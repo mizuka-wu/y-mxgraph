@@ -1,0 +1,3 @@
+[submodule "public/drawio"]
+	path = public/drawio
+	url = git@github.com:jgraph/drawio.git
