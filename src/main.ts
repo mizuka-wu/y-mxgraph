@@ -6,10 +6,15 @@ import { applyUpdate } from "yjs";
 setTimeout(() => {
   (window as any).Draw.loadPlugin((app: any) => {
     const file = app.currentFile;
+    file.startSync();
     app.editor.graph.model.addListener(
       (window as any).mxEvent ? (window as any).mxEvent.CHANGE : "change",
       () => {
-        console.log("graph changed");
+        const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
+        file.setShadowPages(file.ui.clonePages(file.ui.pages));
+
+        // 更新到yjs
+        console.log(patch);
       }
     );
   });
