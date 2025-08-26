@@ -6,7 +6,7 @@ import { applyUpdate } from "yjs";
 setTimeout(() => {
   (window as any).Draw.loadPlugin((app: any) => {
     const file = app.currentFile;
-    file.startSync();
+    console.log(file.data);
     app.editor.graph.model.addListener(
       (window as any).mxEvent ? (window as any).mxEvent.CHANGE : "change",
       () => {

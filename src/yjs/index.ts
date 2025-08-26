@@ -1,3 +1,3 @@
 /**
- * Yjs / mxGraph转换工具
+ * Yjs / mxGraph(drawio)转换工具
  */
