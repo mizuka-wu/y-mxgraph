@@ -6,6 +6,11 @@ import { applyUpdate } from "yjs";
 setTimeout(() => {
   (window as any).Draw.loadPlugin((app: any) => {
     const file = app.currentFile;
-    console.log(file);
+    app.editor.graph.model.addListener(
+      (window as any).mxEvent ? (window as any).mxEvent.CHANGE : "change",
+      () => {
+        console.log("graph changed");
+      }
+    );
   });
 }, 3000);
