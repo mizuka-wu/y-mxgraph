@@ -1,4 +1,4 @@
-import { applyUpdate } from "yjs";
+import { createDocFromXml } from "./yjs";
 
 /**
  * 通过注入的方式拿到实例, 这个之后再考虑什么时候搞进去，3s后开发版是一定加载完成的
@@ -6,7 +6,10 @@ import { applyUpdate } from "yjs";
 setTimeout(() => {
   (window as any).Draw.loadPlugin((app: any) => {
     const file = app.currentFile;
-    console.log(file.data);
+    const doc = createDocFromXml(file.data);
+
+    console.log(doc);
+
     app.editor.graph.model.addListener(
       (window as any).mxEvent ? (window as any).mxEvent.CHANGE : "change",
       () => {
