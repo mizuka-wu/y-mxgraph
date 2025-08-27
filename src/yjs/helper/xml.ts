@@ -33,17 +33,36 @@ function deepProcess(node: any): void {
   for (const key of keys) {
     if (key === "_attributes") continue; // 跳过属性对象
 
-    const value = node[key];
+    let value = node[key];
+    const keyLower = key.toLowerCase();
+
+    // 规范化：diagram / mxCell 若为单个对象，统一转为数组
+    if (
+      (keyLower === "diagram" || keyLower === "mxcell") &&
+      value !== undefined &&
+      !Array.isArray(value)
+    ) {
+      node[key] = [value];
+      value = node[key];
+    }
 
     // 特殊处理 mxCell：如果包含 mxGeometry，则把它移动到 _attributes 上
-    if (key === "mxCell") {
+    if (keyLower === "mxcell") {
       const attachGeometry = (cell: any) => {
         if (cell && typeof cell === "object" && cell.mxGeometry !== undefined) {
           if (!cell._attributes || typeof cell._attributes !== "object") {
             cell._attributes = {};
           }
+
           // 将 mxGeometry 移动到 _attributes，键名保持为 mxGeometry
-          (cell._attributes as any).mxGeometry = cell.mxGeometry;
+          (cell._attributes as any).mxGeometry = Convert.js2xml(
+            {
+              mxGeometry: cell.mxGeometry,
+            },
+            {
+              compact: true,
+            }
+          );
           delete cell.mxGeometry;
         }
       };
