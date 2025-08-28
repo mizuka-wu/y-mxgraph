@@ -22,7 +22,7 @@ export function bindDrawioFile(
 ) {
   const doc = options?.doc || new Y.Doc();
 
-  if (!doc.share.has("xmlfile")) {
+  if (!doc.share.has("mxfile")) {
     xml2doc(file.data, doc);
   }
 
@@ -38,7 +38,7 @@ export function bindDrawioFile(
   });
 
   // 监听remoteChange
-  doc.getXmlElement("xmlfile").observeDeep((event: any, txn: any) => {
+  doc.getXmlElement("mxfile").observeDeep((event: any, txn: any) => {
     console.log(event, txn, this);
   });
 
