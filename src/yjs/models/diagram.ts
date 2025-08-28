@@ -10,6 +10,7 @@ export function parse(object: Diagram): Y.XmlElement {
   // 标记参数已使用，满足 noUnusedParameters
   const xmlElement = new Y.XmlElement("diagram");
   xmlElement.setAttribute("name", `${object._attributes?.name || ""}`);
+  xmlElement.setAttribute("id", `${object._attributes?.id || ""}`);
   xmlElement.insert(0, [parseMxGraphModel(object.mxGraphModel)]);
   return xmlElement;
 }
