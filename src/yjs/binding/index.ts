@@ -30,7 +30,7 @@ export function bindDrawioFile(
   const mxGraphModel = graph.model;
   const mouseMoveThrottle = options.mouseMoveThrottle || 100;
 
-  // 绑定本地的change到外部
+  // 绑定本地的change到yDoc
   mxGraphModel.addListener("change", () => {
     const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
     file.setShadowPages(file.ui.clonePages(file.ui.pages));
