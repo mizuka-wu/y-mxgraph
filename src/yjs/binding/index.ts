@@ -2,22 +2,75 @@
  * 绑定yDoc和drawioFile/mxGraphModel
  * @todo 绑定mxGraphModel
  */
+import { throttle } from "lodash-es";
 import { createDocFromXml } from "../transformer";
 import { applyFilePath } from "./patch";
+import { getId } from "../helper/getId";
 import * as Y from "yjs";
+import { type Awareness } from "y-protocols/awareness";
 
 /**
  * 绑定yDoc和drawioFile
  */
-export function bindDrawioFile(file: any, _doc?: Y.Doc) {
-  const doc = _doc || createDocFromXml(file.data);
+export function bindDrawioFile(
+  file: any,
+  options: {
+    mouseMoveThrottle?: number;
+    doc?: Y.Doc | null;
+    awareness?: Awareness;
+  } = {}
+) {
+  const doc = options?.doc || createDocFromXml(file.data);
 
-  console.log(doc.share.get("mxfile")?.toJSON(), doc.share.get("mxfile"));
+  const graph = file.getUi().editor.graph;
+  const mxGraphModel = graph.model;
+  const mouseMoveThrottle = options.mouseMoveThrottle || 100;
 
-  const mxGraphModel = file.getUi().editor.graph.model;
+  // 绑定本地的change到外部
   mxGraphModel.addListener("change", () => {
     const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
     file.setShadowPages(file.ui.clonePages(file.ui.pages));
     applyFilePath(doc, patch);
   });
+
+  if (options.awareness) {
+    // 绑定鼠标事件
+    graph.addMouseListener({
+      startX: 0,
+      startY: 0,
+      scrollLeft: 0,
+      scrollTop: 0,
+      mouseMove: throttle(function (
+        _: any,
+        event: {
+          graphX: number;
+          graphY: number;
+          evt: MouseEvent;
+        }
+      ) {
+        options.awareness?.setLocalStateField("cursor", {
+          x: event.graphX,
+          y: event.graphY,
+          pageId: file.getUi().currentPage?.getId(),
+        });
+      }, mouseMoveThrottle),
+    });
+
+    // 绑定选区事件
+    graph
+      .getSelectionModel()
+      .addListener("change", function (_: any, evt: any) {
+        const pageId = file.getUi().currentPage?.getId();
+        const added = (evt.getProperty("added") || []).map(getId);
+        const removed = (evt.getProperty("removed") || []).map(getId);
+
+        options.awareness?.setLocalStateField("selection", {
+          added,
+          removed,
+          pageId,
+        });
+      });
+  }
+
+  return doc;
 }
