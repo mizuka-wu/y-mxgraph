@@ -152,6 +152,57 @@ export function applyFilePath(doc: Y.Doc, patch: FilePatch) {
         ) as Y.XmlElement | null;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
+
+          if (update.cells) {
+            const mxGraphModel = diagram.firstChild as Y.XmlElement;
+            // 删除
+            if (update.cells[DIFF_REMOVE]) {
+              const existingCells = mxGraphModel.querySelectorAll(
+                "mxCell"
+              ) as Y.XmlElement[];
+              const removeIndexList = update.cells[DIFF_REMOVE].map((id) =>
+                existingCells.findIndex(
+                  (item) => item.getAttribute("id") === id
+                )
+              )
+                .filter((index) => index !== -1)
+                .sort((a, b) => b - a);
+              removeIndexList.forEach((index) => mxGraphModel.delete(index));
+            }
+            // 添加
+            if (update.cells[DIFF_INSERT]) {
+              mxGraphModel.insert(
+                mxGraphModel.length,
+                update.cells[DIFF_INSERT].map((item) => {
+                  const xmlElement = new Y.XmlElement("mxCell");
+                  Object.keys(item).forEach((key) => {
+                    xmlElement.setAttribute(key, item[key]);
+                  });
+                  return xmlElement;
+                })
+              );
+            }
+
+            if (update.cells[DIFF_UPDATE]) {
+              Object.keys(update.cells[DIFF_UPDATE]).forEach((id) => {
+                const cell = mxGraphModel.querySelector(
+                  `mxCell[id="${id}"]`
+                ) as Y.XmlElement | null;
+                if (cell) {
+                  Object.keys(update.cells![DIFF_UPDATE]![id]).forEach(
+                    (key) => {
+                      cell.setAttribute(
+                        key,
+                        update.cells![DIFF_UPDATE]![id][key]
+                      );
+                    }
+                  );
+                }
+              });
+            }
+          }
+
+          // 顺序更新
           if (Reflect.has(update, "previous")) {
             const previous = update.previous;
             const existingDiagrams = mxfile.querySelectorAll(
