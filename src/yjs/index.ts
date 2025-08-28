@@ -1,2 +1,2 @@
 export { bindDrawioFile } from "./binding";
-export { createDocFromXml } from "./transformer";
+export { xml2doc } from "./transformer";

@@ -3,7 +3,7 @@
  * @todo 绑定mxGraphModel
  */
 import { throttle } from "lodash-es";
-import { createDocFromXml } from "../transformer";
+import { xml2doc } from "../transformer";
 import { applyFilePath } from "./patch";
 import { getId } from "../helper/getId";
 import * as Y from "yjs";
@@ -20,7 +20,11 @@ export function bindDrawioFile(
     awareness?: Awareness;
   } = {}
 ) {
-  const doc = options?.doc || createDocFromXml(file.data);
+  const doc = options?.doc || new Y.Doc();
+
+  if (!doc.share.has("xmlfile")) {
+    xml2doc(file.data, doc);
+  }
 
   const graph = file.getUi().editor.graph;
   const mxGraphModel = graph.model;
