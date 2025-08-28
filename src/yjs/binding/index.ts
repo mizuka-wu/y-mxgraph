@@ -37,6 +37,12 @@ export function bindDrawioFile(
     applyFilePath(doc, patch);
   });
 
+  // 监听remoteChange
+  doc.getXmlElement("xmlfile").observeDeep((event: any, txn: any) => {
+    console.log(event, txn, this);
+  });
+
+  // 当前用户信息到awareness
   if (options.awareness) {
     // 绑定鼠标事件
     graph.addMouseListener({
@@ -44,6 +50,12 @@ export function bindDrawioFile(
       startY: 0,
       scrollLeft: 0,
       scrollTop: 0,
+      mouseDown: function (_: any, event: any) {
+        //
+      },
+      mouseUp: function (_: any, event: any) {
+        //
+      },
       mouseMove: throttle(function (
         _: any,
         event: {
