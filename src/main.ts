@@ -16,5 +16,8 @@ setTimeout(() => {
       doc,
       awareness: provider.awareness,
     });
+
+    Reflect.set(window, "__doc__", doc);
+    Reflect.set(window, "__awareness__", provider.awareness);
   });
 }, 3000);
