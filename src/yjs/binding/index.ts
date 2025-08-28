@@ -38,7 +38,7 @@ export function bindDrawioFile(
   });
 
   // 监听remoteChange
-  doc.getXmlElement("mxfile").observeDeep((event: any, txn: any) => {
+  doc.getXmlElement("mxfile").observeDeep((event: any, txn: Y.Transaction) => {
     console.log(event, txn, this);
   });
 
