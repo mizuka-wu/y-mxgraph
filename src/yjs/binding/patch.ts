@@ -146,6 +146,41 @@ export function applyFilePath(doc: Y.Doc, patch: FilePatch) {
 
     if (patch[DIFF_UPDATE]) {
       // 更新
+      Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
+        const diagram = mxfile.querySelector(
+          `diagram[id="${id}"]`
+        ) as Y.XmlElement | null;
+        if (diagram) {
+          const update = patch[DIFF_UPDATE]![id];
+          if (Reflect.has(update, "previous")) {
+            const previous = update.previous;
+            const existingDiagrams = mxfile.querySelectorAll(
+              "diagram"
+            ) as Y.XmlElement[];
+
+            const targetIndex = !previous
+              ? 0
+              : existingDiagrams.findIndex(
+                  (item) => item.getAttribute("id") === previous
+                ) + 1;
+
+            const currentIndex = existingDiagrams.findIndex(
+              (item) => item.getAttribute("id") === id
+            );
+
+            if (currentIndex === -1) {
+              // 未定位到当前节点（理论上不应发生），退化为直接插入
+              mxfile.insert(targetIndex, [diagram]);
+            } else if (currentIndex !== targetIndex) {
+              // 稳妥移动：先删后插，并在 currentIndex < targetIndex 时修正插入索引
+              let insertIndex = targetIndex;
+              if (currentIndex < insertIndex) insertIndex -= 1;
+              mxfile.delete(currentIndex);
+              mxfile.insert(insertIndex, [diagram]);
+            }
+          }
+        }
+      });
     }
   });
 }

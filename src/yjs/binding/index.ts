@@ -12,7 +12,7 @@ import * as Y from "yjs";
 export function bindDrawioFile(file: any, _doc?: Y.Doc) {
   const doc = _doc || createDocFromXml(file.data);
 
-  console.log(doc.share.get("mxfile")?.toJSON());
+  console.log(doc.share.get("mxfile")?.toJSON(), doc.share.get("mxfile"));
 
   const mxGraphModel = file.getUi().editor.graph.model;
   mxGraphModel.addListener("change", () => {
