@@ -25,10 +25,8 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
   const xmlElement = doc?.getXmlElement(key) || new Y.XmlElement(key);
 
   if (doc) {
-    doc.transact(() => {
-      xmlElement.nodeName = key;
-      xmlElement.insert(0, mxCells);
-    });
+    xmlElement.nodeName = key;
+    xmlElement.insert(0, mxCells);
   } else {
     xmlElement.insert(0, mxCells);
   }

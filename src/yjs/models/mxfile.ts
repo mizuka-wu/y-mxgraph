@@ -17,18 +17,16 @@ export interface MxFile extends ElementCompact {
 }
 
 export function parse(object: MxFile, doc: Y.Doc) {
-  doc.transact(() => {
-    const xmlElement = doc.getXmlElement(key);
-    xmlElement.setAttribute("pages", (object._attributes?.pages || "1") + "");
-    if (object._attributes?.id) {
-      xmlElement.setAttribute("id", (object._attributes?.id || "") + "");
-    }
-    xmlElement.nodeName = key;
-    xmlElement.insert(
-      0,
-      object.diagram.map((diagram) => parseDiagram(diagram))
-    );
-  });
+  const xmlElement = doc.getXmlElement(key);
+  xmlElement.setAttribute("pages", (object._attributes?.pages || "1") + "");
+  if (object._attributes?.id) {
+    xmlElement.setAttribute("id", (object._attributes?.id || "") + "");
+  }
+  xmlElement.nodeName = key;
+  xmlElement.insert(
+    0,
+    object.diagram.map((diagram) => parseDiagram(diagram))
+  );
 }
 
 export function serializer(xmlElement: Y.XmlElement): ElementCompact {
