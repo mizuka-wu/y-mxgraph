@@ -4,7 +4,7 @@
  */
 import { throttle } from "lodash-es";
 import { xml2doc } from "../transformer";
-import { applyFilePath } from "./patch";
+import { applyFilePatch } from "./patch";
 import { getId } from "../helper/getId";
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
@@ -29,12 +29,11 @@ export function bindDrawioFile(
   const graph = file.getUi().editor.graph;
   const mxGraphModel = graph.model;
   const mouseMoveThrottle = options.mouseMoveThrottle || 100;
-
   // 绑定本地的change到yDoc
   mxGraphModel.addListener("change", () => {
     const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
     file.setShadowPages(file.ui.clonePages(file.ui.pages));
-    applyFilePath(doc, patch);
+    applyFilePatch(doc, patch);
   });
 
   // 监听remoteChange

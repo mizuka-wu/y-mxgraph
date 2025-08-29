@@ -34,7 +34,7 @@ export interface FilePatch {
   };
 }
 
-export function applyFilePath(doc: Y.Doc, patch: FilePatch) {
+export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
   doc.transact(() => {
     const mxfile = doc.getXmlElement("mxfile");
     // 移除
