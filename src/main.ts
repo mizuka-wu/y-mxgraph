@@ -8,6 +8,7 @@ import { bindDrawioFile } from "./yjs";
 setTimeout(() => {
   (window as any).Draw.loadPlugin((app: any) => {
     const file = app.currentFile;
+    if (!file) return console.warn("no file");
     const doc = new Y.Doc();
     const provider = new WebrtcProvider(file.id, doc, {
       signaling: [],
