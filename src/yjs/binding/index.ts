@@ -38,7 +38,9 @@ export function bindDrawioFile(
 
   // 监听remoteChange
   doc.getXmlElement("mxfile").observeDeep((event: any, txn: Y.Transaction) => {
-    console.log(event, txn, this);
+    // 远端的origin
+    if (txn.origin === null) return;
+    console.log(event);
   });
 
   // 当前用户信息到awareness

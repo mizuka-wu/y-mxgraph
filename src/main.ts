@@ -10,7 +10,8 @@ setTimeout(() => {
     const file = app.currentFile;
     if (!file) return console.warn("no file");
     const doc = new Y.Doc();
-    const provider = new WebrtcProvider(file.id, doc, {
+    const roomName = file.getId() || file.draftId;
+    const provider = new WebrtcProvider(roomName, doc, {
       signaling: [],
     });
     bindDrawioFile(file, {
