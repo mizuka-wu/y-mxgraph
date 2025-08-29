@@ -3,26 +3,23 @@
  */
 import * as Y from "yjs";
 
+import {
+  key as mxCellKey,
+  parse as parseMxCell,
+  serialize as serializeMxCell,
+} from "./mxCell";
 import type { ElementCompact } from "xml-js";
 
 export const key = "mxGraphModel";
 export interface MxGraphModel extends ElementCompact {
   root: {
-    mxCell: ElementCompact[];
+    [mxCellKey]: ElementCompact[];
   };
 }
 
 export function parse(object: MxGraphModel, doc?: Y.Doc) {
-  const mxCells = (object.root.mxCell || []).map((cell) => {
-    const xmlElement = new Y.XmlElement("mxCell");
-
-    for (const attribute of Object.keys(cell._attributes || {})) {
-      xmlElement.setAttribute(
-        attribute,
-        `${cell._attributes?.[attribute] || ""}`
-      );
-    }
-    return xmlElement;
+  const mxCells = (object.root[mxCellKey] || []).map((cell) => {
+    return parseMxCell(cell);
   });
 
   const xmlElement = doc?.getXmlElement(key) || new Y.XmlElement(key);
@@ -40,10 +37,14 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
 }
 
 export function serialize(xmlElement: Y.XmlElement) {
+  const cells = (xmlElement.querySelectorAll(mxCellKey) ||
+    []) as Y.XmlElement[];
   return {
     _attributes: {
       ...xmlElement.getAttributes(),
     },
-    root: {},
+    root: {
+      [mxCellKey]: cells.map(serializeMxCell),
+    },
   };
 }
