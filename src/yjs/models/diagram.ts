@@ -2,6 +2,8 @@ import * as Y from "yjs";
 import { parse as parseMxGraphModel, type MxGraphModel } from "./mxGraphModel";
 import type { ElementCompact } from "xml-js";
 
+export const key = "diagram";
+
 export interface Diagram extends ElementCompact {
   mxGraphModel: MxGraphModel;
 }
@@ -15,4 +17,10 @@ export function parse(object: Diagram): Y.XmlElement {
   return xmlElement;
 }
 
-export function serialize() {}
+export function serialize(xmlElement: Y.XmlElement) {
+  return {
+    _attributes: {
+      ...xmlElement.getAttributes(),
+    },
+  };
+}

@@ -3,7 +3,7 @@
  * @todo 绑定mxGraphModel
  */
 import { throttle } from "lodash-es";
-import { xml2doc } from "../transformer";
+import { xml2doc, doc2xml } from "../transformer";
 import { applyFilePatch } from "./patch";
 import { getId } from "../helper/getId";
 import { key as mxfileKey } from "../models/mxfile";
@@ -40,9 +40,15 @@ export function bindDrawioFile(
   // 监听remoteChange
   doc.getXmlElement(mxfileKey).observeDeep((event: any, txn: Y.Transaction) => {
     // 远端的origin
-
     if (txn.origin === null) return;
-    // 尝试反向推理patch出来
+    // 尝试反向推理patch出来, 暂时暴力一点直接生成副本，靠file的merge合并
+
+    try {
+      const newFile = new (window as any).DrawioFile(doc2xml(doc));
+      file.mergeFile(newFile);
+    } catch (e) {
+      console.error(e);
+    }
   });
 
   // 当前用户信息到awareness

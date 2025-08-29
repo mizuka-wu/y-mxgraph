@@ -25,6 +25,7 @@ setTimeout(() => {
       fileId: file.getId(),
       draftId: file.draftId,
       created: file.created + "",
+      fileData: file.data,
     });
 
     console.log(doc2xml(doc));

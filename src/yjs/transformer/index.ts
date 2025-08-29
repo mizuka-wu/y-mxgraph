@@ -2,8 +2,12 @@
  * Yjs / mxGraph(drawio)转换工具
  */
 import * as Y from "yjs";
-import { parse } from "../helper/xml";
-import { parse as parseMxFile, key as mxfileKey } from "../models/mxfile";
+import { parse, serializer } from "../helper/xml";
+import {
+  parse as parseMxFile,
+  key as mxfileKey,
+  serializer as serializerMxFile,
+} from "../models/mxfile";
 import {
   parse as parseMxGraphModel,
   key as mxGraphKey,
@@ -29,7 +33,11 @@ export function xml2doc(xml: string, _doc?: Y.Doc) {
 
 export function doc2xml(doc: Y.Doc): string {
   if (doc.share.has(mxfileKey)) {
-    return "";
+    return serializer({
+      [mxfileKey]: serializerMxFile(
+        doc.share.get(mxfileKey) as unknown as Y.XmlElement
+      ),
+    });
   } else if (doc.share.has(mxGraphKey)) {
     console.warn("暂不支持");
     return "";

@@ -1,19 +1,4 @@
-import Convert from "xml-js";
-
-/**
- * xml 转换为 js 对象
- * @param xml
- * @returns
- */
-export function parse(xml: string) {
-  const result = Convert.xml2js(xml, { compact: true }) as any;
-
-  // 深度遍历（紧凑结构）：跳过 _attributes；当 key 为 mxCell 时，若存在 mxGeometry，
-  // 则移动到该对象的 _attributes.mxGeometry 上
-  deepProcess(result);
-
-  return result;
-}
+import { xml2js, js2xml, type ElementCompact } from "xml-js";
 
 function deepProcess(node: any): void {
   if (node == null) return;
@@ -55,7 +40,7 @@ function deepProcess(node: any): void {
           }
 
           // 将 mxGeometry 移动到 _attributes，键名保持为 mxGeometry
-          (cell._attributes as any).mxGeometry = Convert.js2xml(
+          (cell._attributes as any).mxGeometry = js2xml(
             {
               mxGeometry: cell.mxGeometry,
             },
@@ -81,4 +66,25 @@ function deepProcess(node: any): void {
       deepProcess(value);
     }
   }
+}
+
+/**
+ * xml 转换为 js 对象
+ * @param xml
+ * @returns
+ */
+export function parse(xml: string) {
+  const result = xml2js(xml, { compact: true }) as any;
+
+  // 深度遍历（紧凑结构）：跳过 _attributes；当 key 为 mxCell 时，若存在 mxGeometry，
+  // 则移动到该对象的 _attributes.mxGeometry 上
+  deepProcess(result);
+
+  return result;
+}
+
+export function serializer(obj: ElementCompact) {
+  return js2xml(obj, {
+    compact: true,
+  });
 }
