@@ -19,9 +19,6 @@ export interface MxFile extends ElementCompact {
 export function parse(object: MxFile, doc: Y.Doc) {
   const xmlElement = doc.getXmlElement(key);
   xmlElement.setAttribute("pages", (object._attributes?.pages || "1") + "");
-  if (object._attributes?.id) {
-    xmlElement.setAttribute("id", (object._attributes?.id || "") + "");
-  }
   xmlElement.nodeName = key;
   xmlElement.insert(
     0,
