@@ -6,14 +6,14 @@ import * as Y from "yjs";
 import {
   parse as parseDiagram,
   key as diagramKey,
-  serialize as diagramSerialize,
+  serialize as serializeDiagram,
 } from "./diagram";
 import type { Diagram } from "./diagram";
 import type { ElementCompact } from "xml-js";
 
 export const key = "mxfile";
 export interface MxFile extends ElementCompact {
-  diagram: Diagram[];
+  [diagramKey]: Diagram[];
 }
 
 export function parse(object: MxFile, doc: Y.Doc) {
@@ -38,7 +38,7 @@ export function serializer(xmlElement: Y.XmlElement): ElementCompact {
     },
     [diagramKey]: (
       xmlElement.querySelectorAll(diagramKey) as Y.XmlElement[]
-    ).map((diagramElement) => diagramSerialize(diagramElement)),
+    ).map((diagramElement) => serializeDiagram(diagramElement)),
   };
 
   return obj;

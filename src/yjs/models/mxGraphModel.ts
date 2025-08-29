@@ -25,12 +25,11 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
     return xmlElement;
   });
 
-  const xmlElement =
-    doc?.getXmlElement("mxGraphModel") || new Y.XmlElement("mxGraphModel");
+  const xmlElement = doc?.getXmlElement(key) || new Y.XmlElement(key);
 
   if (doc) {
     doc.transact(() => {
-      xmlElement.nodeName = "mxGraphModel";
+      xmlElement.nodeName = key;
       xmlElement.insert(0, mxCells);
     });
   } else {
@@ -38,4 +37,13 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
   }
 
   return xmlElement;
+}
+
+export function serialize(xmlElement: Y.XmlElement) {
+  return {
+    _attributes: {
+      ...xmlElement.getAttributes(),
+    },
+    root: {},
+  };
 }

@@ -10,7 +10,8 @@ import {
 } from "../models/mxfile";
 import {
   parse as parseMxGraphModel,
-  key as mxGraphKey,
+  key as mxGraphModelKey,
+  serialize as serializerMxGraphModel,
 } from "../models/mxGraphModel";
 
 export function xml2doc(xml: string, _doc?: Y.Doc) {
@@ -38,9 +39,12 @@ export function doc2xml(doc: Y.Doc): string {
         doc.share.get(mxfileKey) as unknown as Y.XmlElement
       ),
     });
-  } else if (doc.share.has(mxGraphKey)) {
-    console.warn("暂不支持");
-    return "";
+  } else if (doc.share.has(mxGraphModelKey)) {
+    return serializer({
+      [mxGraphModelKey]: serializerMxGraphModel(
+        doc.share.get(mxGraphModelKey) as unknown as Y.XmlElement
+      ),
+    });
   }
 
   console.warn("无支持的文件类型");
