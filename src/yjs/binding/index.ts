@@ -4,7 +4,7 @@
  */
 import { throttle } from "lodash-es";
 import { xml2doc, doc2xml } from "../transformer";
-import { applyFilePatch } from "./patch";
+import { applyFilePatch, generatePatch } from "./patch";
 import { getId } from "../helper/getId";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
 import * as Y from "yjs";
@@ -47,9 +47,8 @@ export function bindDrawioFile(
       ) => {
         // 远端的origin
         if (transaction.local) return;
-        // 尝试反向推理patch出来, 暂时暴力一点直接生成副本，靠file的merge合并
-
-        console.log(events, transaction.origin);
+        const patch = generatePatch(events);
+        console.log(patch, events);
       }
     );
 

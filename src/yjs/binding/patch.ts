@@ -251,6 +251,8 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
   });
 }
 
-// export function generatePatch(doc: Y.Doc, ): FilePatch {
-
-// }
+export function generatePatch(
+  events: Y.YEvent<Y.XmlElement | Y.Array<Y.XmlElement> | YMxFile>[]
+): FilePatch {
+  return {};
+}
