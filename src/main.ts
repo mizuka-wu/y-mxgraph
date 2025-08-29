@@ -10,7 +10,7 @@ setTimeout(() => {
     const file = app.currentFile;
     if (!file) return console.warn("no file");
     const doc = new Y.Doc();
-    const roomName = file.getId() || file.draftId;
+    const roomName = file.getId() || file.draftId || file.created + "";
     const provider = new WebrtcProvider(roomName, doc, {
       signaling: [],
     });
@@ -21,6 +21,6 @@ setTimeout(() => {
 
     Reflect.set(window, "__doc__", doc);
     Reflect.set(window, "__awareness__", provider.awareness);
-    console.log("注入完成", roomName);
+    console.log("注入完成 当前room：", roomName);
   });
 }, 3000);
