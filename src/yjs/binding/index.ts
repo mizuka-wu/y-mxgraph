@@ -44,14 +44,6 @@ export function bindDrawioFile(
     // 尝试反向推理patch出来, 暂时暴力一点直接生成副本，靠file的merge合并
 
     console.log(event);
-    try {
-      const newFile = new (window as any).DrawioFile(doc2xml(doc));
-      file.mergeFile(newFile);
-
-      console.log(file, newFile);
-    } catch (e) {
-      console.error(e);
-    }
   });
 
   // 当前用户信息到awareness
