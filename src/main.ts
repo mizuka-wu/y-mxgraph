@@ -2,7 +2,7 @@ import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { bindDrawioFile, doc2xml } from "./yjs";
 
-const demoFile = `<mxfile pages="1" id="demo">
+const demoFile = `<mxfile pages="1">
   <diagram name="第 1 页" id="JUnyabHTdChjKBf1yHdD">
     <mxGraphModel dx="506" dy="689" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
@@ -26,6 +26,7 @@ window.onload = function () {
   App.main((app: any) => {
     const file = app.currentFile;
     if (!file) return console.warn("no file");
+    console.log(file.data);
     const doc = new Y.Doc();
     const roomName = "demo";
     const provider = new WebrtcProvider(roomName, doc, {
@@ -38,7 +39,7 @@ window.onload = function () {
 
     Reflect.set(window, "__doc__", doc);
     Reflect.set(window, "__awareness__", provider.awareness);
-    console.log("注入完成 当前room：", roomName);
+    console.log("注入完成 当前room：", roomName, doc2xml(doc));
   });
 };
 //  * 通过注入的方式拿到实例, 这个之后再考虑什么时候搞进去，3s后开发版是一定加载完成的

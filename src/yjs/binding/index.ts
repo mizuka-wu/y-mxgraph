@@ -38,7 +38,7 @@ export function bindDrawioFile(
   });
 
   // 监听remoteChange
-  doc.getXmlElement(mxfileKey).observeDeep((event: any, txn: Y.Transaction) => {
+  doc.getMap(mxfileKey).observeDeep((event: any, txn: Y.Transaction) => {
     // 远端的origin
     if (txn.origin === null) return;
     // 尝试反向推理patch出来, 暂时暴力一点直接生成副本，靠file的merge合并

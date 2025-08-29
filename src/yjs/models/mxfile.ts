@@ -12,27 +12,32 @@ import type { Diagram } from "./diagram";
 import type { ElementCompact } from "xml-js";
 
 export const key = "mxfile";
+
+export type YMxFile = Y.Map<{
+  pages: string;
+  [diagramKey]: Y.Array<Y.XmlElement>;
+}>;
+
 export interface MxFile extends ElementCompact {
   [diagramKey]: Diagram[];
 }
 
 export function parse(object: MxFile, doc: Y.Doc) {
-  const xmlElement = doc.getXmlElement(key);
-  xmlElement.setAttribute("pages", (object._attributes?.pages || "1") + "");
-  xmlElement.nodeName = key;
-  xmlElement.insert(
-    0,
-    object.diagram.map((diagram) => parseDiagram(diagram))
-  );
+  const mxfile = doc.getMap(key);
+  mxfile.set("pages", (object._attributes?.pages || "1") + "");
+  const diagrams = new Y.Array();
+  diagrams.push(object.diagram.map((diagram) => parseDiagram(diagram)));
+  mxfile.set(diagramKey, diagrams);
+  return mxfile;
 }
 
-export function serializer(xmlElement: Y.XmlElement): ElementCompact {
+export function serializer(yMxFile: YMxFile): ElementCompact {
   const obj: any = {
     _attributes: {
-      ...xmlElement.getAttributes(),
+      pages: yMxFile.get("pages") || "1",
     },
     [diagramKey]: (
-      xmlElement.querySelectorAll(diagramKey) as Y.XmlElement[]
+      yMxFile.get(diagramKey) as unknown as Y.Array<Y.XmlElement>
     ).map((diagramElement) => serializeDiagram(diagramElement)),
   };
 

@@ -7,6 +7,7 @@ import {
   parse as parseMxFile,
   key as mxfileKey,
   serializer as serializerMxFile,
+  type YMxFile,
 } from "../models/mxfile";
 import {
   parse as parseMxGraphModel,
@@ -36,7 +37,7 @@ export function doc2xml(doc: Y.Doc): string {
   if (doc.share.has(mxfileKey)) {
     return serializer({
       [mxfileKey]: serializerMxFile(
-        doc.share.get(mxfileKey) as unknown as Y.XmlElement
+        doc.share.get(mxfileKey) as unknown as YMxFile
       ),
     });
   } else if (doc.share.has(mxGraphModelKey)) {
