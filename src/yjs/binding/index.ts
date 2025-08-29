@@ -45,8 +45,10 @@ export function bindDrawioFile(
 
     console.log(event);
     try {
-      // const newFile = new (window as any).DrawioFile(doc2xml(doc));
-      // file.mergeFile(newFile);
+      const newFile = new (window as any).DrawioFile(doc2xml(doc));
+      file.mergeFile(newFile);
+
+      console.log(file, newFile);
     } catch (e) {
       console.error(e);
     }

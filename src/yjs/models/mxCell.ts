@@ -22,7 +22,7 @@ export function serialize(xmlElement: Y.XmlElement) {
     ...xmlElement.getAttributes(),
   };
 
-  let mxGeometry: any = {};
+  let mxGeometry: any = null;
 
   if (Reflect.has(attributes, mxGeometryKey)) {
     const mxGeometryString = Reflect.get(attributes, mxGeometryKey);
@@ -39,8 +39,13 @@ export function serialize(xmlElement: Y.XmlElement) {
     Reflect.deleteProperty(attributes, mxGeometryKey);
   }
 
-  return {
+  const obj: any = {
     _attributes: attributes,
-    [mxGeometryKey]: mxGeometry,
   };
+
+  if (mxGeometry) {
+    obj[mxGeometryKey] = mxGeometry;
+  }
+
+  return obj;
 }
