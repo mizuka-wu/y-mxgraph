@@ -250,3 +250,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
     }
   });
 }
+
+// export function generatePatch(doc: Y.Doc, ): FilePatch {
+
+// }
