@@ -5,6 +5,7 @@ import * as Y from "yjs";
 
 import type { ElementCompact } from "xml-js";
 
+export const key = "mxGraphModel";
 export interface MxGraphModel extends ElementCompact {
   root: {
     mxCell: ElementCompact[];

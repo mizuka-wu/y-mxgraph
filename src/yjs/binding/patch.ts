@@ -5,6 +5,7 @@
  */
 import { parse } from "../helper/xml";
 import { parse as parseDiagram } from "../models/diagram";
+import { key as mxfileKey } from "../models/mxfile";
 import * as Y from "yjs";
 
 const DIFF_INSERT = "i";
@@ -36,7 +37,7 @@ export interface FilePatch {
 
 export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
   doc.transact(() => {
-    const mxfile = doc.getXmlElement("mxfile");
+    const mxfile = doc.getXmlElement(mxfileKey);
     // 移除
     if (patch[DIFF_REMOVE]) {
       const diagrams = mxfile.querySelectorAll("diagram") as Y.XmlElement[];

@@ -7,13 +7,14 @@ import { parse as parseDiagram } from "./diagram";
 import type { Diagram } from "./diagram";
 import type { ElementCompact } from "xml-js";
 
+export const key = "mxfile";
 export interface MxFile extends ElementCompact {
   diagram: Diagram[];
 }
 
 export function parse(object: MxFile, doc: Y.Doc) {
   doc.transact(() => {
-    const xmlElement = doc.getXmlElement("mxfile");
+    const xmlElement = doc.getXmlElement(key);
     xmlElement.setAttribute("pages", (object._attributes?.pages || "1") + "");
     xmlElement.nodeName = "xmlfile";
     xmlElement.insert(

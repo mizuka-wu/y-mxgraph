@@ -6,6 +6,7 @@ import { throttle } from "lodash-es";
 import { xml2doc } from "../transformer";
 import { applyFilePatch } from "./patch";
 import { getId } from "../helper/getId";
+import { key as mxfileKey } from "../models/mxfile";
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
 
@@ -22,7 +23,7 @@ export function bindDrawioFile(
 ) {
   const doc = options?.doc || new Y.Doc();
 
-  if (!doc.share.has("mxfile")) {
+  if (!doc.share.has(mxfileKey)) {
     xml2doc(file.data, doc);
   }
 
@@ -37,10 +38,11 @@ export function bindDrawioFile(
   });
 
   // 监听remoteChange
-  doc.getXmlElement("mxfile").observeDeep((event: any, txn: Y.Transaction) => {
+  doc.getXmlElement(mxfileKey).observeDeep((event: any, txn: Y.Transaction) => {
     // 远端的origin
+
     if (txn.origin === null) return;
-    console.log(event);
+    // 尝试反向推理patch出来
   });
 
   // 当前用户信息到awareness

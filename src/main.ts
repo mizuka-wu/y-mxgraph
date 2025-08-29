@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
-import { bindDrawioFile } from "./yjs";
+import { bindDrawioFile, doc2xml } from "./yjs";
 
 /**
  * 通过注入的方式拿到实例, 这个之后再考虑什么时候搞进去，3s后开发版是一定加载完成的
@@ -26,5 +26,7 @@ setTimeout(() => {
       draftId: file.draftId,
       created: file.created + "",
     });
+
+    console.log(doc2xml(doc));
   });
 }, 3000);
