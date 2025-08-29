@@ -21,6 +21,10 @@ setTimeout(() => {
 
     Reflect.set(window, "__doc__", doc);
     Reflect.set(window, "__awareness__", provider.awareness);
-    console.log("注入完成 当前room：", roomName);
+    console.log("注入完成 当前room：", roomName, {
+      fileId: file.getId(),
+      draftId: file.draftId,
+      created: file.created + "",
+    });
   });
 }, 3000);
