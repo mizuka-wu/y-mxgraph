@@ -9,7 +9,7 @@ import * as Y from "yjs";
 
 const DIFF_INSERT = "i";
 const DIFF_REMOVE = "r";
-const DIFF_UPDATE = "d";
+const DIFF_UPDATE = "u";
 
 export interface DiagramInsert {
   data: string;
@@ -36,6 +36,7 @@ export interface FilePatch {
 
 export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
   doc.transact(() => {
+    debugger;
     const mxfile = doc.getXmlElement("mxfile");
     // 移除
     if (patch[DIFF_REMOVE]) {
