@@ -83,8 +83,9 @@ export function parse(xml: string) {
   return result;
 }
 
-export function serializer(obj: ElementCompact) {
+export function serializer(obj: ElementCompact, spaces = 2) {
   return js2xml(obj, {
     compact: true,
+    spaces,
   });
 }

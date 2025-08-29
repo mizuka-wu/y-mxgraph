@@ -33,19 +33,25 @@ export function xml2doc(xml: string, _doc?: Y.Doc) {
   return doc;
 }
 
-export function doc2xml(doc: Y.Doc): string {
+export function doc2xml(doc: Y.Doc, spaces = 0): string {
   if (doc.share.has(mxfileKey)) {
-    return serializer({
-      [mxfileKey]: serializerMxFile(
-        doc.share.get(mxfileKey) as unknown as YMxFile
-      ),
-    });
+    return serializer(
+      {
+        [mxfileKey]: serializerMxFile(
+          doc.share.get(mxfileKey) as unknown as YMxFile
+        ),
+      },
+      spaces
+    );
   } else if (doc.share.has(mxGraphModelKey)) {
-    return serializer({
-      [mxGraphModelKey]: serializerMxGraphModel(
-        doc.share.get(mxGraphModelKey) as unknown as Y.XmlElement
-      ),
-    });
+    return serializer(
+      {
+        [mxGraphModelKey]: serializerMxGraphModel(
+          doc.share.get(mxGraphModelKey) as unknown as Y.XmlElement
+        ),
+      },
+      spaces
+    );
   }
 
   console.warn("无支持的文件类型");

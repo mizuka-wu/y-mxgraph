@@ -39,7 +39,8 @@ window.onload = function () {
 
     Reflect.set(window, "__doc__", doc);
     Reflect.set(window, "__awareness__", provider.awareness);
-    console.log("注入完成 当前room：", roomName, doc2xml(doc));
+    console.log("注入完成 当前room：", roomName);
+    console.log(doc2xml(doc, 2));
   });
 };
 //  * 通过注入的方式拿到实例, 这个之后再考虑什么时候搞进去，3s后开发版是一定加载完成的
