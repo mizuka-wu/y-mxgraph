@@ -36,7 +36,6 @@ export interface FilePatch {
 
 export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
   doc.transact(() => {
-    debugger;
     const mxfile = doc.getXmlElement("mxfile");
     // 移除
     if (patch[DIFF_REMOVE]) {
@@ -148,8 +147,10 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
     if (patch[DIFF_UPDATE]) {
       // 更新
       Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
-        const diagram = mxfile.querySelector(
-          `diagram[id="${id}"]`
+        const diagram = (
+          mxfile.querySelectorAll("diagram") as Y.XmlElement[]
+        ).find(
+          (item: Y.XmlElement) => item.getAttribute("id") === id
         ) as Y.XmlElement | null;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
@@ -186,9 +187,9 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
 
             if (update.cells[DIFF_UPDATE]) {
               Object.keys(update.cells[DIFF_UPDATE]).forEach((id) => {
-                const cell = mxGraphModel.querySelector(
-                  `mxCell[id="${id}"]`
-                ) as Y.XmlElement | null;
+                const cell = (
+                  mxGraphModel.querySelectorAll("mxCell") as Y.XmlElement[]
+                ).find((_cell) => _cell.getAttribute("id") === id);
                 if (cell) {
                   Object.keys(update.cells![DIFF_UPDATE]![id]).forEach(
                     (key) => {
