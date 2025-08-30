@@ -8,6 +8,7 @@ import {
   parse as parseDiagram,
   key as diagramKey,
   serialize as serializeDiagram,
+  type YDiagram,
 } from "../models/diagram";
 import {
   key as mxfileKey,
@@ -59,7 +60,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     // 移除
     if (patch[DIFF_REMOVE]) {
-      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<Y.XmlElement>;
+      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
       const orderArr = mxfile.get(
         diagramOrderKey
       ) as unknown as Y.Array<string>;
@@ -82,7 +83,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
     if (patch[DIFF_INSERT]) {
       // 添加插入（Map 存内容，Array 维护顺序）
       // 1) 现有 diagram 的 id -> index 映射（已在上方完成删除操作，这里是最新状态）
-      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<Y.XmlElement>;
+      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
       const orderArr = mxfile.get(
         diagramOrderKey
       ) as unknown as Y.Array<string>;
@@ -96,11 +97,11 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
         const diagramObj = Array.isArray(object?.diagram)
           ? object.diagram[0]
           : object?.diagram;
-        const xmlElement = parseDiagram(diagramObj);
+        const diagramElement = parseDiagram(diagramObj);
         return {
           id: item.id,
           previous: item.previous || "",
-          xmlElement,
+          diagramElement,
           order, // 保留原始顺序用于稳定排序
         };
       });
@@ -160,10 +161,12 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
       // - 再根据“当前”顺序数组查找锚点位置进行插入，避免前序插入导致的索引漂移
       for (const item of enriched) {
         // 内容落盘
-        diagramsMap.set(item.id, item.xmlElement);
+        diagramsMap.set(item.id, item.diagramElement);
         // 顺序插入
         const currentIds = orderArr.toArray();
-        const anchorPos = item.anchorId ? currentIds.indexOf(item.anchorId) : -1;
+        const anchorPos = item.anchorId
+          ? currentIds.indexOf(item.anchorId)
+          : -1;
         const index = anchorPos + 1; // -1 -> 0；k -> k+1
         orderArr.insert(index, [item.id]);
       }
@@ -183,15 +186,20 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
             // diagram 直接持有 mxGraphModel（Map 结构）作为 firstChild
             const gm = (diagram as any).firstChild as YMxGraphModel | undefined;
             if (!gm) return;
-            const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
-            const orderArr = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+            const cellsMap = gm.get(mxCellKey) as
+              | Y.Map<Y.XmlElement>
+              | undefined;
+            const orderArr = gm.get(mxCellOrderKey) as
+              | Y.Array<string>
+              | undefined;
             if (!cellsMap || !orderArr) return;
 
             // 删除
             if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
               const orderIds = orderArr.toArray();
-              const removeIndexList = update.cells[DIFF_REMOVE]
-                .map((cid) => orderIds.indexOf(cid))
+              const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
+                orderIds.indexOf(cid)
+              )
                 .filter((i) => i !== -1)
                 .sort((a, b) => b - a);
               removeIndexList.forEach((idx) => orderArr.delete(idx));
@@ -204,7 +212,9 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 const id = (item as any)["id"] as string | undefined;
                 if (!id) continue;
                 const xmlElement = new Y.XmlElement("mxCell");
-                Object.keys(item).forEach((key) => xmlElement.setAttribute(key, item[key]));
+                Object.keys(item).forEach((key) =>
+                  xmlElement.setAttribute(key, item[key])
+                );
                 cellsMap.set(id, xmlElement);
                 const len = orderArr.toArray().length;
                 orderArr.insert(len, [id]);
@@ -231,7 +241,9 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 const previous = (updateObj as any).previous as string;
 
                 const currentIds = orderArr.toArray();
-                const targetIndex = !previous ? 0 : currentIds.indexOf(previous) + 1;
+                const targetIndex = !previous
+                  ? 0
+                  : currentIds.indexOf(previous) + 1;
                 const currentIndex = currentIds.indexOf(cellId);
                 if (currentIndex === -1) {
                   // 不存在则按顺序插入新 cell
@@ -301,9 +313,7 @@ export function generatePatch(
   if (!doc) return patch;
   const mxfile = doc.getMap(mxfileKey) as YMxFile;
   const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<Y.XmlElement>;
-  const orderArr = mxfile.get(
-    diagramOrderKey
-  ) as unknown as Y.Array<string>;
+  const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
 
   // 读取/初始化当前文档的快照容器
   let snap = docSnapshots.get(doc);
@@ -346,7 +356,8 @@ export function generatePatch(
         currCellsOrder.set(did, ids);
         for (const cid of ids) {
           const c = cellsMap.get(cid) as Y.XmlElement | undefined;
-          if (c) attrs.set(cid, (c.getAttributes() as Record<string, string>) || {});
+          if (c)
+            attrs.set(cid, (c.getAttributes() as Record<string, string>) || {});
         }
       } else {
         currCellsOrder.set(did, []);
