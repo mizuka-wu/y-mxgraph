@@ -9,7 +9,11 @@ import {
   key as diagramKey,
   serialize as serializeDiagram,
 } from "../models/diagram";
-import { key as mxfileKey, type YMxFile } from "../models/mxfile";
+import {
+  key as mxfileKey,
+  type YMxFile,
+  diagramOrderKey,
+} from "../models/mxfile";
 import * as Y from "yjs";
 
 const DIFF_INSERT = "i";
@@ -51,34 +55,36 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     // 移除
     if (patch[DIFF_REMOVE]) {
-      const diagrams = mxfile.get(
-        diagramKey
-      ) as unknown as Y.Array<Y.XmlElement>;
-      const diagramsArray = diagrams.toArray();
-      const indexList = patch[DIFF_REMOVE].map((id) => {
-        return diagramsArray.findIndex(
-          (item) => item.getAttribute("id") === id
-        );
-      })
-        .sort((a, b) => b - a)
-        .filter((index) => index !== -1);
+      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<Y.XmlElement>;
+      const orderArr = mxfile.get(
+        diagramOrderKey
+      ) as unknown as Y.Array<string>;
+      const orderList = orderArr.toArray();
 
-      indexList.forEach((index) => {
-        diagrams.delete(index);
-      });
+      const removeIds = patch[DIFF_REMOVE];
+      if (removeIds && removeIds.length) {
+        const indexList = removeIds
+          .map((id) => orderList.indexOf(id))
+          .filter((i) => i !== -1)
+          .sort((a, b) => b - a);
+
+        // 先从顺序数组删除
+        indexList.forEach((idx) => orderArr.delete(idx));
+        // 再从 map 删除内容
+        removeIds.forEach((id) => diagramsMap.delete(id));
+      }
     }
 
     if (patch[DIFF_INSERT]) {
-      // 添加插入
+      // 添加插入（Map 存内容，Array 维护顺序）
       // 1) 现有 diagram 的 id -> index 映射（已在上方完成删除操作，这里是最新状态）
-      const existingDiagrams = mxfile.get(
-        diagramKey
-      ) as unknown as Y.Array<Y.XmlElement>;
+      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<Y.XmlElement>;
+      const orderArr = mxfile.get(
+        diagramOrderKey
+      ) as unknown as Y.Array<string>;
+      const existingIds = orderArr.toArray();
       const existingIndex = new Map<string, number>();
-      existingDiagrams.forEach((el, idx) => {
-        const id = el.getAttribute("id");
-        if (id) existingIndex.set(id, idx);
-      });
+      existingIds.forEach((id, idx) => existingIndex.set(id, idx));
 
       // 2) 解析待插入项，构造 xmlElement
       const inserts = patch[DIFF_INSERT].map((item, order) => {
@@ -95,24 +101,21 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
         };
       });
 
-      // 3) 为每个插入项计算锚点（anchorIndex）与深度（depth）
+      // 3) 为每个插入项计算锚点（anchorId：最近已存在的前驱）与深度（depth）
       const byId = new Map(inserts.map((i) => [i.id, i] as const));
-
-      function computeAnchorAndDepth(node: { id: string; previous: string }): {
-        anchorIndex: number;
+      function computeAnchor(node: { id: string; previous: string }): {
+        anchorId: string; // 为空表示插到最前
         depth: number;
       } {
-        // depth: 相对锚点的层级，previous 为空视为 depth = 1
         let depth = 1;
-        let anchorIndex = -1; // -1 表示插入到最前面
+        let anchorId = "";
         let prevId = node.previous;
         const seen = new Set<string>([node.id]);
-
         while (prevId) {
           if (seen.has(prevId)) {
-            // 检测到环，降级：视为从最前插入，depth 重置
+            // 检测到环，降级
             depth = 1;
-            anchorIndex = -1;
+            anchorId = "";
             break;
           }
           seen.add(prevId);
@@ -124,55 +127,51 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
             continue;
           }
 
-          // 不在本次批次中，查找现有位置
           if (existingIndex.has(prevId)) {
-            anchorIndex = existingIndex.get(prevId)!;
+            anchorId = prevId;
           } else {
-            // 未找到对应现有节点，按最前处理
-            anchorIndex = -1;
+            anchorId = "";
           }
           break;
         }
-
-        return { anchorIndex, depth };
+        return { anchorId, depth };
       }
 
-      const enriched = inserts.map((i) => ({
-        ...i,
-        ...computeAnchorAndDepth(i),
-      }));
+      const enriched = inserts.map((i) => ({ ...i, ...computeAnchor(i) }));
 
       // 4) 排序规则：
-      // - 先按锚点位置（anchorIndex）升序，使不同锚点间插入互不干扰
+      // - 先按锚点在当前序列的索引升序（不同锚点相对独立）
       // - 同锚点下，按 depth 降序（越深的先插入）
       // - 再按原始顺序的倒序，保证同层兄弟按“倒叙插入”以得到期望最终顺序
       enriched.sort((a, b) => {
-        if (a.anchorIndex !== b.anchorIndex)
-          return a.anchorIndex - b.anchorIndex;
+        const aIdx = a.anchorId ? existingIndex.get(a.anchorId)! : -1;
+        const bIdx = b.anchorId ? existingIndex.get(b.anchorId)! : -1;
+        if (aIdx !== bIdx) return aIdx - bIdx;
         if (a.depth !== b.depth) return b.depth - a.depth;
         return b.order - a.order;
       });
 
-      // 5) 倒叙插入：始终在 anchorIndex + 1 处插入；
-      //    anchorIndex 为 -1 时，插入到最前（index 0）
-      const diagrams = mxfile.get(
-        diagramKey
-      ) as unknown as Y.Array<Y.XmlElement>;
+      // 5) 插入：
+      // - 先写入 Map 内容
+      // - 再根据“当前”顺序数组查找锚点位置进行插入，避免前序插入导致的索引漂移
       for (const item of enriched) {
-        const index = item.anchorIndex + 1; // -1 -> 0；k -> k+1（紧跟在前兄弟之后）
-        diagrams.insert(index, [item.xmlElement]);
+        // 内容落盘
+        diagramsMap.set(item.id, item.xmlElement);
+        // 顺序插入
+        const currentIds = orderArr.toArray();
+        const anchorPos = item.anchorId ? currentIds.indexOf(item.anchorId) : -1;
+        const index = anchorPos + 1; // -1 -> 0；k -> k+1
+        orderArr.insert(index, [item.id]);
       }
     }
 
     if (patch[DIFF_UPDATE]) {
       // 更新
       Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
-        const diagrams = mxfile.get(
+        const diagramsMap = mxfile.get(
           diagramKey
-        ) as unknown as Y.Array<Y.XmlElement>;
-        const diagram = diagrams
-          .toArray()
-          .find((item) => item.getAttribute("id") === id);
+        ) as unknown as Y.Map<Y.XmlElement>;
+        const diagram = diagramsMap.get(id) as Y.XmlElement | undefined;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
 
@@ -260,32 +259,26 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
           // 顺序更新
           if (Reflect.has(update, "previous")) {
             const previous = update.previous;
-            const existingDiagrams = (
-              mxfile.get(diagramKey) as unknown as Y.Array<Y.XmlElement>
-            ).toArray();
+            const orderArr = mxfile.get(
+              diagramOrderKey
+            ) as unknown as Y.Array<string>;
+            const currentIds = orderArr.toArray();
 
             const targetIndex = !previous
               ? 0
-              : existingDiagrams.findIndex(
-                  (item) => item.getAttribute("id") === previous
-                ) + 1;
+              : currentIds.indexOf(previous) + 1;
 
-            const currentIndex = existingDiagrams.findIndex(
-              (item) => item.getAttribute("id") === id
-            );
+            const currentIndex = currentIds.indexOf(id);
 
-            const diagrams = mxfile.get(
-              diagramKey
-            ) as unknown as Y.Array<Y.XmlElement>;
             if (currentIndex === -1) {
-              // 未定位到当前节点（理论上不应发生），退化为直接插入
-              diagrams.insert(targetIndex, [diagram.clone()]);
+              // 未定位到当前节点（理论上不应发生），退化为直接插入 id
+              orderArr.insert(targetIndex, [id]);
             } else if (currentIndex !== targetIndex) {
               // 稳妥移动：先删后插，并在 currentIndex < targetIndex 时修正插入索引
               let insertIndex = targetIndex;
               if (currentIndex < insertIndex) insertIndex -= 1;
-              diagrams.delete(currentIndex);
-              diagrams.insert(insertIndex, [diagram.clone()]);
+              orderArr.delete(currentIndex);
+              orderArr.insert(insertIndex, [id]);
             }
           }
         }
