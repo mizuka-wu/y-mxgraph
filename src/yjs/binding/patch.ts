@@ -15,7 +15,11 @@ import {
   type YMxFile,
   diagramOrderKey,
 } from "../models/mxfile";
-import { mxCellOrderKey, type YMxGraphModel } from "../models/mxGraphModel";
+import {
+  mxCellOrderKey,
+  key as mxGraphModelKey,
+  type YMxGraphModel,
+} from "../models/mxGraphModel";
 import { key as mxCellKey } from "../models/mxCell";
 import * as Y from "yjs";
 
@@ -177,19 +181,21 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
       Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
         const diagramsMap = mxfile.get(
           diagramKey
-        ) as unknown as Y.Map<Y.XmlElement>;
-        const diagram = diagramsMap.get(id) as Y.XmlElement | undefined;
+        ) as unknown as Y.Map<YDiagram>;
+        const diagram = diagramsMap.get(id) as YDiagram | undefined;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
 
           if (update.cells) {
             // diagram 直接持有 mxGraphModel（Map 结构）作为 firstChild
-            const gm = (diagram as any).firstChild as YMxGraphModel | undefined;
-            if (!gm) return;
-            const cellsMap = gm.get(mxCellKey) as
+            const yMxGraphModel = diagram.get(mxGraphModelKey) as
+              | YMxGraphModel
+              | undefined;
+            if (!yMxGraphModel) return;
+            const cellsMap = yMxGraphModel.get(mxCellKey) as
               | Y.Map<Y.XmlElement>
               | undefined;
-            const orderArr = gm.get(mxCellOrderKey) as
+            const orderArr = yMxGraphModel.get(mxCellOrderKey) as
               | Y.Array<string>
               | undefined;
             if (!cellsMap || !orderArr) return;
