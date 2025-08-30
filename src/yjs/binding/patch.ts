@@ -224,35 +224,46 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 }
               });
 
-              // // 再处理顺序更新（按照 previous 移动）
-              // Object.keys(update.cells[DIFF_UPDATE]).forEach((id) => {
-              //   const updateObj = update.cells![DIFF_UPDATE]![id];
-              //   if (!Reflect.has(updateObj, "previous")) return;
+              // 再处理顺序更新（按照 previous 移动/插入）
+              Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
+                const updateObj = update.cells![DIFF_UPDATE]![cellId];
+                if (!Reflect.has(updateObj, "previous")) return;
 
-              //   const previous = updateObj.previous as string;
-              //   const existingCells = (mxGraphModel.querySelectorAll(
-              //     "mxCell"
-              //   ) || []) as Y.XmlElement[];
+                const previous = (updateObj as any).previous as string;
+                const existingCells = (mxGraphModel.querySelectorAll(
+                  "mxCell"
+                ) || []) as Y.XmlElement[];
 
-              //   const targetIndex = !previous
-              //     ? 0
-              //     : existingCells.findIndex(
-              //         (item) => item.getAttribute("id") === previous
-              //       ) + 1;
+                const targetIndex = !previous
+                  ? 0
+                  : existingCells.findIndex(
+                      (item) => item.getAttribute("id") === previous
+                    ) + 1;
 
-              //   const currentIndex = existingCells.findIndex(
-              //     (item) => item.getAttribute("id") === id
-              //   );
+                const currentIndex = existingCells.findIndex(
+                  (item) => item.getAttribute("id") === cellId
+                );
 
-              //   if (currentIndex === -1) return;
+                if (currentIndex === -1) {
+                  // 不存在则按顺序插入新 cell（使用已提供属性，补充 id）
+                  const newCell = new Y.XmlElement("mxCell");
+                  newCell.setAttribute("id", cellId);
+                  Object.keys(updateObj).forEach((k) => {
+                    if (k === "previous") return;
+                    newCell.setAttribute(k, (updateObj as any)[k]);
+                  });
+                  mxGraphModel.insert(targetIndex, [newCell]);
+                  return;
+                }
 
-              //   let insertIndex = targetIndex;
-              //   if (currentIndex < insertIndex) insertIndex -= 1;
-
-              //   const cell = existingCells[currentIndex];
-              //   mxGraphModel.delete(currentIndex);
-              //   mxGraphModel.insert(insertIndex, [cell]);
-              // });
+                if (currentIndex !== targetIndex) {
+                  let insertIndex = targetIndex;
+                  if (currentIndex < insertIndex) insertIndex -= 1;
+                  const cell = existingCells[currentIndex];
+                  mxGraphModel.delete(currentIndex);
+                  mxGraphModel.insert(insertIndex, [cell]);
+                }
+              });
             }
           }
 
@@ -288,7 +299,9 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
 }
 
 export function generatePatch(
-  events: Y.YEvent<Y.XmlElement | Y.Array<Y.XmlElement> | YMxFile>[]
+  events: Y.YEvent<
+    Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
+  >[]
 ): FilePatch {
   const patch: FilePatch = {};
 
@@ -299,9 +312,10 @@ export function generatePatch(
   const doc = (events[0] as any)?.transaction?.doc as Y.Doc | undefined;
   if (!doc) return patch;
   const mxfile = doc.getMap(mxfileKey) as YMxFile;
-  const diagramsArr = mxfile.get(
-    diagramKey
-  ) as unknown as Y.Array<Y.XmlElement>;
+  const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<Y.XmlElement>;
+  const orderArr = mxfile.get(
+    diagramOrderKey
+  ) as unknown as Y.Array<string>;
 
   // 读取/初始化当前文档的快照容器
   let snap = docSnapshots.get(doc);
@@ -325,8 +339,10 @@ export function generatePatch(
   };
 
   // 当前快照（变更后）
-  const diagramsList = diagramsArr.toArray();
-  const currDiagramOrder = diagramsList.map((d) => d.getAttribute("id") || "");
+  const currDiagramOrder = orderArr.toArray();
+  const diagramsList = currDiagramOrder
+    .map((id) => diagramsMap.get(id) as Y.XmlElement | undefined)
+    .filter((d): d is Y.XmlElement => !!d);
   const currCellsOrder = new Map<string, string[]>();
   const cellAttrMap = new Map<string, Map<string, Record<string, string>>>();
 
@@ -368,9 +384,8 @@ export function generatePatch(
       for (const id of inserted) {
         const index = currDiagramOrder.indexOf(id);
         const previous = index <= 0 ? "" : currDiagramOrder[index - 1];
-        const diagramEl = diagramsList.find(
-          (d) => (d.getAttribute("id") || "") === id
-        )!;
+        const diagramEl = diagramsMap.get(id) as Y.XmlElement | undefined;
+        if (!diagramEl) continue;
         const data = xmlSerializer({ diagram: serializeDiagram(diagramEl) });
         patch[DIFF_INSERT]!.push({ id, previous, data });
       }

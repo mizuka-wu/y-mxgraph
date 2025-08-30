@@ -42,7 +42,9 @@ export function bindDrawioFile(
     .getMap(mxfileKey)
     .observeDeep(
       (
-        events: Y.YEvent<Y.XmlElement | Y.Array<Y.XmlElement> | YMxFile>[],
+        events: Y.YEvent<
+          Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
+        >[],
         transaction: Y.Transaction
       ) => {
         // 远端的origin
