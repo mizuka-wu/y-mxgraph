@@ -3,7 +3,7 @@
  * @todo 绑定mxGraphModel
  */
 import { throttle } from "lodash-es";
-import { xml2doc, doc2xml } from "../transformer";
+import { xml2doc } from "../transformer";
 import { applyFilePatch, generatePatch } from "./patch";
 import { getId } from "../helper/getId";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
@@ -62,10 +62,10 @@ export function bindDrawioFile(
       startY: 0,
       scrollLeft: 0,
       scrollTop: 0,
-      mouseDown: function (_: any, event: any) {
+      mouseDown: function (_: any) {
         //
       },
-      mouseUp: function (_: any, event: any) {
+      mouseUp: function (_: any) {
         //
       },
       mouseMove: throttle(function (

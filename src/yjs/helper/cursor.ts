@@ -1,4 +1,4 @@
-function createCursorImage(Graph: any, color: string) {
+export function createCursorImage(Graph: any, color: string) {
   return Graph.createSvgImage(
     8,
     12,
