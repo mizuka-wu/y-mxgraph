@@ -27,14 +27,17 @@ const demoFile = `<mxfile pages="1">
 </mxfile>
 `;
 
-function logXmlDiffToConsole(
-  currentXml: string,
-  ydocXml: string,
-  diff: any[]
-) {
+function logXmlDiffToConsole(currentXml: string, ydocXml: string, diff: any[]) {
   try {
+    const changeSegments = Array.isArray(diff)
+      ? diff.reduce(
+          (acc: number, part: any) =>
+            acc + (part && (part.added || part.removed) ? 1 : 0),
+          0
+        )
+      : 0;
     console.groupCollapsed(
-      "XML Diff (current vs ydoc) — 更可视化输出"
+      "XML Diff (current vs ydoc) — 更可视化输出 总变更数：" + changeSegments
     );
     console.log(
       "%cLegend:%c 添加%c 删除%c 未变",
