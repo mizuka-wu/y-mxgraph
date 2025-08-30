@@ -231,9 +231,9 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 if (!Reflect.has(updateObj, "previous")) return;
 
                 const previous = updateObj.previous as string;
-                const existingCells = (
-                  mxGraphModel.querySelectorAll("mxCell") || []
-                ) as Y.XmlElement[];
+                const existingCells = (mxGraphModel.querySelectorAll(
+                  "mxCell"
+                ) || []) as Y.XmlElement[];
 
                 const targetIndex = !previous
                   ? 0
@@ -306,7 +306,9 @@ export function generatePatch(
   const doc = (events[0] as any)?.transaction?.doc as Y.Doc | undefined;
   if (!doc) return patch;
   const mxfile = doc.getMap(mxfileKey) as YMxFile;
-  const diagramsArr = mxfile.get(diagramKey) as unknown as Y.Array<Y.XmlElement>;
+  const diagramsArr = mxfile.get(
+    diagramKey
+  ) as unknown as Y.Array<Y.XmlElement>;
 
   // 读取/初始化当前文档的快照容器
   let snap = docSnapshots.get(doc);
@@ -342,7 +344,11 @@ export function generatePatch(
     const ids = cells.map((c) => c.getAttribute("id") || "");
     currCellsOrder.set(did, ids);
     const attrs = new Map<string, Record<string, string>>();
-    for (const c of cells) attrs.set(c.getAttribute("id") || "", (c.getAttributes() as Record<string, string>) || {});
+    for (const c of cells)
+      attrs.set(
+        c.getAttribute("id") || "",
+        (c.getAttributes() as Record<string, string>) || {}
+      );
     cellAttrMap.set(did, attrs);
   }
 
@@ -355,17 +361,23 @@ export function generatePatch(
     const currSet = new Set(currDiagramOrder);
 
     // 删除
-    const removed = prevDiagramOrder.filter((id: string) => !currSet.has(id) && id);
+    const removed = prevDiagramOrder.filter(
+      (id: string) => !currSet.has(id) && id
+    );
     if (removed.length) patch[DIFF_REMOVE] = removed;
 
     // 插入
-    const inserted = currDiagramOrder.filter((id: string) => !prevSet.has(id) && id);
+    const inserted = currDiagramOrder.filter(
+      (id: string) => !prevSet.has(id) && id
+    );
     if (inserted.length) {
       patch[DIFF_INSERT] = patch[DIFF_INSERT] || [];
       for (const id of inserted) {
         const index = currDiagramOrder.indexOf(id);
         const previous = index <= 0 ? "" : currDiagramOrder[index - 1];
-        const diagramEl = diagramsList.find((d) => (d.getAttribute("id") || "") === id)!;
+        const diagramEl = diagramsList.find(
+          (d) => (d.getAttribute("id") || "") === id
+        )!;
         const data = xmlSerializer({ diagram: serializeDiagram(diagramEl) });
         patch[DIFF_INSERT]!.push({ id, previous, data });
       }
@@ -409,7 +421,9 @@ export function generatePatch(
     }
 
     // 插入
-    const inserted = currCells.filter((cid: string) => !prevSet.has(cid) && cid);
+    const inserted = currCells.filter(
+      (cid: string) => !prevSet.has(cid) && cid
+    );
     if (inserted.length) {
       const cells = ensureCellSection(did);
       cells[DIFF_INSERT] = cells[DIFF_INSERT] || [];
@@ -433,7 +447,8 @@ export function generatePatch(
       if (prevP !== currP) {
         const cells = ensureCellSection(did);
         cells[DIFF_UPDATE] = cells[DIFF_UPDATE] || {};
-        const cellUpdate = (cells[DIFF_UPDATE]![cid] = cells[DIFF_UPDATE]![cid] || {});
+        const cellUpdate = (cells[DIFF_UPDATE]![cid] =
+          cells[DIFF_UPDATE]![cid] || {});
         // 只写入顺序字段，属性更新仍由事件层收集
         (cellUpdate as any).previous = currP;
       }
