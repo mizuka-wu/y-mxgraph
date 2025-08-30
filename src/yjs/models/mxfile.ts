@@ -12,7 +12,7 @@ import type { Diagram } from "./diagram";
 import type { ElementCompact } from "xml-js";
 
 export const key = "mxfile";
-export const diagramOrderKey = "diagramOrder";
+export const diagramOrderKey = diagramKey + "Order";
 
 export type YMxFile = Y.Map<{
   pages: string;
