@@ -225,69 +225,69 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 }
               });
 
-              // 再处理顺序更新（按照 previous 移动）
-              Object.keys(update.cells[DIFF_UPDATE]).forEach((id) => {
-                const updateObj = update.cells![DIFF_UPDATE]![id];
-                if (!Reflect.has(updateObj, "previous")) return;
+              // // 再处理顺序更新（按照 previous 移动）
+              // Object.keys(update.cells[DIFF_UPDATE]).forEach((id) => {
+              //   const updateObj = update.cells![DIFF_UPDATE]![id];
+              //   if (!Reflect.has(updateObj, "previous")) return;
 
-                const previous = updateObj.previous as string;
-                const existingCells = (mxGraphModel.querySelectorAll(
-                  "mxCell"
-                ) || []) as Y.XmlElement[];
+              //   const previous = updateObj.previous as string;
+              //   const existingCells = (mxGraphModel.querySelectorAll(
+              //     "mxCell"
+              //   ) || []) as Y.XmlElement[];
 
-                const targetIndex = !previous
-                  ? 0
-                  : existingCells.findIndex(
-                      (item) => item.getAttribute("id") === previous
-                    ) + 1;
+              //   const targetIndex = !previous
+              //     ? 0
+              //     : existingCells.findIndex(
+              //         (item) => item.getAttribute("id") === previous
+              //       ) + 1;
 
-                const currentIndex = existingCells.findIndex(
-                  (item) => item.getAttribute("id") === id
-                );
+              //   const currentIndex = existingCells.findIndex(
+              //     (item) => item.getAttribute("id") === id
+              //   );
 
-                if (currentIndex === -1) return;
+              //   if (currentIndex === -1) return;
 
-                let insertIndex = targetIndex;
-                if (currentIndex < insertIndex) insertIndex -= 1;
+              //   let insertIndex = targetIndex;
+              //   if (currentIndex < insertIndex) insertIndex -= 1;
 
-                const cell = existingCells[currentIndex];
-                mxGraphModel.delete(currentIndex);
-                mxGraphModel.insert(insertIndex, [cell]);
-              });
+              //   const cell = existingCells[currentIndex];
+              //   mxGraphModel.delete(currentIndex);
+              //   mxGraphModel.insert(insertIndex, [cell]);
+              // });
             }
           }
 
-          // 顺序更新
-          if (Reflect.has(update, "previous")) {
-            const previous = update.previous;
-            const existingDiagrams = (
-              mxfile.get(diagramKey) as unknown as Y.Array<Y.XmlElement>
-            ).toArray();
+          // // 顺序更新
+          // if (Reflect.has(update, "previous")) {
+          //   const previous = update.previous;
+          //   const existingDiagrams = (
+          //     mxfile.get(diagramKey) as unknown as Y.Array<Y.XmlElement>
+          //   ).toArray();
 
-            const targetIndex = !previous
-              ? 0
-              : existingDiagrams.findIndex(
-                  (item) => item.getAttribute("id") === previous
-                ) + 1;
+          //   const targetIndex = !previous
+          //     ? 0
+          //     : existingDiagrams.findIndex(
+          //         (item) => item.getAttribute("id") === previous
+          //       ) + 1;
 
-            const currentIndex = existingDiagrams.findIndex(
-              (item) => item.getAttribute("id") === id
-            );
+          //   const currentIndex = existingDiagrams.findIndex(
+          //     (item) => item.getAttribute("id") === id
+          //   );
 
-            const diagrams = mxfile.get(
-              diagramKey
-            ) as unknown as Y.Array<Y.XmlElement>;
-            if (currentIndex === -1) {
-              // 未定位到当前节点（理论上不应发生），退化为直接插入
-              diagrams.insert(targetIndex, [diagram]);
-            } else if (currentIndex !== targetIndex) {
-              // 稳妥移动：先删后插，并在 currentIndex < targetIndex 时修正插入索引
-              let insertIndex = targetIndex;
-              if (currentIndex < insertIndex) insertIndex -= 1;
-              diagrams.delete(currentIndex);
-              diagrams.insert(insertIndex, [diagram]);
-            }
-          }
+          //   const diagrams = mxfile.get(
+          //     diagramKey
+          //   ) as unknown as Y.Array<Y.XmlElement>;
+          //   if (currentIndex === -1) {
+          //     // 未定位到当前节点（理论上不应发生），退化为直接插入
+          //     diagrams.insert(targetIndex, [diagram]);
+          //   } else if (currentIndex !== targetIndex) {
+          //     // 稳妥移动：先删后插，并在 currentIndex < targetIndex 时修正插入索引
+          //     let insertIndex = targetIndex;
+          //     if (currentIndex < insertIndex) insertIndex -= 1;
+          //     diagrams.delete(currentIndex);
+          //     diagrams.insert(insertIndex, [diagram]);
+          //   }
+          // }
         }
       });
     }
