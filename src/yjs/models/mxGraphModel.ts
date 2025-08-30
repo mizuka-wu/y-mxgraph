@@ -19,7 +19,7 @@ export interface MxGraphModel extends ElementCompact {
   };
 }
 
-type YMxGraphModel = Y.Map<{
+export type YMxGraphModel = Y.Map<{
   [mxCellKey]: Y.Map<Y.XmlElement>;
   [mxCellOrderKey]: Y.Array<string>;
 }>;

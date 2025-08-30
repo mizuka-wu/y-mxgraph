@@ -13,6 +13,7 @@ import {
   parse as parseMxGraphModel,
   key as mxGraphModelKey,
   serialize as serializerMxGraphModel,
+  type YMxGraphModel,
 } from "../models/mxGraphModel";
 
 export function xml2doc(xml: string, _doc?: Y.Doc) {
@@ -47,7 +48,7 @@ export function doc2xml(doc: Y.Doc, spaces = 0): string {
     return serializer(
       {
         [mxGraphModelKey]: serializerMxGraphModel(
-          doc.share.get(mxGraphModelKey) as unknown as Y.XmlElement
+          doc.share.get(mxGraphModelKey) as unknown as YMxGraphModel
         ),
       },
       spaces
