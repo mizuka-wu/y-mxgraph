@@ -27,6 +27,47 @@ const demoFile = `<mxfile pages="1">
 </mxfile>
 `;
 
+function logXmlDiffToConsole(
+  currentXml: string,
+  ydocXml: string,
+  diff: any[]
+) {
+  try {
+    console.groupCollapsed(
+      "XML Diff (current vs ydoc) — 更可视化输出"
+    );
+    console.log(
+      "%cLegend:%c 添加%c 删除%c 未变",
+      "font-weight:bold;color:#333;",
+      "color:#1b5e20;background:#e8f5e9;padding:1px 2px;border-radius:2px;",
+      "color:#b71c1c;background:#ffebee;padding:1px 2px;border-radius:2px;margin-left:4px;",
+      "color:#777;margin-left:4px;"
+    );
+    let fmt = "";
+    const styles: string[] = [];
+    for (const part of diff) {
+      const text = (part.value as string).replace(/%/g, "%%");
+      if (part.added) {
+        fmt += "%c" + text;
+        styles.push("color:#1b5e20;background:#e8f5e9;");
+      } else if (part.removed) {
+        fmt += "%c" + text;
+        styles.push("color:#b71c1c;background:#ffebee;");
+      } else {
+        fmt += "%c" + text;
+        styles.push("color:#555;");
+      }
+    }
+    console.log(fmt, ...styles);
+    // 附加原始对象，便于进一步调试
+    console.log("原始数据: ", { currentXml, ydocXml, diff });
+    console.groupEnd();
+  } catch (e) {
+    console.warn("可视化 diff 输出失败，降级为原始对象输出。", e);
+    console.log({ currentXml, ydocXml, diff });
+  }
+}
+
 function getLatestXml(app: any) {
   const data = new XMLSerializer().serializeToString(
     app.currentFile.ui.getXmlFileData()
@@ -97,11 +138,7 @@ window.onload = function () {
         const ydocXml = doc2xml(doc, SPACES);
         const diff = diffWordsWithSpace(currentXml, ydocXml, {});
 
-        console.log("生成当前和ydoc转换的xml对比", {
-          currentXml,
-          ydocXml,
-          diff,
-        });
+        logXmlDiffToConsole(currentXml, ydocXml, diff as any[]);
       }, 1000)
     );
   });
