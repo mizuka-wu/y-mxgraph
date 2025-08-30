@@ -78,7 +78,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
           .sort((a, b) => b - a);
 
         // 先从顺序数组删除
-        indexList.forEach((idx) => orderArr.delete(idx));
+        indexList.forEach((idx) => orderArr.delete(idx, 1));
         // 再从 map 删除内容
         removeIds.forEach((id) => diagramsMap.delete(id));
       }
@@ -208,7 +208,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
               )
                 .filter((i) => i !== -1)
                 .sort((a, b) => b - a);
-              removeIndexList.forEach((idx) => orderArr.delete(idx));
+              removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
               update.cells[DIFF_REMOVE].forEach((cid) => cellsMap.delete(cid));
             }
 
@@ -271,7 +271,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 if (currentIndex !== targetIndex) {
                   let insertIndex = targetIndex;
                   if (currentIndex < insertIndex) insertIndex -= 1;
-                  orderArr.delete(currentIndex);
+                  orderArr.delete(currentIndex, 1);
                   orderArr.insert(insertIndex, [cellId]);
                 }
               });
@@ -299,7 +299,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
               // 稳妥移动：先删后插，并在 currentIndex < targetIndex 时修正插入索引
               let insertIndex = targetIndex;
               if (currentIndex < insertIndex) insertIndex -= 1;
-              orderArr.delete(currentIndex);
+              orderArr.delete(currentIndex, 1);
               orderArr.insert(insertIndex, [id]);
             }
           }
