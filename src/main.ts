@@ -2,7 +2,7 @@ import * as Y from "yjs";
 import { debounce } from "lodash-es";
 import { xml2js, js2xml } from "xml-js";
 import { WebrtcProvider } from "y-webrtc";
-import { jsonDiff } from "diff";
+import { diffWordsWithSpace } from "diff";
 import { bindDrawioFile, doc2xml } from "./yjs";
 
 const SPACES = 2;
@@ -94,16 +94,12 @@ window.onload = function () {
       "change",
       debounce(() => {
         const currentXml = getLatestXml(app);
-        const current = xml2js(currentXml, { compact: true });
         const ydocXml = doc2xml(doc, SPACES);
-        const ydoc = xml2js(ydocXml, { compact: true });
-        const diff = jsonDiff.diff(current, ydoc, {});
+        const diff = diffWordsWithSpace(currentXml, ydocXml, {});
 
         console.log("生成当前和ydoc转换的xml对比", {
-          current,
           currentXml,
           ydocXml,
-          ydoc,
           diff,
         });
       }, 1000)
