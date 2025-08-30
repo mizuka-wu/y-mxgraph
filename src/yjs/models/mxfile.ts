@@ -16,7 +16,7 @@ export const diagramOrderKey = diagramKey + "Order";
 
 export type YMxFile = Y.Map<{
   pages: string;
-  [diagramKey]: Y.Map<Y.XmlElement>;
+  [diagramKey]: Y.Map<YDiagram>;
   [diagramOrderKey]: Y.Array<string>;
 }>;
 
@@ -45,7 +45,7 @@ export function parse(object: MxFile, doc: Y.Doc) {
 }
 
 export function serializer(yMxFile: YMxFile): ElementCompact {
-  const diagrams = yMxFile.get(diagramKey) as unknown as YDiagram;
+  const diagrams = yMxFile.get(diagramKey) as unknown as Y.Map<YDiagram>;
   const diagramOrder = yMxFile.get(
     diagramOrderKey
   ) as unknown as Y.Array<string>;

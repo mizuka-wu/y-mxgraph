@@ -218,12 +218,17 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 const id = (item as any)["id"] as string | undefined;
                 if (!id) continue;
                 const xmlElement = new Y.XmlElement("mxCell");
-                Object.keys(item).forEach((key) =>
-                  xmlElement.setAttribute(key, item[key])
-                );
+                Object.keys(item).forEach((key) => {
+                  if (key === "previous") return;
+                  xmlElement.setAttribute(key, item[key]);
+                });
                 cellsMap.set(id, xmlElement);
-                const len = orderArr.toArray().length;
-                orderArr.insert(len, [id]);
+                const previous = (item as any)["previous"] as string | undefined;
+                const currentIds = orderArr.toArray();
+                const targetIndex = !previous
+                  ? currentIds.length
+                  : currentIds.indexOf(previous) + 1;
+                orderArr.insert(targetIndex, [id]);
               }
             }
 
@@ -306,7 +311,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
 
 export function generatePatch(
   events: Y.YEvent<
-    Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
+    Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile | YDiagram
   >[]
 ): FilePatch {
   const patch: FilePatch = {};
@@ -318,7 +323,7 @@ export function generatePatch(
   const doc = (events[0] as any)?.transaction?.doc as Y.Doc | undefined;
   if (!doc) return patch;
   const mxfile = doc.getMap(mxfileKey) as YMxFile;
-  const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<Y.XmlElement>;
+  const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
   const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
 
   // 读取/初始化当前文档的快照容器
@@ -345,15 +350,15 @@ export function generatePatch(
   // 当前快照（变更后）
   const currDiagramOrder = orderArr.toArray();
   const diagramsList = currDiagramOrder
-    .map((id) => diagramsMap.get(id) as Y.XmlElement | undefined)
-    .filter((d): d is Y.XmlElement => !!d);
+    .map((id) => diagramsMap.get(id) as YDiagram | undefined)
+    .filter((d): d is YDiagram => !!d);
   const currCellsOrder = new Map<string, string[]>();
   const cellAttrMap = new Map<string, Map<string, Record<string, string>>>();
 
   for (const d of diagramsList) {
-    const did = d.getAttribute("id") || "";
+    const did = (d.get("id") as unknown as string) || "";
     const attrs = new Map<string, Record<string, string>>();
-    const gm = (d as any).firstChild as YMxGraphModel | undefined;
+    const gm = d.get(mxGraphModelKey) as YMxGraphModel | undefined;
     if (gm) {
       const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
       const orderArr = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
@@ -397,9 +402,9 @@ export function generatePatch(
       for (const id of inserted) {
         const index = currDiagramOrder.indexOf(id);
         const previous = index <= 0 ? "" : currDiagramOrder[index - 1];
-        const diagramEl = diagramsMap.get(id) as Y.XmlElement | undefined;
-        if (!diagramEl) continue;
-        const data = xmlSerializer({ diagram: serializeDiagram(diagramEl) });
+        const yDiagram = diagramsMap.get(id) as YDiagram | undefined;
+        if (!yDiagram) continue;
+        const data = xmlSerializer({ diagram: serializeDiagram(yDiagram) });
         patch[DIFF_INSERT]!.push({ id, previous, data });
       }
     }
