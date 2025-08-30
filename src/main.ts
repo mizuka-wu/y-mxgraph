@@ -1,6 +1,11 @@
 import * as Y from "yjs";
+import { debounce } from "lodash-es";
+import { xml2js, js2xml } from "xml-js";
 import { WebrtcProvider } from "y-webrtc";
+import { diffLines } from "diff";
 import { bindDrawioFile, doc2xml } from "./yjs";
+
+const SPACE = 2;
 
 const demoFile = `<mxfile pages="1">
   <diagram name="第 1 页" id="JUnyabHTdChjKBf1yHdD">
@@ -13,6 +18,10 @@ const demoFile = `<mxfile pages="1">
   </diagram>
 </mxfile>
 `;
+
+function getLatestXml(app: any) {
+  return js2xml(xml2js(app.currentFile.ui.getXmlFileData()), { spaces: SPACE });
+}
 
 window.onload = function () {
   const App = (window as any).App;
@@ -30,7 +39,9 @@ window.onload = function () {
   App.main((app: any) => {
     const file = app.currentFile;
     if (!file) return console.warn("no file");
-    console.log(file.data);
+
+    Reflect.set(globalThis, "app", app);
+
     const doc = new Y.Doc();
     const roomName = "demo";
     const provider = new WebrtcProvider(roomName, doc, {
@@ -44,34 +55,22 @@ window.onload = function () {
     Reflect.set(window, "__doc__", doc);
     Reflect.set(window, "__awareness__", provider.awareness);
     console.log("注入完成 当前room：", roomName);
-    console.log(doc2xml(doc, 2));
+
+    const graph = app.editor.graph;
+    const mxGraphModel = graph.model;
+    mxGraphModel.addListener(
+      "change",
+      debounce(() => {
+        const current = getLatestXml(app);
+        const ydoc = doc2xml(doc);
+        const diff = diffLines(current, ydoc);
+
+        console.log("生成当前和ydoc转换的xml对比", {
+          current,
+          ydoc,
+          diff,
+        });
+      }, 1000)
+    );
   });
 };
-//  * 通过注入的方式拿到实例, 这个之后再考虑什么时候搞进去，3s后开发版是一定加载完成的
-//  */
-// setTimeout(() => {
-//   (window as any).Draw.loadPlugin((app: any) => {
-//     const file = app.currentFile;
-//     if (!file) return console.warn("no file");
-//     const doc = new Y.Doc();
-//     const roomName = file.getId() || file.draftId || file.created + "";
-//     const provider = new WebrtcProvider(roomName, doc, {
-//       signaling: [],
-//     });
-//     bindDrawioFile(file, {
-//       doc,
-//       awareness: provider.awareness,
-//     });
-
-//     Reflect.set(window, "__doc__", doc);
-//     Reflect.set(window, "__awareness__", provider.awareness);
-//     console.log("注入完成 当前room：", roomName, {
-//       fileId: file.getId(),
-//       draftId: file.draftId,
-//       created: file.created + "",
-//       fileData: file.data,
-//     });
-
-//     console.log(doc2xml(doc));
-//   });
-// }, 3000);
