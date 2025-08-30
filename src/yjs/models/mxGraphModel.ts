@@ -12,38 +12,52 @@ import {
 import type { ElementCompact } from "xml-js";
 
 export const key = "mxGraphModel";
+export const mxCellOrderKey = mxCellKey + "Order";
 export interface MxGraphModel extends ElementCompact {
   root: {
     [mxCellKey]: MxCellModel[];
   };
 }
 
+type YMxGraphModel = Y.Map<{
+  [mxCellKey]: Y.Map<Y.XmlElement>;
+  [mxCellOrderKey]: Y.Array<string>;
+}>;
+
 export function parse(object: MxGraphModel, doc?: Y.Doc) {
   const mxCells = (object.root[mxCellKey] || []).map((cell) => {
-    return parseMxCell(cell);
+    return {
+      value: parseMxCell(cell),
+      id: cell._attributes?.id! as string,
+    };
   });
 
-  const xmlElement = doc?.getXmlElement(key) || new Y.XmlElement(key);
+  const mxGraphElement = doc?.getMap(key) || new Y.Map();
 
-  if (doc) {
-    xmlElement.nodeName = key;
-    xmlElement.insert(0, mxCells);
-  } else {
-    xmlElement.insert(0, mxCells);
-  }
+  const cells = new Y.Map<Y.XmlElement>();
+  const cellsOrder = new Y.Array<string>();
 
-  return xmlElement;
+  mxCells.forEach((cell) => {
+    cells.set(cell.id, cell.value);
+  });
+
+  cellsOrder.push(mxCells.map((cell) => cell.id));
+
+  mxGraphElement.set(mxCellKey, cells);
+  mxGraphElement.set(mxCellOrderKey, cellsOrder);
+
+  return mxGraphElement as YMxGraphModel;
 }
 
-export function serialize(xmlElement: Y.XmlElement) {
-  const cells = (xmlElement.querySelectorAll(mxCellKey) ||
-    []) as Y.XmlElement[];
+export function serialize(map: YMxGraphModel) {
+  const cells = map.get(mxCellKey) as unknown as Y.Map<Y.XmlElement>;
+  const cellsOrder = map.get(mxCellOrderKey) as unknown as Y.Array<string>;
   return {
-    _attributes: {
-      ...xmlElement.getAttributes(),
-    },
+    _attributes: {},
     root: {
-      [mxCellKey]: cells.map(serializeMxCell),
+      [mxCellKey]: cellsOrder
+        .toArray()
+        .map((id) => serializeMxCell(cells.get(id) as Y.XmlElement)),
     },
   };
 }
