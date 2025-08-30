@@ -83,10 +83,18 @@ function getLatestXml(app: any) {
       return;
     }
     if (typeof node === "object") {
-      if (node.type === "element" && node.name === "mxGraphModel") {
-        if (node.attributes && Object.keys(node.attributes).length) {
-          delete node.attributes;
-          removedCount++;
+      if (node.type === "element") {
+        if (node.name === "mxGraphModel") {
+          if (node.attributes && Object.keys(node.attributes).length) {
+            delete node.attributes;
+            removedCount++;
+          }
+        } else if (node.attributes && Object.keys(node.attributes).length) {
+          // 对所有元素的 attributes 进行字母序排序，避免仅因顺序不同产生 diff
+          const keys = Object.keys(node.attributes).sort();
+          const sorted: any = {};
+          for (const k of keys) sorted[k] = node.attributes[k];
+          node.attributes = sorted;
         }
       }
       if (node.elements) stripAttrs(node.elements);
@@ -94,6 +102,42 @@ function getLatestXml(app: any) {
   };
   stripAttrs(obj);
   return js2xml(obj, { compact: false, spaces: SPACES });
+}
+
+// 对任意 XML 文本进行属性字母序排序并标准化缩进
+function normalizeAttrsOrderForXml(xml: string): string {
+  try {
+    const obj = xml2js(xml, { compact: false });
+    const sortAttrs = (node: any): void => {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        node.forEach(sortAttrs);
+        return;
+      }
+      if (typeof node === "object") {
+        if (node.type === "element") {
+          if (node.name === "mxGraphModel") {
+            if (node.attributes && Object.keys(node.attributes).length) {
+              // 保持与 getLatestXml 同步：移除 mxGraphModel 的 attributes
+              delete node.attributes;
+            }
+          } else if (node.attributes && Object.keys(node.attributes).length) {
+            // 其它元素按字母序排序 attributes
+            const keys = Object.keys(node.attributes).sort();
+            const sorted: any = {};
+            for (const k of keys) sorted[k] = node.attributes[k];
+            node.attributes = sorted;
+          }
+        }
+        if (node.elements) node.elements.forEach(sortAttrs);
+      }
+    };
+    sortAttrs(obj);
+    return js2xml(obj, { compact: false, spaces: SPACES });
+  } catch (e) {
+    // 解析失败则直接返回原字符串，避免影响流程
+    return xml;
+  }
 }
 
 window.onload = function () {
@@ -135,7 +179,8 @@ window.onload = function () {
       "change",
       debounce(() => {
         const currentXml = getLatestXml(app);
-        const ydocXml = doc2xml(doc, SPACES);
+        let ydocXml = doc2xml(doc, SPACES);
+        ydocXml = normalizeAttrsOrderForXml(ydocXml);
         const diff = diffWordsWithSpace(currentXml, ydocXml, {});
 
         logXmlDiffToConsole(currentXml, ydocXml, diff as any[]);
