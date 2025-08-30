@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@types/lodash-es": "^4.17.12",
+    "json-diff": "^1.0.6",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
     "y-webrtc": "^10.3.0"
