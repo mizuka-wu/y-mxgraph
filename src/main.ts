@@ -18,6 +18,10 @@ window.onload = function () {
   const App = (window as any).App;
 
   // 加载文件地址（demo base文件）
+  if (window.location.hash) {
+    window.location.hash = "";
+    window.location.reload();
+  }
   window.location.hash = "#R" + encodeURIComponent(demoFile);
   /**
    * 设置文件
