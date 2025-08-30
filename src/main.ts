@@ -5,7 +5,7 @@ import { WebrtcProvider } from "y-webrtc";
 import { diffLines } from "diff";
 import { bindDrawioFile, doc2xml } from "./yjs";
 
-const SPACE = 2;
+const SPACES = 2;
 
 const demoFile = `<mxfile pages="1">
   <diagram name="第 1 页" id="JUnyabHTdChjKBf1yHdD">
@@ -20,7 +20,31 @@ const demoFile = `<mxfile pages="1">
 `;
 
 function getLatestXml(app: any) {
-  return js2xml(xml2js(app.currentFile.ui.getXmlFileData()), { spaces: SPACE });
+  const data = new XMLSerializer().serializeToString(
+    app.currentFile.ui.getXmlFileData()
+  );
+  const obj = xml2js(data, { compact: false });
+
+  // 删除 mxGraphModel 的所有 attributes
+  let removedCount = 0;
+  const stripAttrs = (node: any): void => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(stripAttrs);
+      return;
+    }
+    if (typeof node === "object") {
+      if (node.type === "element" && node.name === "mxGraphModel") {
+        if (node.attributes && Object.keys(node.attributes).length) {
+          delete node.attributes;
+          removedCount++;
+        }
+      }
+      if (node.elements) stripAttrs(node.elements);
+    }
+  };
+  stripAttrs(obj);
+  return js2xml(obj, { compact: false, spaces: SPACES });
 }
 
 window.onload = function () {
@@ -62,7 +86,7 @@ window.onload = function () {
       "change",
       debounce(() => {
         const current = getLatestXml(app);
-        const ydoc = doc2xml(doc);
+        const ydoc = doc2xml(doc, SPACES);
         const diff = diffLines(current, ydoc);
 
         console.log("生成当前和ydoc转换的xml对比", {
