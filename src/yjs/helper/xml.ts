@@ -31,34 +31,6 @@ function deepProcess(node: any): void {
       value = node[key];
     }
 
-    // 特殊处理 mxCell：如果包含 mxGeometry，则把它移动到 _attributes 上
-    if (keyLower === "mxcell") {
-      const attachGeometry = (cell: any) => {
-        if (cell && typeof cell === "object" && cell.mxGeometry !== undefined) {
-          if (!cell._attributes || typeof cell._attributes !== "object") {
-            cell._attributes = {};
-          }
-
-          // 将 mxGeometry 移动到 _attributes，键名保持为 mxGeometry
-          (cell._attributes as any).mxGeometry = js2xml(
-            {
-              mxGeometry: cell.mxGeometry,
-            },
-            {
-              compact: true,
-            }
-          );
-          delete cell.mxGeometry;
-        }
-      };
-
-      if (Array.isArray(value)) {
-        for (const v of value) attachGeometry(v);
-      } else {
-        attachGeometry(value);
-      }
-    }
-
     // 继续递归（除 _attributes 外的所有键）
     if (Array.isArray(value)) {
       for (const v of value) deepProcess(v);

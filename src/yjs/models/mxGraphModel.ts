@@ -7,13 +7,14 @@ import {
   key as mxCellKey,
   parse as parseMxCell,
   serialize as serializeMxCell,
+  type MxCellModel,
 } from "./mxCell";
 import type { ElementCompact } from "xml-js";
 
 export const key = "mxGraphModel";
 export interface MxGraphModel extends ElementCompact {
   root: {
-    [mxCellKey]: ElementCompact[];
+    [mxCellKey]: MxCellModel[];
   };
 }
 
