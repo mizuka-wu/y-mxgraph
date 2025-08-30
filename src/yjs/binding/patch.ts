@@ -14,6 +14,8 @@ import {
   type YMxFile,
   diagramOrderKey,
 } from "../models/mxfile";
+import { mxCellOrderKey, type YMxGraphModel } from "../models/mxGraphModel";
+import { key as mxCellKey } from "../models/mxCell";
 import * as Y from "yjs";
 
 const DIFF_INSERT = "i";
@@ -26,6 +28,8 @@ type DocSnapshot = {
   cellsOrder: Map<string, string[]>;
 };
 const docSnapshots = new WeakMap<Y.Doc, DocSnapshot>();
+
+// 仅使用根级单实例 mxGraphModel（{ [mxCellKey], [mxCellOrderKey] }）
 
 export interface DiagramInsert {
   data: string;
@@ -176,51 +180,47 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
           const update = patch[DIFF_UPDATE]![id];
 
           if (update.cells) {
-            const mxGraphModel = diagram.firstChild as Y.XmlElement;
+            // diagram 直接持有 mxGraphModel（Map 结构）作为 firstChild
+            const gm = (diagram as any).firstChild as YMxGraphModel | undefined;
+            if (!gm) return;
+            const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+            const orderArr = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+            if (!cellsMap || !orderArr) return;
+
             // 删除
-            if (update.cells[DIFF_REMOVE]) {
-              const existingCells = mxGraphModel.querySelectorAll(
-                "mxCell"
-              ) as Y.XmlElement[];
-              const removeIndexList = update.cells[DIFF_REMOVE].map((id) =>
-                existingCells.findIndex(
-                  (item) => item.getAttribute("id") === id
-                )
-              )
-                .filter((index) => index !== -1)
+            if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
+              const orderIds = orderArr.toArray();
+              const removeIndexList = update.cells[DIFF_REMOVE]
+                .map((cid) => orderIds.indexOf(cid))
+                .filter((i) => i !== -1)
                 .sort((a, b) => b - a);
-              removeIndexList.forEach((index) => mxGraphModel.delete(index));
+              removeIndexList.forEach((idx) => orderArr.delete(idx));
+              update.cells[DIFF_REMOVE].forEach((cid) => cellsMap.delete(cid));
             }
+
             // 添加
-            if (update.cells[DIFF_INSERT]) {
-              mxGraphModel.insert(
-                mxGraphModel.length,
-                update.cells[DIFF_INSERT].map((item) => {
-                  const xmlElement = new Y.XmlElement("mxCell");
-                  Object.keys(item).forEach((key) => {
-                    xmlElement.setAttribute(key, item[key]);
-                  });
-                  return xmlElement;
-                })
-              );
+            if (update.cells[DIFF_INSERT] && update.cells[DIFF_INSERT].length) {
+              for (const item of update.cells[DIFF_INSERT]) {
+                const id = (item as any)["id"] as string | undefined;
+                if (!id) continue;
+                const xmlElement = new Y.XmlElement("mxCell");
+                Object.keys(item).forEach((key) => xmlElement.setAttribute(key, item[key]));
+                cellsMap.set(id, xmlElement);
+                const len = orderArr.toArray().length;
+                orderArr.insert(len, [id]);
+              }
             }
 
             if (update.cells[DIFF_UPDATE]) {
               // 先应用属性更新（跳过 previous）
-              Object.keys(update.cells[DIFF_UPDATE]).forEach((id) => {
-                const cell = (
-                  mxGraphModel.querySelectorAll("mxCell") as Y.XmlElement[]
-                ).find((_cell) => _cell.getAttribute("id") === id);
+              Object.keys(update.cells[DIFF_UPDATE]).forEach((cid) => {
+                const updateObj = update.cells![DIFF_UPDATE]![cid];
+                const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
                 if (cell) {
-                  Object.keys(update.cells![DIFF_UPDATE]![id]).forEach(
-                    (key) => {
-                      if (key === "previous") return; // 顺序更新另行处理
-                      cell.setAttribute(
-                        key,
-                        update.cells![DIFF_UPDATE]![id][key]
-                      );
-                    }
-                  );
+                  Object.keys(updateObj).forEach((k) => {
+                    if (k === "previous") return;
+                    cell.setAttribute(k, updateObj[k]);
+                  });
                 }
               });
 
@@ -228,40 +228,28 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
               Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
                 const updateObj = update.cells![DIFF_UPDATE]![cellId];
                 if (!Reflect.has(updateObj, "previous")) return;
-
                 const previous = (updateObj as any).previous as string;
-                const existingCells = (mxGraphModel.querySelectorAll(
-                  "mxCell"
-                ) || []) as Y.XmlElement[];
 
-                const targetIndex = !previous
-                  ? 0
-                  : existingCells.findIndex(
-                      (item) => item.getAttribute("id") === previous
-                    ) + 1;
-
-                const currentIndex = existingCells.findIndex(
-                  (item) => item.getAttribute("id") === cellId
-                );
-
+                const currentIds = orderArr.toArray();
+                const targetIndex = !previous ? 0 : currentIds.indexOf(previous) + 1;
+                const currentIndex = currentIds.indexOf(cellId);
                 if (currentIndex === -1) {
-                  // 不存在则按顺序插入新 cell（使用已提供属性，补充 id）
+                  // 不存在则按顺序插入新 cell
                   const newCell = new Y.XmlElement("mxCell");
                   newCell.setAttribute("id", cellId);
                   Object.keys(updateObj).forEach((k) => {
                     if (k === "previous") return;
                     newCell.setAttribute(k, (updateObj as any)[k]);
                   });
-                  mxGraphModel.insert(targetIndex, [newCell]);
+                  cellsMap.set(cellId, newCell);
+                  orderArr.insert(targetIndex, [cellId]);
                   return;
                 }
-
                 if (currentIndex !== targetIndex) {
                   let insertIndex = targetIndex;
                   if (currentIndex < insertIndex) insertIndex -= 1;
-                  const cell = existingCells[currentIndex];
-                  mxGraphModel.delete(currentIndex);
-                  mxGraphModel.insert(insertIndex, [cell]);
+                  orderArr.delete(currentIndex);
+                  orderArr.insert(insertIndex, [cellId]);
                 }
               });
             }
@@ -348,16 +336,24 @@ export function generatePatch(
 
   for (const d of diagramsList) {
     const did = d.getAttribute("id") || "";
-    const gm = d.firstChild as Y.XmlElement;
-    const cells = (gm?.querySelectorAll("mxCell") || []) as Y.XmlElement[];
-    const ids = cells.map((c) => c.getAttribute("id") || "");
-    currCellsOrder.set(did, ids);
     const attrs = new Map<string, Record<string, string>>();
-    for (const c of cells)
-      attrs.set(
-        c.getAttribute("id") || "",
-        (c.getAttributes() as Record<string, string>) || {}
-      );
+    const gm = (d as any).firstChild as YMxGraphModel | undefined;
+    if (gm) {
+      const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+      const orderArr = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+      if (cellsMap && orderArr) {
+        const ids = orderArr.toArray();
+        currCellsOrder.set(did, ids);
+        for (const cid of ids) {
+          const c = cellsMap.get(cid) as Y.XmlElement | undefined;
+          if (c) attrs.set(cid, (c.getAttributes() as Record<string, string>) || {});
+        }
+      } else {
+        currCellsOrder.set(did, []);
+      }
+    } else {
+      currCellsOrder.set(did, []);
+    }
     cellAttrMap.set(did, attrs);
   }
 
@@ -477,13 +473,12 @@ export function generatePatch(
     const cellId = el.getAttribute("id");
     if (!cellId || insertedCellIdGlobal.has(cellId)) continue;
 
-    // 定位所属 diagram
+    // 定位所属 diagram：基于快照的顺序表判断
+    const idsEntries = Array.from(currCellsOrder.entries());
     let diagramId = "";
-    for (const d of diagramsList) {
-      const gm = d.firstChild as Y.XmlElement;
-      const cells = (gm.querySelectorAll("mxCell") || []) as Y.XmlElement[];
-      if (cells.includes(el)) {
-        diagramId = d.getAttribute("id") || "";
+    for (const [did, ids] of idsEntries) {
+      if (ids.includes(cellId)) {
+        diagramId = did;
         break;
       }
     }
