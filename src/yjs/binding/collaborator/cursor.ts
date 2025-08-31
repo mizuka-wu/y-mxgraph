@@ -136,6 +136,13 @@ export function renderRemoteCursors(
 
   const currentPageRemotes: RemoteCursor[] = [];
   const otherPageRemotes: RemoteCursor[] = [];
+  const leaveRemotesIds = new Set<number>();
+
+  Array.from(cache.keys()).forEach((clientId) => {
+    if (!remotes.has(clientId)) {
+      leaveRemotesIds.add(clientId);
+    }
+  });
 
   Array.from(remotes.values()).forEach((remote) => {
     if (remote.cursorState?.pageId === currentPageId) {
@@ -143,6 +150,14 @@ export function renderRemoteCursors(
     } else {
       otherPageRemotes.push(remote);
     }
+  });
+
+  // 移除离开的
+  leaveRemotesIds.forEach((clientId) => {
+    const el = cache.get(clientId);
+    cache.delete(clientId);
+    if (!el) return;
+    el.remove();
   });
 
   // 移除非当前页的
