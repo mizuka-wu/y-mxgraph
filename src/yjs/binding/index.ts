@@ -75,7 +75,6 @@ export function bindDrawioFile(
       graph,
       cursor: options.cursor,
       mouseMoveThrottle,
-      debug: options.debug ?? false,
     });
   }
 

@@ -5,7 +5,7 @@ import {
 } from "../../helper/awarenessStateValue";
 import { generateColor, generateRandomName } from "../../helper/random";
 import { bindCursor, renderRemoteCursors } from "./cursor";
-import { bindSelection } from "./selection";
+import { bindSelection, renderRemoteSelections } from "./selection";
 
 export const DEFAULT_USER_NAME_KEY = "user.name";
 export const DEFAULT_USER_COLOR_KEY = "user.color";
@@ -117,6 +117,7 @@ export function bindCollaborator(
 
         // 渲染cursor
         renderRemoteCursors(file.getUi(), remotes);
+        renderRemoteSelections(file.getUi(), remotes);
       }
     );
   }
