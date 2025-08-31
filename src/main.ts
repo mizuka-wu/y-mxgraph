@@ -165,28 +165,50 @@ window.onload = function () {
       signaling: [],
     });
 
-    bindDrawioFile(file, {
-      doc,
-      awareness: provider.awareness,
-    });
+    /**
+     * 最终绑定页面上的数据
+     * 首先尝试等待ydoc加载成功，因为webrtc，所以是没有whenSynced的
+     */
+    function bind() {
+      app.spinner.stop();
+      bindDrawioFile(file, {
+        doc,
+        awareness: provider.awareness,
+      });
 
-    const graph = app.editor.graph;
-    const mxGraphModel = graph.model;
-    mxGraphModel.addListener(
-      "change",
-      debounce(() => {
-        const currentXml = getLatestXml(app);
-        let ydocXml = doc2xml(doc, SPACES);
-        ydocXml = normalizeAttrsOrderForXml(ydocXml);
-        const diff = diffWordsWithSpace(currentXml, ydocXml, {});
+      const graph = app.editor.graph;
+      const mxGraphModel = graph.model;
+      mxGraphModel.addListener(
+        "change",
+        debounce(() => {
+          const currentXml = getLatestXml(app);
+          let ydocXml = doc2xml(doc, SPACES);
+          ydocXml = normalizeAttrsOrderForXml(ydocXml);
+          const diff = diffWordsWithSpace(currentXml, ydocXml, {});
 
-        logXmlDiffToConsole(currentXml, ydocXml, diff as any[]);
-      }, 1000)
-    );
+          logXmlDiffToConsole(currentXml, ydocXml, diff as any[]);
+        }, 1000)
+      );
 
-    Reflect.set(window, "__doc__", doc);
-    Reflect.set(window, "__awareness__", provider.awareness);
-    console.log("注入完成 当前room：", roomName);
+      Reflect.set(window, "__doc__", doc);
+      Reflect.set(window, "__awareness__", provider.awareness);
+      console.log("注入完成 当前room：", roomName);
+    }
+
+    app.spinner.spin(document.body);
+    const connectedHandler = function (status: { connected: boolean }) {
+      if (status.connected) {
+        provider.off("status", connectedHandler);
+        setTimeout(() => {
+          console.log(provider.awareness.states.size);
+          bind();
+          if (provider.awareness.states.size > 1) {
+            file.mergeFile(new DrawioFile(file.getUi(), doc2xml(doc)));
+          }
+        }, 800); // 没有synced只能延迟检测
+      }
+    };
+    provider.on("status", connectedHandler);
   }
 
   App.main((app: any) => {
