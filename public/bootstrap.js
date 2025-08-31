@@ -131,7 +131,7 @@ function mxscript(src, onLoad, id, dataAppKey, noWrite, onError)
         var s = document.createElement('script');
         s.setAttribute('type', 'text/javascript');
         s.setAttribute('defer', 'true');
-        s.setAttribute('src', src.startsWith('http') ? src : '/drawio/src/main/webapp/' + src);
+        s.setAttribute('src', src.startsWith('http') ? src : './drawio/src/main/webapp/' + src);
 
         if (id != null)
         {
