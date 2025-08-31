@@ -151,10 +151,6 @@ export function renderRemoteCursors(
           y
         )
       );
-
-      const img = el.querySelector("img");
-
-      if (img) img.style.opacity = (cx != x || cy != y ? 0 : 1) + "";
       el.style.left = cx + "px";
       el.style.top = cy + "px";
       el.style.display = "";
