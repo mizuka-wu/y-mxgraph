@@ -158,6 +158,7 @@ window.onload = function () {
 
   App.main((app: any) => {
     const file = app.currentFile;
+    console.log("file", file, app);
     if (!file) return console.warn("no file");
 
     Reflect.set(globalThis, "app", app);
