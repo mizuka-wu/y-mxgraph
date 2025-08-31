@@ -3,10 +3,10 @@ import { type Awareness } from "y-protocols/awareness";
 import {
   getAwarenessStateValue,
   setAwarenessStateValue,
-} from "../helper/awarenessStateValue";
-import { generateColor, generateRandomName } from "../helper/random";
-import { getId } from "../helper/getId";
-import { createCursorImage } from "../helper/cursor";
+} from "../../helper/awarenessStateValue";
+import { generateColor, generateRandomName } from "../../helper/random";
+import { getId } from "../../helper/getId";
+import { createCursorImage } from "../../helper/cursor";
 
 export const DEFAULT_USER_NAME_KEY = "user.name";
 export const DEFAULT_USER_COLOR_KEY = "user.color";
@@ -48,7 +48,10 @@ export function bindCollaborator(
   };
 
   // 确保容器可作为绝对定位参考（避免 left/top 参照 body）
-  if (graph?.container && getComputedStyle(graph.container).position === "static") {
+  if (
+    graph?.container &&
+    getComputedStyle(graph.container).position === "static"
+  ) {
     graph.container.style.position = "relative";
   }
   dlog("container-position", getComputedStyle(graph.container).position);
@@ -87,29 +90,32 @@ export function bindCollaborator(
       _: any,
       event: { graphX: number; graphY: number; evt: MouseEvent }
     ) {
-      dlog("local-mouse", { graphX: event.graphX, graphY: event.graphY, pageId: file.getUi().currentPage?.getId() });
+      dlog("local-mouse", {
+        graphX: event.graphX,
+        graphY: event.graphY,
+        pageId: file.getUi().currentPage?.getId(),
+      });
       awareness.setLocalStateField("cursor", {
         x: event.graphX,
         y: event.graphY,
         pageId: file.getUi().currentPage?.getId(),
       });
-    }, mouseMoveThrottle),
+    },
+    mouseMoveThrottle),
   });
 
   // 绑定选区事件 -> 同步到 awareness.selection
-  graph
-    .getSelectionModel()
-    .addListener("change", function (_: any, evt: any) {
-      const pageId = file.getUi().currentPage?.getId();
-      const added = (evt.getProperty("added") || []).map(getId);
-      const removed = (evt.getProperty("removed") || []).map(getId);
+  graph.getSelectionModel().addListener("change", function (_: any, evt: any) {
+    const pageId = file.getUi().currentPage?.getId();
+    const added = (evt.getProperty("added") || []).map(getId);
+    const removed = (evt.getProperty("removed") || []).map(getId);
 
-      awareness.setLocalStateField("selection", {
-        added,
-        removed,
-        pageId,
-      });
+    awareness.setLocalStateField("selection", {
+      added,
+      removed,
+      pageId,
     });
+  });
 
   // 渲染远端光标
   const showCursor = options.cursor ?? true;
@@ -137,8 +143,11 @@ export function bindCollaborator(
 
     const imgEl = document.createElement("img");
     try {
-      const GraphCtor = (graph as any)?.constructor || (window as any).Graph || null;
-      const src = GraphCtor ? createCursorImage(GraphCtor, userColor || "#000") : "";
+      const GraphCtor =
+        (graph as any)?.constructor || (window as any).Graph || null;
+      const src = GraphCtor
+        ? createCursorImage(GraphCtor, userColor || "#000")
+        : "";
       if (src) imgEl.src = src;
     } catch {}
     imgEl.style.width = "8px";
@@ -222,9 +231,11 @@ export function bindCollaborator(
         function setPosition() {
           const cont = graph.container;
           const xMin = cont.scrollLeft;
-          const xMax = cont.scrollLeft + cont.clientWidth - entry.cursorEl.clientWidth;
+          const xMax =
+            cont.scrollLeft + cont.clientWidth - entry.cursorEl.clientWidth;
           const yMin = cont.scrollTop - 22;
-          const yMax = cont.scrollTop + cont.clientHeight - entry.cursorEl.clientHeight;
+          const yMax =
+            cont.scrollTop + cont.clientHeight - entry.cursorEl.clientHeight;
 
           const cx = Math.max(xMin, Math.min(xMax, x));
           const cy = Math.max(yMin, Math.min(yMax, y));
@@ -275,7 +286,10 @@ export function bindCollaborator(
     awareness.on("update", () => {
       const otherStates = awareness.getStates();
       const valid = new Set<number>();
-      dlog("awareness:update", { size: otherStates.size, self: awareness.clientID });
+      dlog("awareness:update", {
+        size: otherStates.size,
+        self: awareness.clientID,
+      });
 
       for (const [clientId] of otherStates.entries()) {
         if (clientId === awareness.clientID) continue;
