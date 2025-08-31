@@ -2,7 +2,7 @@ import { type Awareness } from "y-protocols/awareness";
 import { getId } from "../../helper/getId";
 import { type RemoteCursor } from "./index";
 
-export const SELECTION_OPACITY = 1;
+export const SELECTION_OPACITY = 70;
 export const CacheKey = "__remoteSelection__";
 
 export function bindSelection(
@@ -16,7 +16,6 @@ export function bindSelection(
     const pageId = file.getUi().currentPage?.getId();
     const added = (evt.getProperty("added") || []).map(getId);
     const removed = (evt.getProperty("removed") || []).map(getId);
-
     awareness.setLocalStateField("selection", {
       added,
       removed,
@@ -117,6 +116,7 @@ export function renderRemoteSelections(
     const graph = ui.editor.graph;
 
     selectionState.added.forEach((id) => {
+      if (highlightCellMap.has(id)) return;
       const cell = graph.model.getCell(id);
       if (cell) {
         const highlightCell = graph.highlightCell(
@@ -126,7 +126,6 @@ export function renderRemoteSelections(
           SELECTION_OPACITY,
           3
         );
-        if (highlightCellMap.has(id)) return;
         highlightCellMap.set(id, highlightCell);
       }
     });
