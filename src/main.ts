@@ -156,11 +156,7 @@ window.onload = function () {
    * 设置文件
    */
 
-  App.main((app: any) => {
-    const file = app.currentFile;
-    console.log("file", file, app);
-    if (!file) return console.warn("no file");
-
+  function handleFileLoaded(app: any, file: any) {
     Reflect.set(globalThis, "app", app);
 
     const doc = new Y.Doc();
@@ -190,5 +186,16 @@ window.onload = function () {
         logXmlDiffToConsole(currentXml, ydocXml, diff as any[]);
       }, 1000)
     );
+  }
+
+  App.main((app: any) => {
+    const file = app.currentFile;
+    if (file) {
+      handleFileLoaded(app, file);
+    } else {
+      app.editor.addListener("fileLoaded", () => {
+        handleFileLoaded(app, app.currentFile);
+      });
+    }
   });
 };
