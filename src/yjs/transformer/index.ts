@@ -23,10 +23,14 @@ export function xml2doc(xml: string, _doc?: Y.Doc) {
 
   if (object.mxfile) {
     // drawio文件
-    parseMxFile(object.mxfile, doc);
+    doc.transact(() => {
+      parseMxFile(object.mxfile, doc);
+    });
   } else if (object.mxGraphModel) {
     // mxGraph数据
-    parseMxGraphModel(object.mxGraphModel, doc);
+    doc.transact(() => {
+      parseMxGraphModel(object.mxGraphModel, doc);
+    });
   } else {
     throw new Error("不支持的文件格式");
   }
