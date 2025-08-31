@@ -36,6 +36,56 @@ const docSnapshots = new WeakMap<Y.Doc, DocSnapshot>();
 
 // 仅使用根级单实例 mxGraphModel（{ [mxCellKey], [mxCellOrderKey] }）
 
+/**
+ * 将 id 插入到 orderArr 中指定 previous 之后的位置，保证唯一：
+ * - 若 id 不存在：直接插入目标位置
+ * - 若已存在：按需要移动（先删再插），避免重复
+ */
+function insertAfterUnique(
+  orderArr: Y.Array<string>,
+  id: string,
+  previous: string | null | undefined,
+  fallbackToEnd = false
+) {
+  const currentIds = orderArr.toArray();
+  let anchorPos = previous ? currentIds.indexOf(previous) : -1;
+  // 当 previous 为空或找不到时，diagram 默认插到最前；cells 需要追加到末尾
+  if (anchorPos === -1 && fallbackToEnd) anchorPos = currentIds.length - 1;
+  let targetIndex = anchorPos + 1; // -1 -> 0; k -> k+1
+
+  const existingIndex = currentIds.indexOf(id);
+  if (existingIndex === -1) {
+    orderArr.insert(targetIndex, [id]);
+    return;
+  }
+
+  // 已存在且位置相同则无需处理
+  if (existingIndex === targetIndex) return;
+
+  // 删除后，若原位置在目标之前，则目标索引左移一位
+  if (existingIndex < targetIndex) targetIndex -= 1;
+  orderArr.delete(existingIndex, 1);
+  orderArr.insert(targetIndex, [id]);
+}
+
+/**
+ * 规范化顺序数组，移除重复项，保留首次出现的位置
+ */
+function ensureUniqueOrder(orderArr: Y.Array<string>) {
+  const arr = orderArr.toArray();
+  const seen = new Set<string>();
+  const dupIdx: number[] = [];
+  for (let i = 0; i < arr.length; i++) {
+    const id = arr[i];
+    if (!id) continue;
+    if (seen.has(id)) dupIdx.push(i);
+    else seen.add(id);
+  }
+  if (dupIdx.length) {
+    dupIdx.sort((a, b) => b - a).forEach((idx) => orderArr.delete(idx, 1));
+  }
+}
+
 export interface DiagramInsert {
   data: string;
   id: string;
@@ -69,6 +119,8 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
       const orderArr = mxfile.get(
         diagramOrderKey
       ) as unknown as Y.Array<string>;
+      // 先去重，避免重复 id 影响删除索引计算
+      ensureUniqueOrder(orderArr);
       const orderList = orderArr.toArray();
 
       const removeIds = patch[DIFF_REMOVE];
@@ -92,6 +144,8 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
       const orderArr = mxfile.get(
         diagramOrderKey
       ) as unknown as Y.Array<string>;
+      // 规范化顺序，清理历史重复
+      ensureUniqueOrder(orderArr);
       const existingIds = orderArr.toArray();
       const existingIndex = new Map<string, number>();
       existingIds.forEach((id, idx) => existingIndex.set(id, idx));
@@ -167,13 +221,8 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
       for (const item of enriched) {
         // 内容落盘
         diagramsMap.set(item.id, item.diagramElement);
-        // 顺序插入
-        const currentIds = orderArr.toArray();
-        const anchorPos = item.anchorId
-          ? currentIds.indexOf(item.anchorId)
-          : -1;
-        const index = anchorPos + 1; // -1 -> 0；k -> k+1
-        orderArr.insert(index, [item.id]);
+        // 顺序插入（唯一）
+        insertAfterUnique(orderArr, item.id, item.anchorId || null);
       }
     }
 
@@ -200,6 +249,8 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
               | Y.Array<string>
               | undefined;
             if (!cellsMap || !orderArr) return;
+            // 规范化 cell 顺序，清理重复
+            ensureUniqueOrder(orderArr as Y.Array<string>);
 
             // 删除
             if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
@@ -227,11 +278,13 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 const previous = (item as any)["previous"] as
                   | string
                   | undefined;
-                const currentIds = orderArr.toArray();
-                const targetIndex = !previous
-                  ? currentIds.length
-                  : currentIds.indexOf(previous) + 1;
-                orderArr.insert(targetIndex, [id]);
+                // 顺序插入（唯一，mxCell 无前驱时需追加到末尾）
+                insertAfterUnique(
+                  orderArr as Y.Array<string>,
+                  id,
+                  previous || null,
+                  true
+                );
               }
             }
 
@@ -285,30 +338,15 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
             }
           }
 
-          // 顺序更新
+          // 顺序更新（使用唯一插入，避免重复）
           if (Reflect.has(update, "previous")) {
-            const previous = update.previous;
+            const previous = update.previous || null;
             const orderArr = mxfile.get(
               diagramOrderKey
             ) as unknown as Y.Array<string>;
-            const currentIds = orderArr.toArray();
-
-            const targetIndex = !previous
-              ? 0
-              : currentIds.indexOf(previous) + 1;
-
-            const currentIndex = currentIds.indexOf(id);
-
-            if (currentIndex === -1) {
-              // 未定位到当前节点（理论上不应发生），退化为直接插入 id
-              orderArr.insert(targetIndex, [id]);
-            } else if (currentIndex !== targetIndex) {
-              // 稳妥移动：先删后插，并在 currentIndex < targetIndex 时修正插入索引
-              let insertIndex = targetIndex;
-              if (currentIndex < insertIndex) insertIndex -= 1;
-              orderArr.delete(currentIndex, 1);
-              orderArr.insert(insertIndex, [id]);
-            }
+            // 规范化后再移动，避免重复
+            ensureUniqueOrder(orderArr);
+            insertAfterUnique(orderArr, id, previous, false);
           }
         }
       });
