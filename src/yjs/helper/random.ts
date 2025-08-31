@@ -7,27 +7,24 @@ export function generateColor(seed?: string | number) {
 }
 
 export function generateRandomName(): string {
-  if (typeof crypto !== "undefined") {
-    // Prefer UUID when available
-    // @ts-ignore
-    if (typeof crypto.randomUUID === "function") {
-      // @ts-ignore
-      return crypto.randomUUID();
+  const len = 6;
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let id = "";
+  if (
+    typeof crypto !== "undefined" &&
+    typeof (crypto as any).getRandomValues === "function"
+  ) {
+    const bytes = new Uint8Array(len);
+    (crypto as any).getRandomValues(bytes);
+    for (let i = 0; i < len; i++) {
+      id += alphabet[bytes[i] % alphabet.length];
     }
-    // Crypto-based fallback
-    // @ts-ignore
-    if (typeof crypto.getRandomValues === "function") {
-      // @ts-ignore
-      const bytes = new Uint8Array(16);
-      // @ts-ignore
-      crypto.getRandomValues(bytes);
-      return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  } else {
+    for (let i = 0; i < len; i++) {
+      id += alphabet[Math.floor(Math.random() * alphabet.length)];
     }
   }
-  // Time + random fallback
-  return (
-    Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
-  ).toLowerCase();
+  return id;
 }
 
 export function generateRandomId(): string {

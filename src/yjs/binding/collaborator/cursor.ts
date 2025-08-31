@@ -1,10 +1,38 @@
 import { throttle } from "lodash-es";
+import { colord } from "colord";
 import { createCursorImage } from "../../helper/cursor";
 
 import { type Awareness } from "y-protocols/awareness";
 import { type RemoteCursor } from "./index";
 
 export const CacheKey = "__remoteCursor__";
+
+function createCursorEl(color: string, username: string) {
+  const cursor = document.createElement("div");
+  cursor.style.position = "absolute";
+  cursor.style.opacity = "0.9";
+  const img = document.createElement("img");
+  img.style.transform = "rotate(-45deg)translateX(-14px)";
+  img.setAttribute("src", createCursorImage(color));
+  img.style.width = "10px";
+  cursor.appendChild(img);
+
+  const name = document.createElement("div");
+  name.style.backgroundColor = color;
+  name.style.color = colord(color).isDark() ? "#fff" : "#000";
+  name.style.fontSize = "9pt";
+  name.style.padding = "3px 7px";
+  name.style.marginTop = "8px";
+  name.style.borderRadius = "10px";
+  name.style.maxWidth = "100px";
+  name.style.overflow = "hidden";
+  name.style.textOverflow = "ellipsis";
+  name.style.whiteSpace = "nowrap";
+
+  name.innerText = username;
+  cursor.appendChild(name);
+  return cursor;
+}
 
 export function bindCursor(
   file: any,
@@ -46,10 +74,10 @@ export function renderRemoteCursors(
   remotes: Map<number, RemoteCursor>
 ) {
   if (!Reflect.has(ui, CacheKey)) {
-    Reflect.set(ui, CacheKey, new Map<number, SVGElement>());
+    Reflect.set(ui, CacheKey, new Map<number, HTMLDivElement>());
   }
 
-  const cache = Reflect.get(ui, CacheKey) as Map<number, SVGElement>;
+  const cache = Reflect.get(ui, CacheKey) as Map<number, HTMLDivElement>;
 
   const currentPageId = ui.currentPage?.getId();
 
@@ -82,14 +110,21 @@ export function renderRemoteCursors(
     el.remove();
   });
 
-  currentPageRemotes.forEach(({ clientId, cursorState }) => {
-    if (!cursorState) return;
-    const el = cache.get(clientId);
-    if (!el) return;
+  currentPageRemotes.forEach(
+    ({ clientId, cursorState, userColor, userName }) => {
+      if (!cursorState) return;
+      let el = cache.get(clientId);
+      if (!el) {
+        el = createCursorEl(userColor, userName);
+        ui.diagramContainer.appendChild(el);
+        cache.set(clientId, el);
+      }
 
-    // el.setAttribute("x", cursorState.x.toString());
-    // el.setAttribute("y", cursorState.y.toString());
-    // el.setAttribute("pageId", cursorState.pageId);
-    // el.setAttribute("selection", JSON.stringify(selectionState));
-  });
+      console.log(el);
+      // el.setAttribute("x", cursorState.x.toString());
+      // el.setAttribute("y", cursorState.y.toString());
+      // el.setAttribute("pageId", cursorState.pageId);
+      // el.setAttribute("selection", JSON.stringify(selectionState));
+    }
+  );
 }
