@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/node": "^20.14.10",
     "@types/lodash-es": "^4.17.12",
     "diff": "^8.0.2",
     "json-diff": "^1.0.6",
