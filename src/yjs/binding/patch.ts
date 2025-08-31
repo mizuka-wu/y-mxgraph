@@ -62,6 +62,7 @@ export interface FilePatch {
 export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
   doc.transact(() => {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
+    console.log(mxfile.toJSON(), patch);
     // 移除
     if (patch[DIFF_REMOVE]) {
       const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
@@ -223,7 +224,9 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                   xmlElement.setAttribute(key, item[key]);
                 });
                 cellsMap.set(id, xmlElement);
-                const previous = (item as any)["previous"] as string | undefined;
+                const previous = (item as any)["previous"] as
+                  | string
+                  | undefined;
                 const currentIds = orderArr.toArray();
                 const targetIndex = !previous
                   ? currentIds.length
@@ -251,10 +254,14 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
                 if (!Reflect.has(updateObj, "previous")) return;
                 const previous = (updateObj as any).previous as string;
 
+                // 特殊处理：当 previous 为空串时，不进行移动（常见于前驱被删除的场景）
+                if (previous === "") return;
+
                 const currentIds = orderArr.toArray();
-                const targetIndex = !previous
-                  ? 0
-                  : currentIds.indexOf(previous) + 1;
+                // 若指定的 previous 不存在（可能因同时删除），则跳过移动以保持稳定
+                const prevIndex = currentIds.indexOf(previous);
+                if (prevIndex === -1) return;
+                const targetIndex = prevIndex + 1;
                 const currentIndex = currentIds.indexOf(cellId);
                 if (currentIndex === -1) {
                   // 不存在则按顺序插入新 cell
