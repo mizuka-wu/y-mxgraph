@@ -35,6 +35,7 @@ export function bindDrawioFile(
     const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
     file.setShadowPages(file.ui.clonePages(file.ui.pages));
     applyFilePatch(doc, patch);
+    console.log("local patch", patch);
   });
 
   // 监听remoteChange
@@ -50,7 +51,12 @@ export function bindDrawioFile(
         // 远端的origin
         if (transaction.local) return;
         const patch = generatePatch(events);
-        console.log(patch, events);
+        console.log("remote patch", patch);
+
+        /**
+         * 应用patch
+         */
+        file.patch([patch]);
       }
     );
 
