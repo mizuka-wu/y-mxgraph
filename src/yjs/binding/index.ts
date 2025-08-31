@@ -172,10 +172,10 @@ export function bindDrawioFile(
               selection,
               userName:
                 getAwarenessStateValue(awareness, userNameKey, clientId) ||
-                generateRandomName(),
+                clientId + "",
               userColor:
                 getAwarenessStateValue(awareness, userColorKey, clientId) ||
-                generateColor(),
+                "#000000",
             };
           });
 
