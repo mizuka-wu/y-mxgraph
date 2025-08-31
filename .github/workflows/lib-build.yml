@@ -21,6 +21,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -33,3 +34,57 @@ jobs:
         with:
           name: y-mxgraph-lib
           path: dist
+
+      - name: Prepare npm package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "Version to publish: $VERSION"
+          rm -rf package
+          mkdir -p package
+          cp -r dist package/
+          if [ -f README.md ]; then cp README.md package/; fi
+          cat > package/package.json <<EOF
+          {
+            "name": "y-mxgraph",
+            "version": "${VERSION}",
+            "description": "Yjs binding for mxGraph",
+            "license": "MIT",
+            "repository": { "type": "git", "url": "git+https://github.com/mizuka-wu/y-mxgraph.git" },
+            "homepage": "https://github.com/mizuka-wu/y-mxgraph#readme",
+            "bugs": { "url": "https://github.com/mizuka-wu/y-mxgraph/issues" },
+            "keywords": ["yjs", "mxgraph", "collaboration"],
+            "main": "dist/y-mxgraph.cjs.js",
+            "module": "dist/y-mxgraph.es.js",
+            "unpkg": "dist/y-mxgraph.umd.js",
+            "jsdelivr": "dist/y-mxgraph.umd.js",
+            "exports": {
+              ".": {
+                "import": "./dist/y-mxgraph.es.js",
+                "require": "./dist/y-mxgraph.cjs.js"
+              }
+            },
+            "files": [
+              "dist",
+              "README.md"
+            ],
+            "sideEffects": false,
+            "peerDependencies": {
+              "lodash-es": "^4.17.21",
+              "yjs": "^13.6.0",
+              "y-protocols": "^1.0.0",
+              "xml-js": "^1.6.0",
+              "colord": "^2.9.0",
+              "diff": "^8.0.0"
+            },
+            "engines": { "node": ">=18" }
+          }
+          EOF
+
+      - name: Publish to npm
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd package
+          npm publish --access public
