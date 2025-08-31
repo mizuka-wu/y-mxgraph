@@ -1,15 +1,15 @@
 import { type Awareness } from "y-protocols/awareness";
 
-export function getAwarenessStateValue(
+export function getAwarenessStateValue<T>(
   awareness: Awareness,
   key: string,
   clientId?: string | number
-) {
+): T | null {
   const states = awareness.getStates();
   const id = clientId != null ? Number(clientId) : awareness.clientID;
   const clientState = states.get(id as number);
-  if (!clientState) return undefined;
-  if (!key) return clientState as unknown;
+  if (!clientState) return null;
+  if (!key) return clientState as T;
   return getByPath(clientState, key);
 }
 
@@ -17,8 +17,9 @@ function getByPath(obj: any, path: string) {
   const parts = path.split(".");
   let cur: any = obj;
   for (const part of parts) {
-    if (cur == null) return undefined;
-    const key: any = Array.isArray(cur) && /^\d+$/.test(part) ? Number(part) : part;
+    if (cur == null) return null;
+    const key: any =
+      Array.isArray(cur) && /^\d+$/.test(part) ? Number(part) : part;
     cur = cur?.[key];
   }
   return cur;
