@@ -97,6 +97,7 @@ export interface FilePatch {
   [DIFF_INSERT]?: DiagramInsert[];
   [DIFF_UPDATE]?: {
     [key: string]: {
+      name?: string;
       previous?: string;
       cells?: {
         [DIFF_REMOVE]?: string[];
@@ -235,6 +236,10 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
         const diagram = diagramsMap.get(id) as YDiagram | undefined;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
+          // diagram 名称更新
+          if (Reflect.has(update, "name")) {
+            (diagram as unknown as Y.Map<any>).set("name", update.name || "");
+          }
 
           if (update.cells) {
             // diagram 直接持有 mxGraphModel（Map 结构）作为 firstChild
@@ -424,7 +429,8 @@ export function generatePatch(
     cellAttrMap.set(did, attrs);
   }
 
-  // 收集新增的 cellId（用于避免对新插入的 cell 再追加属性更新）
+  // 收集新增的 diagram/cell（用于避免对新插入的元素再追加属性更新）
+  const insertedDiagramIdGlobal = new Set<string>();
   const insertedCellIdGlobal = new Set<string>();
 
   // 1) 基于快照：diagram 层 删除 / 插入 / 重排(previous)
@@ -452,6 +458,7 @@ export function generatePatch(
         if (!yDiagram) continue;
         const data = xmlSerializer({ diagram: serializeDiagram(yDiagram) });
         patch[DIFF_INSERT]!.push({ id, previous, data });
+        insertedDiagramIdGlobal.add(id);
       }
     }
 
@@ -537,7 +544,23 @@ export function generatePatch(
     }
   }
 
-  // 3) 事件驱动：mxCell 属性更新（跳过刚插入的 cell）
+  // 3) 事件驱动：diagram 名称更新（跳过刚插入的 diagram）
+  {
+    const diagramSet = new Set<Y.Map<any>>(diagramsList as unknown as Y.Map<any>[]);
+    for (const ev of events) {
+      const target: any = (ev as any).target;
+      if (!(target instanceof Y.Map)) continue;
+      if (!diagramSet.has(target)) continue;
+      const changed: Set<string> = (ev as any).keysChanged || new Set();
+      if (!changed || !changed.has("name")) continue;
+      const did = (target.get("id") as unknown as string) || "";
+      if (!did || insertedDiagramIdGlobal.has(did)) continue;
+      const u = ensureUpdate(did);
+      u.name = (target.get("name") as unknown as string) || "";
+    }
+  }
+
+  // 4) 事件驱动：mxCell 属性更新（跳过刚插入的 cell）
   for (const ev of events) {
     const target: any = (ev as any).target;
     if (!(target instanceof Y.XmlElement)) continue;
@@ -571,7 +594,7 @@ export function generatePatch(
     }
   }
 
-  // 4) 更新当前文档的快照（供下次对比）
+  // 5) 更新当前文档的快照（供下次对比）
   snap.diagramOrder = currDiagramOrder.slice();
   const newCellsOrder = new Map<string, string[]>();
   for (const [did, arr] of currCellsOrder.entries()) {
