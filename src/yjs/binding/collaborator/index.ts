@@ -23,7 +23,7 @@ type SelectionState = {
   pageId?: string | null;
 };
 
-type RemoteCursor = {
+export type RemoteCursor = {
   clientId: number;
   cursorState: CursorState | null;
   selectionState: SelectionState | null;
