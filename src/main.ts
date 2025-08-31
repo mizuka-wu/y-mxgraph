@@ -200,7 +200,6 @@ window.onload = function () {
       if (status.connected) {
         provider.off("status", connectedHandler);
         setTimeout(() => {
-          console.log(provider.awareness.states.size);
           bind();
           if (provider.awareness.states.size > 1) {
             file.mergeFile(new DrawioFile(file.getUi(), doc2xml(doc)));
