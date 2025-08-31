@@ -399,6 +399,7 @@ export function generatePatch(
       (id: string) => !currSet.has(id) && id
     );
     if (removed.length) patch[DIFF_REMOVE] = removed;
+    const removedDiagramSet = new Set(removed);
 
     // 插入
     const inserted = currDiagramOrder.filter(
@@ -426,6 +427,8 @@ export function generatePatch(
       const prevP = prevNeighbor(prevDiagramOrder, id);
       const currP = prevNeighbor(currDiagramOrder, id);
       if (prevP !== currP) {
+        // 若 prevP 在同批次被删除，则不生成 previous 更新，避免多余移动
+        if (prevP && removedDiagramSet.has(prevP)) continue;
         const u = ensureUpdate(id);
         u.previous = currP;
       }
@@ -452,6 +455,7 @@ export function generatePatch(
       const cells = ensureCellSection(did);
       cells[DIFF_REMOVE] = (cells[DIFF_REMOVE] || []).concat(removed);
     }
+    const removedCellSet = new Set(removed);
 
     // 插入
     const inserted = currCells.filter(
@@ -463,7 +467,12 @@ export function generatePatch(
       const attrsMap = cellAttrMap.get(did) || new Map();
       for (const cid of inserted) {
         const attrs = attrsMap.get(cid) || {};
-        cells[DIFF_INSERT]!.push({ ...(attrs as Record<string, string>) });
+        const index = currCells.indexOf(cid);
+        const previous = index <= 0 ? "" : currCells[index - 1];
+        cells[DIFF_INSERT]!.push({
+          ...(attrs as Record<string, string>),
+          previous,
+        });
         insertedCellIdGlobal.add(cid);
       }
     }
@@ -478,6 +487,8 @@ export function generatePatch(
       const prevP = prevNeighbor(prevCells, cid);
       const currP = prevNeighbor(currCells, cid);
       if (prevP !== currP) {
+        // 若前驱在本补丁中被删除，则不生成 previous，避免接收端多余移动
+        if (prevP && removedCellSet.has(prevP)) continue;
         const cells = ensureCellSection(did);
         cells[DIFF_UPDATE] = cells[DIFF_UPDATE] || {};
         const cellUpdate = (cells[DIFF_UPDATE]![cid] =
