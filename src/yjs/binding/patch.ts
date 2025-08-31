@@ -560,6 +560,17 @@ export function generatePatch(
     }
   }
 
+  // 3.5) 初始化兜底：若无上次快照（prevDiagramOrder 为 null），
+  // 则为现存的每个 diagram 补充一次 name 更新，避免初始化阶段遗漏 name patch
+  if (!prevDiagramOrder) {
+    for (const d of diagramsList) {
+      const did = (d.get("id") as unknown as string) || "";
+      if (!did) continue;
+      const u = ensureUpdate(did);
+      u.name = (d.get("name") as unknown as string) || "";
+    }
+  }
+
   // 4) 事件驱动：mxCell 属性更新（跳过刚插入的 cell）
   for (const ev of events) {
     const target: any = (ev as any).target;
