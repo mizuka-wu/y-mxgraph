@@ -7,7 +7,11 @@ import { xml2doc } from "../transformer";
 import { applyFilePatch, generatePatch } from "./patch";
 import { getId } from "../helper/getId";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
-import { getAwarenessStateValue } from "../helper/awarenessStateValue";
+import {
+  getAwarenessStateValue,
+  setAwarenessStateValue,
+} from "../helper/awarenessStateValue";
+import { generateColor, generateRandomName } from "../helper/random";
 import { type Awareness } from "y-protocols/awareness";
 
 export const DEFAULT_USER_NAME_KEY = "user.name";
@@ -72,6 +76,31 @@ export function bindDrawioFile(
   // 当前用户信息到awareness
   if (options.awareness) {
     const awareness = options.awareness!;
+
+    /**
+     * 添加自己的默认颜色/默认名称
+     */
+    const cursorOption = options.cursor;
+    const userNameKey =
+      typeof cursorOption === "object" && cursorOption?.userNameKey
+        ? cursorOption.userNameKey
+        : DEFAULT_USER_NAME_KEY;
+    const userColorKey =
+      typeof cursorOption === "object" && cursorOption?.userColorKey
+        ? cursorOption.userColorKey
+        : DEFAULT_USER_COLOR_KEY;
+
+    let userName = getAwarenessStateValue(awareness, userNameKey);
+    if (!userName) {
+      userName = generateRandomName();
+      setAwarenessStateValue(awareness, userNameKey, userName);
+    }
+    let userColor = getAwarenessStateValue(awareness, userColorKey);
+    if (!userColor) {
+      userColor = generateColor(userName);
+      setAwarenessStateValue(awareness, userColorKey, userColor);
+    }
+
     // 绑定鼠标事件
     graph.addMouseListener({
       startX: 0,
@@ -121,15 +150,6 @@ export function bindDrawioFile(
       // 同步光标
       options.awareness.on("update", () => {
         const otherCursors = awareness.getStates();
-        const cursorOpt = options.cursor;
-        const userNameKey =
-          typeof cursorOpt === "object" && cursorOpt?.userNameKey
-            ? cursorOpt.userNameKey
-            : DEFAULT_USER_NAME_KEY;
-        const userColorKey =
-          typeof cursorOpt === "object" && cursorOpt?.userColorKey
-            ? cursorOpt.userColorKey
-            : DEFAULT_USER_COLOR_KEY;
         /**
          * 排除自己的client以及非当前页面的 cursor/selection 整理一个列表
          */
@@ -150,16 +170,12 @@ export function bindDrawioFile(
               clientId,
               cursor,
               selection,
-              userName: getAwarenessStateValue(
-                awareness,
-                userNameKey,
-                clientId
-              ),
-              userColor: getAwarenessStateValue(
-                awareness,
-                userColorKey,
-                clientId
-              ),
+              userName:
+                getAwarenessStateValue(awareness, userNameKey, clientId) ||
+                generateRandomName(),
+              userColor:
+                getAwarenessStateValue(awareness, userColorKey, clientId) ||
+                generateColor(),
             };
           });
 
