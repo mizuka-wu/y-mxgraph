@@ -17,6 +17,10 @@
  * --
  * - networkshapes=1: For testing network shapes (temporary)
  */
+
+window.mxBasePath = '/y-mxgraph/drawio/src/main/webapp/'
+window.RESOURCES_PATH = '/y-mxgraph/drawio/src/main/webapp/'
+
 // Parses URL parameters
 var urlParams = (function()
 {
