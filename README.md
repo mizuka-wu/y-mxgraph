@@ -28,7 +28,7 @@
 
 ## 目录结构（关键部分）
 
-```
+```text
 .
 ├─ index.html                 # Demo 页面，加载 draw.io 资源并注入 main.ts
 ├─ src/
@@ -104,6 +104,124 @@ const xml = doc2xml(doc, /* spaces */ 2);
 ```
 
 > 注意：`signaling: []` 表示未配置信令服务器，通常只适合单机演示或在同一网络中的点对点尝试。若需稳定的多端实时协作，请提供可达的信令服务器列表。
+
+## 与不同 yProvider 绑定示例
+
+> 下述示例仅展示如何创建不同 Provider 并将其 `awareness` 交给 `bindDrawioFile`。请根据自身项目按需安装依赖、配置服务端。
+
+### 通用绑定模式
+
+```ts
+import * as Y from 'yjs';
+import { bindDrawioFile } from './yjs';
+
+const doc = new Y.Doc();
+// 1) 创建 provider（示例见下）
+// 2) 将 provider.awareness 传入绑定
+bindDrawioFile(file, { doc, awareness: provider.awareness });
+```
+
+### y-webrtc（去中心化/P2P）
+
+已在 `src/main.ts` 演示：
+
+```ts
+import { WebrtcProvider } from 'y-webrtc';
+
+const doc = new Y.Doc();
+const provider = new WebrtcProvider('roomName', doc, {
+  signaling: [
+    // 推荐配置至少 1~2 个可达的信令服务器
+    // 'wss://signaling.yjs.dev',
+  ],
+});
+
+bindDrawioFile(file, { doc, awareness: provider.awareness });
+```
+
+### y-websocket（中心化服务端）
+
+安装（可选）：
+
+```bash
+pnpm add y-websocket
+```
+
+示例：
+
+```ts
+import { WebsocketProvider } from 'y-websocket';
+
+const doc = new Y.Doc();
+// 你的 y-websocket 服务端地址（例：wss://your-server:1234）
+const provider = new WebsocketProvider('wss://your-server', 'roomName', doc, {
+  // params: { token: '...' }, // 可选：鉴权等
+  // connect: true,            // 可选：延迟连接
+});
+
+// 初次同步完成后再绑定，避免本地初始状态覆盖远端
+provider.on('sync', (isSynced: boolean) => {
+  if (isSynced) {
+    bindDrawioFile(file, { doc, awareness: provider.awareness });
+  }
+});
+
+// 可选：连接状态
+provider.on('status', (e: { status: 'connected' | 'disconnected' }) => {
+  console.log('ws status:', e.status);
+});
+```
+
+### IndexedDB 本地离线持久化（可与任意 Provider 组合）
+
+安装（可选）：
+
+```bash
+pnpm add y-indexeddb
+```
+
+示例（单机离线）：
+
+```ts
+import { IndexeddbPersistence } from 'y-indexeddb';
+
+const doc = new Y.Doc();
+const idb = new IndexeddbPersistence('y-mxgraph-demo', doc);
+
+idb.once('synced', () => {
+  // 本地数据已读取，可安全绑定
+  bindDrawioFile(file, { doc }); // 无 provider 也可运行（单机模式）
+});
+```
+
+### 组合：IndexedDB + y-websocket
+
+建议先等待本地 IndexedDB 读取完成，再连接/绑定，减少首次覆盖风险：
+
+```ts
+import { WebsocketProvider } from 'y-websocket';
+import { IndexeddbPersistence } from 'y-indexeddb';
+
+const doc = new Y.Doc();
+const idb = new IndexeddbPersistence('roomName', doc);
+const ws = new WebsocketProvider('wss://your-server', 'roomName', doc);
+
+idb.once('synced', () => {
+  bindDrawioFile(file, { doc, awareness: ws.awareness });
+});
+```
+
+### 无 Provider（单机纯本地）
+
+```ts
+const doc = new Y.Doc();
+bindDrawioFile(file, { doc });
+```
+
+> 提示：
+> - 上述示例未将相关依赖加入本仓库默认依赖中，请按需自行安装。
+> - `bindDrawioFile` 只关心同一个 `Y.Doc` 与可选 `awareness`，无需关心具体 Provider 类型。
+> - 首次绑定时机：对中心化 Provider（如 `y-websocket`）建议在初次 `sync` 完成后再绑定，避免覆盖远端。
 
 ## API 文档
 

@@ -28,7 +28,7 @@ This library provides:
 
 ## Structure (key parts)
 
-```
+```text
 .
 ├─ index.html                 # Demo page, loads draw.io and injects main.ts
 ├─ src/
@@ -104,6 +104,125 @@ const xml = doc2xml(doc, /* spaces */ 2);
 ```
 
 > Note: `signaling: []` means no signaling servers configured, suitable for local/small tests. For reliable multi-party collaboration, provide accessible signaling servers.
+
+## Binding Examples with Different yProviders
+
+> The following snippets show how to create different providers and pass their `awareness` to `bindDrawioFile`. Install optional deps and configure servers as needed for your project.
+
+### General binding pattern
+
+```ts
+import * as Y from 'yjs';
+import { bindDrawioFile } from './yjs';
+
+const doc = new Y.Doc();
+// 1) Create a provider (see examples below)
+// 2) Pass provider.awareness into the binding
+bindDrawioFile(file, { doc, awareness: provider.awareness });
+```
+
+### y-webrtc (decentralized/P2P)
+
+Already shown in `src/main.ts`:
+
+```ts
+import { WebrtcProvider } from 'y-webrtc';
+
+const doc = new Y.Doc();
+const provider = new WebrtcProvider('roomName', doc, {
+  signaling: [
+    // Provide at least 1-2 accessible signaling servers
+    // 'wss://signaling.yjs.dev',
+  ],
+});
+
+bindDrawioFile(file, { doc, awareness: provider.awareness });
+```
+
+### y-websocket (centralized server)
+
+Install (optional):
+
+```bash
+pnpm add y-websocket
+```
+
+Example:
+
+```ts
+import { WebsocketProvider } from 'y-websocket';
+
+const doc = new Y.Doc();
+// Your y-websocket server URL (e.g., wss://your-server:1234)
+const provider = new WebsocketProvider('wss://your-server', 'roomName', doc, {
+  // params: { token: '...' }, // Optional: auth, etc.
+  // connect: true,            // Optional: delay connect
+});
+
+// Bind after initial sync to avoid overwriting remote state with local initial state
+provider.on('sync', (isSynced: boolean) => {
+  if (isSynced) {
+    bindDrawioFile(file, { doc, awareness: provider.awareness });
+  }
+});
+
+// Optional: connection status
+provider.on('status', (e: { status: 'connected' | 'disconnected' }) => {
+  console.log('ws status:', e.status);
+});
+```
+
+### IndexedDB offline persistence (can be combined with any provider)
+
+Install (optional):
+
+```bash
+pnpm add y-indexeddb
+```
+
+Standalone (single-machine) example:
+
+```ts
+import { IndexeddbPersistence } from 'y-indexeddb';
+
+const doc = new Y.Doc();
+const idb = new IndexeddbPersistence('y-mxgraph-demo', doc);
+
+idb.once('synced', () => {
+  // Local data loaded, safe to bind
+  bindDrawioFile(file, { doc }); // Works without provider (single-machine mode)
+});
+```
+
+### Combo: IndexedDB + y-websocket
+
+Prefer waiting for local IndexedDB to load before connecting/binding to reduce first-time overwrite risk:
+
+```ts
+import { WebsocketProvider } from 'y-websocket';
+import { IndexeddbPersistence } from 'y-indexeddb';
+
+const doc = new Y.Doc();
+const idb = new IndexeddbPersistence('roomName', doc);
+const ws = new WebsocketProvider('wss://your-server', 'roomName', doc);
+
+idb.once('synced', () => {
+  bindDrawioFile(file, { doc, awareness: ws.awareness });
+});
+```
+
+### No provider (pure local)
+
+```ts
+const doc = new Y.Doc();
+bindDrawioFile(file, { doc });
+```
+
+> Tip:
+
+> - These deps are not included by default in this repo; install as needed.
+> - `bindDrawioFile` only cares about the same `Y.Doc` instance and optional `awareness`, not the specific provider type.
+> - For centralized providers (like `y-websocket`), bind after the first `sync` to avoid overwriting remote state.
 
 ## API
 
