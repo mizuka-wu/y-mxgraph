@@ -4,7 +4,7 @@ import {
   setAwarenessStateValue,
 } from "../../helper/awarenessStateValue";
 import { generateColor, generateRandomName } from "../../helper/random";
-import { bindCursor } from "./cursor";
+import { bindCursor, renderRemoteCursors } from "./cursor";
 import { bindSelection } from "./selection";
 
 export const DEFAULT_USER_NAME_KEY = "user.name";
@@ -112,7 +112,8 @@ export function bindCollaborator(
         });
       }
 
-      console.log(remotes);
+      // 渲染cursor
+      renderRemoteCursors(file.getUi(), remotes);
     });
   }
 }
