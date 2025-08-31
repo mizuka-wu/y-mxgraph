@@ -79,41 +79,45 @@ export function bindCollaborator(
 
   // 渲染远端光标
   const showCursor = options.cursor ?? true;
-  const remotes = new Map<number, RemoteCursor>();
 
   if (typeof showCursor === "boolean" && showCursor) {
-    awareness.on("update", () => {
-      const states = awareness.getStates();
+    awareness.on(
+      "update",
+      (update: { added: number[]; removed: number[]; updated: number[] }) => {
+        const states = awareness.getStates();
+        const remotes = new Map<number, RemoteCursor>();
 
-      for (const [clientId] of states.entries()) {
-        if (clientId === awareness.clientID) continue;
+        for (const [clientId] of states.entries()) {
+          if (clientId === awareness.clientID) continue;
+          if (!update.updated.includes(clientId)) continue;
 
-        const name =
-          getAwarenessStateValue<string>(awareness, userNameKey, clientId) ||
-          clientId + "";
-        const color =
-          getAwarenessStateValue<string>(awareness, userColorKey, clientId) ||
-          "#000000";
+          const name =
+            getAwarenessStateValue<string>(awareness, userNameKey, clientId) ||
+            clientId + "";
+          const color =
+            getAwarenessStateValue<string>(awareness, userColorKey, clientId) ||
+            "#000000";
 
-        remotes.set(clientId, {
-          clientId,
-          cursorState: getAwarenessStateValue<CursorState>(
-            awareness,
-            "cursor",
-            clientId
-          ),
-          selectionState: getAwarenessStateValue<SelectionState>(
-            awareness,
-            "selection",
-            clientId
-          ),
-          userColor: color,
-          userName: name,
-        });
+          remotes.set(clientId, {
+            clientId,
+            cursorState: getAwarenessStateValue<CursorState>(
+              awareness,
+              "cursor",
+              clientId
+            ),
+            selectionState: getAwarenessStateValue<SelectionState>(
+              awareness,
+              "selection",
+              clientId
+            ),
+            userColor: color,
+            userName: name,
+          });
+        }
+
+        // 渲染cursor
+        renderRemoteCursors(file.getUi(), remotes);
       }
-
-      // 渲染cursor
-      renderRemoteCursors(file.getUi(), remotes);
-    });
+    );
   }
 }
