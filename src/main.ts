@@ -3,7 +3,7 @@ import { debounce } from "lodash-es";
 import { xml2js, js2xml } from "xml-js";
 import { WebrtcProvider } from "y-webrtc";
 import { diffWordsWithSpace } from "diff";
-import { bindDrawioFile, doc2xml } from "./yjs";
+import { bindDrawioFile, doc2xml, xml2doc } from "./yjs";
 
 const SPACES = 2;
 
@@ -159,7 +159,7 @@ window.onload = function () {
   function handleFileLoaded(app: any, file: any) {
     Reflect.set(globalThis, "app", app);
 
-    const doc = new Y.Doc();
+    const doc = xml2doc(file.data);
     const roomName = "demo";
     const provider = new WebrtcProvider(roomName, doc, {
       signaling: [],
