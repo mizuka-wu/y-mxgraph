@@ -1,14 +1,17 @@
 /**
  * 绑定yDoc和drawioFile/mxGraphModel
- * @todo 绑定mxGraphModel
  */
+import * as Y from "yjs";
 import { throttle } from "lodash-es";
 import { xml2doc } from "../transformer";
 import { applyFilePatch, generatePatch } from "./patch";
 import { getId } from "../helper/getId";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
-import * as Y from "yjs";
+import { getAwarenessStateValue } from "../helper/awarenessStateValue";
 import { type Awareness } from "y-protocols/awareness";
+
+export const DEFAULT_USER_NAME_KEY = "user.name";
+export const DEFAULT_USER_COLOR_KEY = "user.color";
 
 /**
  * 绑定yDoc和drawioFile
@@ -19,6 +22,12 @@ export function bindDrawioFile(
     mouseMoveThrottle?: number;
     doc?: Y.Doc | null;
     awareness?: Awareness;
+    cursor?:
+      | boolean
+      | {
+          userNameKey?: string;
+          userColorKey?: string;
+        };
   } = {}
 ) {
   const doc = options?.doc || new Y.Doc();
@@ -62,6 +71,7 @@ export function bindDrawioFile(
 
   // 当前用户信息到awareness
   if (options.awareness) {
+    const awareness = options.awareness!;
     // 绑定鼠标事件
     graph.addMouseListener({
       startX: 0,
@@ -82,7 +92,7 @@ export function bindDrawioFile(
           evt: MouseEvent;
         }
       ) {
-        options.awareness?.setLocalStateField("cursor", {
+        awareness.setLocalStateField("cursor", {
           x: event.graphX,
           y: event.graphY,
           pageId: file.getUi().currentPage?.getId(),
@@ -98,12 +108,64 @@ export function bindDrawioFile(
         const added = (evt.getProperty("added") || []).map(getId);
         const removed = (evt.getProperty("removed") || []).map(getId);
 
-        options.awareness?.setLocalStateField("selection", {
+        awareness.setLocalStateField("selection", {
           added,
           removed,
           pageId,
         });
       });
+
+    // 绘制其他人选区
+    const showCursor = options.cursor ?? true;
+    if (typeof showCursor === "boolean" && showCursor) {
+      // 同步光标
+      options.awareness.on("update", () => {
+        const otherCursors = awareness.getStates();
+        const cursorOpt = options.cursor;
+        const userNameKey =
+          typeof cursorOpt === "object" && cursorOpt?.userNameKey
+            ? cursorOpt.userNameKey
+            : DEFAULT_USER_NAME_KEY;
+        const userColorKey =
+          typeof cursorOpt === "object" && cursorOpt?.userColorKey
+            ? cursorOpt.userColorKey
+            : DEFAULT_USER_COLOR_KEY;
+        /**
+         * 排除自己的client以及非当前页面的 cursor/selection 整理一个列表
+         */
+        const cursorList = Array.from(otherCursors.entries())
+          .filter(([clientId]) => clientId !== awareness.clientID)
+          .map(([clientId]) => {
+            const cursor = getAwarenessStateValue(
+              awareness,
+              "cursor",
+              clientId
+            );
+            const selection = getAwarenessStateValue(
+              awareness,
+              "selection",
+              clientId
+            );
+            return {
+              clientId,
+              cursor,
+              selection,
+              userName: getAwarenessStateValue(
+                awareness,
+                userNameKey,
+                clientId
+              ),
+              userColor: getAwarenessStateValue(
+                awareness,
+                userColorKey,
+                clientId
+              ),
+            };
+          });
+
+        console.log(cursorList);
+      });
+    }
   }
 
   return doc;
