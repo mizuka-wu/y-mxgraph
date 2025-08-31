@@ -37,31 +37,6 @@ function createCursorEl(color: string, username: string) {
   return cursor;
 }
 
-function getOffset(a: any, b: any) {
-  for (
-    var c = 0,
-      d = 0,
-      e = !1,
-      f = a,
-      g = document.body,
-      k = document.documentElement;
-    null != f && f != g && f != k && !e;
-
-  ) {
-    var l = mxUtils.getCurrentStyle(f);
-    null != l && (e = e || "fixed" == l.position);
-    f = f.parentNode;
-  }
-  b ||
-    e ||
-    ((b = mxUtils.getDocumentScrollOrigin(a.ownerDocument)),
-    (c += b.x),
-    (d += b.y));
-  a = a.getBoundingClientRect();
-  null != a && ((c += a.left), (d += a.top));
-  return new mxPoint(c, d);
-}
-
 export function bindCursor(
   file: any,
   options: {
