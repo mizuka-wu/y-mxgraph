@@ -149,7 +149,7 @@ window.onload = function () {
   // 加载文件地址（demo base文件）
   if (window.location.hash) {
     window.location.hash = "";
-    window.location.reload();
+    return window.location.reload();
   }
   window.location.hash = "#R" + encodeURIComponent(demoFile);
   /**
