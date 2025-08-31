@@ -3,7 +3,7 @@ import { debounce } from "lodash-es";
 import { xml2js, js2xml } from "xml-js";
 import { WebrtcProvider } from "y-webrtc";
 import { diffWordsWithSpace } from "diff";
-import { bindDrawioFile, doc2xml, xml2doc } from "./yjs";
+import { bindDrawioFile, doc2xml } from "./yjs";
 
 const SPACES = 2;
 
@@ -159,19 +159,16 @@ window.onload = function () {
   function handleFileLoaded(app: any, file: any) {
     Reflect.set(globalThis, "app", app);
 
-    const doc = xml2doc(file.data);
+    const doc = new Y.Doc();
     const roomName = "demo";
     const provider = new WebrtcProvider(roomName, doc, {
       signaling: [],
     });
+
     bindDrawioFile(file, {
       doc,
       awareness: provider.awareness,
     });
-
-    Reflect.set(window, "__doc__", doc);
-    Reflect.set(window, "__awareness__", provider.awareness);
-    console.log("注入完成 当前room：", roomName);
 
     const graph = app.editor.graph;
     const mxGraphModel = graph.model;
@@ -186,6 +183,10 @@ window.onload = function () {
         logXmlDiffToConsole(currentXml, ydocXml, diff as any[]);
       }, 1000)
     );
+
+    Reflect.set(window, "__doc__", doc);
+    Reflect.set(window, "__awareness__", provider.awareness);
+    console.log("注入完成 当前room：", roomName);
   }
 
   App.main((app: any) => {
