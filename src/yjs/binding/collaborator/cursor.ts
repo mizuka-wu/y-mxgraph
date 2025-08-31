@@ -11,10 +11,13 @@ function createCursorEl(color: string, username: string) {
   const cursor = document.createElement("div");
   cursor.style.position = "absolute";
   cursor.style.opacity = "0.9";
+  cursor.style.transition = "all 0.3s ease-in-out";
+
   const img = document.createElement("img");
   img.style.transform = "rotate(-45deg)translateX(-14px)";
   img.setAttribute("src", createCursorImage(color));
   img.style.width = "10px";
+  img.style.transition = "all 0.3s ease-in-out";
   cursor.appendChild(img);
 
   const name = document.createElement("div");
@@ -110,6 +113,13 @@ export function renderRemoteCursors(
     el.remove();
   });
 
+  if (!currentPageRemotes.length) {
+    return;
+  }
+
+  const graph = ui.editor.graph;
+  const { translate, scale } = graph.view;
+
   currentPageRemotes.forEach(
     ({ clientId, cursorState, userColor, userName }) => {
       if (!cursorState) return;
@@ -120,11 +130,34 @@ export function renderRemoteCursors(
         cache.set(clientId, el);
       }
 
-      console.log(el);
-      // el.setAttribute("x", cursorState.x.toString());
-      // el.setAttribute("y", cursorState.y.toString());
-      // el.setAttribute("pageId", cursorState.pageId);
-      // el.setAttribute("selection", JSON.stringify(selectionState));
+      var x = (translate.x + cursorState.x) * scale + 8;
+      var y = (translate.y + cursorState.y) * scale - 12;
+
+      const cx = Math.max(
+        graph.container.scrollLeft,
+        Math.min(
+          graph.container.scrollLeft +
+            graph.container.clientWidth -
+            el.clientWidth,
+          x
+        )
+      );
+      const cy = Math.max(
+        graph.container.scrollTop - 22,
+        Math.min(
+          graph.container.scrollTop +
+            graph.container.clientHeight -
+            el.clientHeight,
+          y
+        )
+      );
+
+      const img = el.querySelector("img");
+
+      if (img) img.style.opacity = (cx != x || cy != y ? 0 : 1) + "";
+      el.style.left = cx + "px";
+      el.style.top = cy + "px";
+      el.style.display = "";
     }
   );
 }
