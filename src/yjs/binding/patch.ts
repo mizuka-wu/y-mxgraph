@@ -286,15 +286,35 @@ export function applyFilePatch(
                   xmlElement.setAttribute(key, item[key]);
                 });
                 cellsMap.set(id, xmlElement);
-                const previous = (item as any)["previous"] as
-                  | string
-                  | undefined;
-                // 顺序插入（唯一，mxCell 无前驱时需追加到末尾）
+                const previous = (item as any)["previous"] as string | undefined;
+                const parent = (item as any)["parent"] as string | undefined;
+                // 计算锚点：previous 优先；若 previous 为空则跟随 parent；两者皆无则移到头部
+                let anchorId: string | null | undefined = null;
+                let fallbackToEnd = true;
+                if (typeof previous !== "undefined") {
+                  if (previous === "") {
+                    if (parent) {
+                      anchorId = parent;
+                      fallbackToEnd = true;
+                    } else {
+                      anchorId = null; // 头部
+                      fallbackToEnd = false; // 不回退到尾部
+                    }
+                  } else {
+                    anchorId = previous;
+                    fallbackToEnd = true;
+                  }
+                } else if (parent) {
+                  anchorId = parent;
+                  fallbackToEnd = true;
+                }
+
+                // 顺序插入（唯一）
                 insertAfterUnique(
                   orderArr as Y.Array<string>,
                   id,
-                  previous || null,
-                  true
+                  anchorId,
+                  fallbackToEnd
                 );
               }
             }
@@ -312,39 +332,76 @@ export function applyFilePatch(
                 }
               });
 
-              // 再处理顺序更新（按照 previous 移动/插入）
+              // 再处理顺序更新：
+              // - 优先使用 previous；
+              // - 若 previous 为空，则尝试使用 parent 作为锚点（将第一个子节点插在父节点之后）；
+              // - 若两者皆无，则当作移动到头部（不追加到末尾）；
+              // - 若指定锚点不存在，则回退到 parent；仍不存在则根据 fallback 规则保持稳定。
               Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
                 const updateObj = update.cells![DIFF_UPDATE]![cellId];
-                if (!Reflect.has(updateObj, "previous")) return;
-                const previous = (updateObj as any).previous as string;
+                const hasPrev = Reflect.has(updateObj, "previous");
+                const hasParent = Reflect.has(updateObj, "parent");
+                if (!hasPrev && !hasParent) return;
 
-                // 特殊处理：当 previous 为空串时，不进行移动（常见于前驱被删除的场景）
-                if (previous === "") return;
+                const prevVal = hasPrev
+                  ? ((updateObj as any).previous as string)
+                  : undefined;
+                const parentVal = hasParent
+                  ? ((updateObj as any).parent as string)
+                  : undefined;
+
+                let anchorId: string | null | undefined = null;
+                let fallbackToEnd = true; // cells 场景通常在锚缺失时追加到末尾
+
+                if (hasPrev) {
+                  if (prevVal === "") {
+                    // 第一个兄弟：优先跟随父节点（若无父，则移动到头部）
+                    if (parentVal) {
+                      anchorId = parentVal;
+                      fallbackToEnd = true;
+                    } else {
+                      anchorId = null; // 头部
+                      fallbackToEnd = false; // 不回退到尾部
+                    }
+                  } else {
+                    anchorId = prevVal;
+                    fallbackToEnd = true;
+                  }
+                } else if (parentVal) {
+                  anchorId = parentVal;
+                  fallbackToEnd = true;
+                }
 
                 const currentIds = orderArr.toArray();
-                // 若指定的 previous 不存在（可能因同时删除），则跳过移动以保持稳定
-                const prevIndex = currentIds.indexOf(previous);
-                if (prevIndex === -1) return;
-                const targetIndex = prevIndex + 1;
                 const currentIndex = currentIds.indexOf(cellId);
+
                 if (currentIndex === -1) {
-                  // 不存在则按顺序插入新 cell
-                  const newCell = new Y.XmlElement("mxCell");
-                  newCell.setAttribute("id", cellId);
-                  Object.keys(updateObj).forEach((k) => {
-                    if (k === "previous") return;
-                    newCell.setAttribute(k, (updateObj as any)[k]);
-                  });
-                  cellsMap.set(cellId, newCell);
-                  orderArr.insert(targetIndex, [cellId]);
+                  // 若 cell 尚不存在，则创建并插入到期望位置
+                  let newCell = cellsMap.get(cellId) as Y.XmlElement | undefined;
+                  if (!newCell) {
+                    newCell = new Y.XmlElement("mxCell");
+                    newCell.setAttribute("id", cellId);
+                    Object.keys(updateObj).forEach((k) => {
+                      if (k === "previous") return;
+                      newCell!.setAttribute(k, (updateObj as any)[k]);
+                    });
+                    cellsMap.set(cellId, newCell);
+                  }
+                  insertAfterUnique(
+                    orderArr as Y.Array<string>,
+                    cellId,
+                    anchorId,
+                    fallbackToEnd
+                  );
                   return;
                 }
-                if (currentIndex !== targetIndex) {
-                  let insertIndex = targetIndex;
-                  if (currentIndex < insertIndex) insertIndex -= 1;
-                  orderArr.delete(currentIndex, 1);
-                  orderArr.insert(insertIndex, [cellId]);
-                }
+
+                insertAfterUnique(
+                  orderArr as Y.Array<string>,
+                  cellId,
+                  anchorId,
+                  fallbackToEnd
+                );
               });
             }
           }
