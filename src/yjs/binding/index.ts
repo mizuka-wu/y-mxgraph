@@ -62,14 +62,17 @@ export function bindDrawioFile(
         >[],
         transaction: Y.Transaction
       ) => {
-        // 跳过本地事务（由本地 change 监听已经处理）
-        if (transaction.local) return;
+        // 仅跳过由本地 UI 写入到 Y.Doc 的事务（origin === LOCAL_ORIGIN）
+        // 这样 yUndo 执行的本地 undo/redo（origin 为 UndoManager 实例）仍会同步到 UI
+        if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) return;
         const patch = generatePatch(events);
         console.log("remote patch", patch);
         // 应用远端 patch 到 UI，期间屏蔽本地 change 回写
         suppressLocalApply = true;
         try {
           file.patch([patch]);
+          // 重要：远端/撤销应用后，刷新 shadowPages，避免后续本地 diff 基于过期快照
+          file.setShadowPages(file.ui.clonePages(file.ui.pages));
         } finally {
           suppressLocalApply = false;
         }

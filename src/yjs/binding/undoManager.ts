@@ -81,9 +81,7 @@ export function bindUndoManager(
     // yjs 原生对象
     _y: yUndo,
 
-    // 本地撤销/重做深度，仅统计本地事务
-    _localUndoDepth: 0,
-    _localRedoDepth: 0,
+    // 不再维护自定义的本地撤销计数，直接依赖 yUndo.canUndo/canRedo
 
     addListener(name: string, fn: ListenerFn) {
       this.eventListeners.push(name, fn);
@@ -118,23 +116,19 @@ export function bindUndoManager(
     },
 
     canUndo(): boolean {
-      return trackLocalOnly
-        ? this._localUndoDepth > 0
-        : typeof this._y.canUndo === "function" && this._y.canUndo();
+      return typeof this._y.canUndo === "function" && this._y.canUndo();
     },
 
     canRedo(): boolean {
-      return trackLocalOnly
-        ? this._localRedoDepth > 0
-        : typeof this._y.canRedo === "function" && this._y.canRedo();
+      return typeof this._y.canRedo === "function" && this._y.canRedo();
     },
 
     undo() {
-      if (!trackLocalOnly || this._localUndoDepth > 0) this._y.undo();
+      this._y.undo();
     },
 
     redo() {
-      if (!trackLocalOnly || this._localRedoDepth > 0) this._y.redo();
+      this._y.redo();
     },
 
     // mx 的接线点，在 yUndo 模式下不再需要真正入栈，避免重复/冲突
@@ -147,7 +141,7 @@ export function bindUndoManager(
   // 注意：部分监听器（如 Editor 内部用于同步 selection 的处理）可能依赖 evt.getProperty('edit')，
   // 这里提供一个空的 edit 占位以避免运行时报错。
   const bridge = (
-    mxEventName: "add" | "clear" | "undo" | "redo",
+    mxEventName: "add" | "clear",
     yEventName: string
   ) => {
     yUndo.on(yEventName as any, () => {
@@ -155,9 +149,8 @@ export function bindUndoManager(
         // 远端事务：不更新 UI 的撤销状态，也不广播事件
         return;
       }
-      // 更新镜像的 history/index 指针，供 DrawioFile.patch 使用
       switch (mxEventName) {
-        case "add":
+        case "add": {
           if (mxLike.indexOfNextAdd < mxLike.history.length) {
             mxLike.history.splice(
               mxLike.indexOfNextAdd,
@@ -166,33 +159,13 @@ export function bindUndoManager(
           }
           mxLike.history.push({});
           mxLike.indexOfNextAdd = mxLike.history.length;
-          if (trackLocalOnly && lastTxnLocalOrigin) {
-            mxLike._localUndoDepth = (mxLike._localUndoDepth || 0) + 1;
-            mxLike._localRedoDepth = 0;
-          }
           break;
-        case "undo":
-          if (mxLike.indexOfNextAdd > 0) mxLike.indexOfNextAdd--;
-          if (trackLocalOnly) {
-            if (mxLike._localUndoDepth > 0) mxLike._localUndoDepth -= 1;
-            mxLike._localRedoDepth = (mxLike._localRedoDepth || 0) + 1;
-          }
-          break;
-        case "redo":
-          if (mxLike.indexOfNextAdd < mxLike.history.length) mxLike.indexOfNextAdd++;
-          if (trackLocalOnly) {
-            if (mxLike._localRedoDepth > 0) mxLike._localRedoDepth -= 1;
-            mxLike._localUndoDepth = (mxLike._localUndoDepth || 0) + 1;
-          }
-          break;
-        case "clear":
+        }
+        case "clear": {
           mxLike.history = [];
           mxLike.indexOfNextAdd = 0;
-          if (trackLocalOnly) {
-            mxLike._localUndoDepth = 0;
-            mxLike._localRedoDepth = 0;
-          }
           break;
+        }
       }
 
       const evt = createMxEventObject(mxEventName, { edit: { changes: [] } });
@@ -200,11 +173,32 @@ export function bindUndoManager(
     });
   };
 
-  // 建立映射
+  // 建立映射（新增/清空）
   bridge("add", "stack-item-added");
   bridge("clear", "stack-cleared");
-  bridge("undo", "stack-item-popped");
-  bridge("redo", "stack-item-updated");
+
+  // 处理撤销/重做：yUndo 使用同一个事件 'stack-item-popped'，通过 e.type 区分
+  yUndo.on("stack-item-popped" as any, (e: any) => {
+    const t = e && (e.type || e.reason || e.kind); // 兼容不同实现字段
+    if (t === "undo") {
+      if (mxLike.indexOfNextAdd > 0) mxLike.indexOfNextAdd--;
+      const evt = createMxEventObject("undo", { edit: { changes: [] } });
+      mxLike.fireEvent(evt);
+    } else if (t === "redo") {
+      if (mxLike.indexOfNextAdd < mxLike.history.length) mxLike.indexOfNextAdd++;
+      const evt = createMxEventObject("redo", { edit: { changes: [] } });
+      mxLike.fireEvent(evt);
+    } else {
+      // 未知类型，尽量不破坏 index
+    }
+  });
+
+  // 当 redo 栈被更新（例如新增编辑后清空 redo），通知 UI 刷新状态
+  yUndo.on("stack-item-updated" as any, () => {
+    // 不修改 index（由 add/undo/redo 已处理），仅派发事件提示 UI 重新计算 canUndo/canRedo
+    const evt = createMxEventObject("redo", { edit: { changes: [] } });
+    mxLike.fireEvent(evt);
+  });
 
   // 迁移旧的 listeners 到新适配器（仅注册，不直接绑定到 yUndo，触发依靠 mxLike.fireEvent）
   pairs.forEach(([key, fn]) => {
