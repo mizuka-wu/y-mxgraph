@@ -63,6 +63,8 @@ pnpm vite build --base "/<your-repo>/"
 pnpm vite build --config vite.lib.config.ts
 ```
 
+Dev server default URL: `http://localhost:5173/y-mxgraph/`.
+
 > GitHub Pages path is usually `https://<user>.github.io/<repo>/`, hence `--base "/<repo>/"` for demo.
 > If your repo is `<user>.github.io` or you use a custom domain, set base to `/`.
 
@@ -259,6 +261,26 @@ Exported from `src/yjs/index.ts`:
 - Params:
   - `spaces`: indentation for readability
 - Returns: XML string
+
+## Patch and Ordering Rules (Important)
+
+To stay consistent with draw.io semantics, the binding layer follows explicit ordering and anchoring rules when generating/applying patches (see `src/yjs/binding/patch.ts` for `applyFilePatch()` and `insertAfterUnique()`):
+
+- __Diagram level (pages)__:
+  - Processing order: delete -> insert -> reorder (based on `previous`).
+  - Before reordering, `ensureUniqueOrder()` is applied to deduplicate IDs to avoid index issues.
+
+- __Cells level (mxCell)__:
+  - Processing order: delete -> insert -> attribute update -> reorder (based on `previous`).
+  - __Anchor rules__ (for both insert and move):
+    - Prefer `previous`. When `previous === ""`, it means the cell is the "first sibling" under its parent.
+    - If `previous === ""` and `parent` exists, the cell is inserted right after its parent (so the first child follows the parent).
+      - Example: parent `-3`, child1 `-1` (previous empty), child2 `-2` (previous `-1`) => final order: `-3 -> -1 -> -2`.
+    - If `previous` is not provided but `parent` is, the cell will follow the parent.
+    - If the specified anchor does not exist (e.g., deleted concurrently), cells typically fall back to the end; when no anchor is available at all, insertion may go to the head to keep order stable.
+  - `insertAfterUnique()` is used universally to ensure unique insertion and correct index handling during moves.
+
+> Note: The above focuses on structure/order. Attribute updates are applied before order changes (to avoid losses), with event-based collection plus snapshot-based diff as a fallback.
 
 ## Use in Your Project
 

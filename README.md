@@ -63,6 +63,8 @@ pnpm vite build --base "/<你的仓库名>/"
 pnpm vite build --config vite.lib.config.ts
 ```
 
+开发服务器默认地址：`http://localhost:5173/y-mxgraph/`。
+
 > GitHub Pages 部署路径通常是 `https://<user>.github.io/<repo>/`，因此 Demo 构建时需要 `--base "/<repo>/"`。
 > 如果你的仓库就是 `<user>.github.io` 或使用自定义域名，可以将 base 设为 `/`。
 
@@ -261,6 +263,27 @@ bindDrawioFile(file, { doc });
 - 参数：
   - `spaces`：缩进空格数，便于人类可读
 - 返回：XML 字符串
+
+## 补丁与顺序规则（重要）
+
+为确保与 draw.io 的语义一致，绑定层在应用/生成补丁（patch）时遵循如下顺序与锚点规则（详见 `src/yjs/binding/patch.ts` 中 `applyFilePatch()` 与 `insertAfterUnique()`）：
+
+- __diagram 层（页面）__：
+  - 处理顺序：先删除 -> 后插入 -> 再重排（基于 `previous`）。
+  - 在每次重排前会调用 `ensureUniqueOrder()` 去重，避免重复 id 影响位置计算。
+
+- __cells 层（mxCell）__：
+  - 处理顺序：先删除 -> 后插入 -> 再属性更新 -> 最后重排（基于 `previous`）。
+  - __锚点规则__（插入或移动时确定位置）：
+    - 优先使用 `previous`。当 `previous === ""` 时，表示该节点是其父的“第一个兄弟”。
+    - 当 `previous === ""` 且存在 `parent` 时，节点会被插在父节点之后（即首个子节点紧随父节点）。
+      - 示例：父 `-3`，子1 `-1`（previous 为空）、子2 `-2`（previous = `-1`）
+        - 最终顺序：`-3 -> -1 -> -2`。
+    - 若未提供 `previous` 但提供了 `parent`，亦会跟随父节点。
+    - 当指定锚点不存在时（可能因同时删除等），cells 通常回退到末尾；若完全无锚点，则可能移动到头部以保持稳定。
+  - 实现上统一使用 `insertAfterUnique()` 完成“唯一化插入”，既能去重也能正确处理移动时的索引漂移。
+
+> 注：上述规则只描述顺序/结构层面的处理。属性变更会在顺序调整前写入（避免属性丢失），并通过事件与快照对比进行兜底。
 
 ## 在你自己的项目中使用
 
