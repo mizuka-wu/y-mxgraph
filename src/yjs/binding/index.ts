@@ -73,7 +73,11 @@ export function bindDrawioFile(
           return;
         }
         const patch = generatePatch(events);
-        console.log("remote patch", patch);
+        const isUndoManagerOrigin =
+          !!transaction.origin &&
+          ((transaction.origin instanceof (Y as any).UndoManager) ||
+            ((transaction.origin as any)?.constructor?.name === "UndoManager"));
+        console.log(isUndoManagerOrigin ? "undoManager patch" : "remote patch", patch);
         // 应用远端 patch 到 UI，期间屏蔽本地 change 回写
         suppressLocalApply = true;
         try {
