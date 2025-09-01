@@ -41,8 +41,11 @@ export function bindDrawioFile(
   const graph = file.getUi().editor.graph;
   const mxGraphModel = graph.model;
   const mouseMoveThrottle = options.mouseMoveThrottle || 100;
+  // 防抖标记：应用远端补丁到 UI 时，暂时忽略本地 change 事件
+  let suppressLocalApply = false;
   // 绑定本地的change到yDoc
   mxGraphModel.addListener("change", () => {
+    if (suppressLocalApply) return;
     const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
     file.setShadowPages(file.ui.clonePages(file.ui.pages));
     applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
@@ -57,15 +60,19 @@ export function bindDrawioFile(
         events: Y.YEvent<
           Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
         >[],
-        _transaction: Y.Transaction
+        transaction: Y.Transaction
       ) => {
-        // if (transaction.local) return;
-        // 远端的origin
+        // 跳过本地事务（由本地 change 监听已经处理）
+        if (transaction.local) return;
         const patch = generatePatch(events);
         console.log("remote patch", patch);
-
-        // 应用patch
-        file.patch([patch]);
+        // 应用远端 patch 到 UI，期间屏蔽本地 change 回写
+        suppressLocalApply = true;
+        try {
+          file.patch([patch]);
+        } finally {
+          suppressLocalApply = false;
+        }
       }
     );
 

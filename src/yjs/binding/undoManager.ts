@@ -48,6 +48,16 @@ export function bindUndoManager(
   const editor = file.getUi().editor;
   const originUndoManager = editor.undoManager;
 
+  // 最近一次事务是否来自本地（我们打的 LOCAL_ORIGIN）
+  let lastTxnLocalOrigin = false;
+  doc.on("beforeTransaction", (t: Y.Transaction) => {
+    lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
+  });
+  doc.on("afterTransaction", (t: Y.Transaction) => {
+    lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
+  });
+  // 仅在 trackLocalOnly 模式下，通过 UndoManager 事件维护本地撤销/重做深度
+
   // 提取旧 undoManager 的监听器对（key, fn）
   const pairs: Array<[string, ListenerFn]> = [];
   const raw = Array.isArray(originUndoManager?.eventListeners)
@@ -70,6 +80,10 @@ export function bindUndoManager(
 
     // yjs 原生对象
     _y: yUndo,
+
+    // 本地撤销/重做深度，仅统计本地事务
+    _localUndoDepth: 0,
+    _localRedoDepth: 0,
 
     addListener(name: string, fn: ListenerFn) {
       this.eventListeners.push(name, fn);
@@ -104,19 +118,23 @@ export function bindUndoManager(
     },
 
     canUndo(): boolean {
-      return typeof this._y.canUndo === "function" ? this._y.canUndo() : false;
+      return trackLocalOnly
+        ? this._localUndoDepth > 0
+        : typeof this._y.canUndo === "function" && this._y.canUndo();
     },
 
     canRedo(): boolean {
-      return typeof this._y.canRedo === "function" ? this._y.canRedo() : false;
+      return trackLocalOnly
+        ? this._localRedoDepth > 0
+        : typeof this._y.canRedo === "function" && this._y.canRedo();
     },
 
     undo() {
-      this._y.undo();
+      if (!trackLocalOnly || this._localUndoDepth > 0) this._y.undo();
     },
 
     redo() {
-      this._y.redo();
+      if (!trackLocalOnly || this._localRedoDepth > 0) this._y.redo();
     },
 
     // mx 的接线点，在 yUndo 模式下不再需要真正入栈，避免重复/冲突
@@ -133,6 +151,10 @@ export function bindUndoManager(
     yEventName: string
   ) => {
     yUndo.on(yEventName as any, () => {
+      if (trackLocalOnly && mxEventName !== "clear" && !lastTxnLocalOrigin) {
+        // 远端事务：不更新 UI 的撤销状态，也不广播事件
+        return;
+      }
       // 更新镜像的 history/index 指针，供 DrawioFile.patch 使用
       switch (mxEventName) {
         case "add":
@@ -144,16 +166,32 @@ export function bindUndoManager(
           }
           mxLike.history.push({});
           mxLike.indexOfNextAdd = mxLike.history.length;
+          if (trackLocalOnly && lastTxnLocalOrigin) {
+            mxLike._localUndoDepth = (mxLike._localUndoDepth || 0) + 1;
+            mxLike._localRedoDepth = 0;
+          }
           break;
         case "undo":
           if (mxLike.indexOfNextAdd > 0) mxLike.indexOfNextAdd--;
+          if (trackLocalOnly) {
+            if (mxLike._localUndoDepth > 0) mxLike._localUndoDepth -= 1;
+            mxLike._localRedoDepth = (mxLike._localRedoDepth || 0) + 1;
+          }
           break;
         case "redo":
           if (mxLike.indexOfNextAdd < mxLike.history.length) mxLike.indexOfNextAdd++;
+          if (trackLocalOnly) {
+            if (mxLike._localRedoDepth > 0) mxLike._localRedoDepth -= 1;
+            mxLike._localUndoDepth = (mxLike._localUndoDepth || 0) + 1;
+          }
           break;
         case "clear":
           mxLike.history = [];
           mxLike.indexOfNextAdd = 0;
+          if (trackLocalOnly) {
+            mxLike._localUndoDepth = 0;
+            mxLike._localRedoDepth = 0;
+          }
           break;
       }
 
