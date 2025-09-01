@@ -55,7 +55,7 @@ export function bindDrawioFile(
         events: Y.YEvent<
           Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
         >[],
-        transaction: Y.Transaction
+        _transaction: Y.Transaction
       ) => {
         // if (transaction.local) return;
         // 远端的origin
@@ -68,9 +68,9 @@ export function bindDrawioFile(
     );
 
   // undoManager劫持
-  // bindUndoManager(doc, file, {
-  //   undoManager: options.undoManager,
-  // });
+  bindUndoManager(doc, file, {
+    undoManager: options.undoManager,
+  });
 
   // 协作（光标/选区/远端光标渲染）
   if (options.awareness) {
