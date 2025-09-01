@@ -3,7 +3,7 @@
  */
 import * as Y from "yjs";
 import { xml2doc } from "../transformer";
-import { applyFilePatch, generatePatch } from "./patch";
+import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
 import { LOCAL_ORIGIN } from "../helper/origin";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
 import { bindCollaborator } from "./collaborator";
@@ -38,6 +38,9 @@ export function bindDrawioFile(
     xml2doc(file.data, doc);
   }
 
+  // 初始化 doc 快照，避免首次事务（如撤销）时 prev 快照缺失导致空补丁
+  initDocSnapshot(doc);
+
   const graph = file.getUi().editor.graph;
   const mxGraphModel = graph.model;
   const mouseMoveThrottle = options.mouseMoveThrottle || 100;
@@ -63,8 +66,12 @@ export function bindDrawioFile(
         transaction: Y.Transaction
       ) => {
         // 仅跳过由本地 UI 写入到 Y.Doc 的事务（origin === LOCAL_ORIGIN）
-        // 这样 yUndo 执行的本地 undo/redo（origin 为 UndoManager 实例）仍会同步到 UI
-        if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) return;
+        // 但仍需更新快照（generatePatch 内部会刷新 docSnapshots），
+        // 以确保随后由 UndoManager 触发的撤销/重做可以生成非空 patch 并同步到 UI
+        if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) {
+          generatePatch(events);
+          return;
+        }
         const patch = generatePatch(events);
         console.log("remote patch", patch);
         // 应用远端 patch 到 UI，期间屏蔽本地 change 回写

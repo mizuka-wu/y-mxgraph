@@ -31,6 +31,8 @@ const DIFF_UPDATE = "u";
 type DocSnapshot = {
   diagramOrder: string[] | null;
   cellsOrder: Map<string, string[]>;
+  // 每个 diagram 的 cell 属性快照：did -> (cid -> attrs)
+  cellAttrs: Map<string, Map<string, Record<string, string>>>;
 };
 const docSnapshots = new WeakMap<Y.Doc, DocSnapshot>();
 
@@ -363,6 +365,60 @@ export function applyFilePatch(
   }, options?.origin);
 }
 
+/**
+ * 显式初始化当前文档的快照，避免首次事件（例如撤销）时 prev 快照为 null 导致补丁为空。
+ */
+export function initDocSnapshot(doc: Y.Doc) {
+  try {
+    const mxfile = doc.getMap(mxfileKey) as YMxFile;
+    const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+    const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
+    const diagramOrder = orderArr ? orderArr.toArray().slice() : [];
+
+    const snap: DocSnapshot = {
+      diagramOrder,
+      cellsOrder: new Map<string, string[]>(),
+      cellAttrs: new Map<string, Map<string, Record<string, string>>>(),
+    };
+
+    // 预采集每个 diagram 的 cells 顺序
+    const diagrams: YDiagram[] = diagramOrder
+      .map((id) => diagramsMap.get(id) as YDiagram | undefined)
+      .filter((d): d is YDiagram => !!d);
+    for (const d of diagrams) {
+      const did = (d.get("id") as unknown as string) || "";
+      if (!did) continue;
+      const gm = d.get(mxGraphModelKey) as YMxGraphModel | undefined;
+      if (gm) {
+        const order = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+        const ids = order ? order.toArray().slice() : [];
+        snap.cellsOrder.set(did, ids);
+        const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+        const attrMap = new Map<string, Record<string, string>>();
+        if (cellsMap) {
+          for (const cid of ids) {
+            const el = cellsMap.get(cid) as Y.XmlElement | undefined;
+            if (el) {
+              attrMap.set(
+                cid,
+                (el.getAttributes() as Record<string, string>) || {}
+              );
+            }
+          }
+        }
+        snap.cellAttrs.set(did, attrMap);
+      } else {
+        snap.cellsOrder.set(did, []);
+        snap.cellAttrs.set(did, new Map());
+      }
+    }
+
+    docSnapshots.set(doc, snap);
+  } catch (_e) {
+    // 初始化失败忽略，等待后续 generatePatch 覆盖
+  }
+}
+
 export function generatePatch(
   events: Y.YEvent<
     Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile | YDiagram
@@ -383,11 +439,16 @@ export function generatePatch(
   // 读取/初始化当前文档的快照容器
   let snap = docSnapshots.get(doc);
   if (!snap) {
-    snap = { diagramOrder: null, cellsOrder: new Map<string, string[]>() };
+    snap = {
+      diagramOrder: null,
+      cellsOrder: new Map<string, string[]>(),
+      cellAttrs: new Map<string, Map<string, Record<string, string>>>(),
+    };
     docSnapshots.set(doc, snap);
   }
   const prevDiagramOrder = snap.diagramOrder;
   const prevCellsOrder = snap.cellsOrder;
+  const prevCellsAttrs = snap.cellAttrs;
 
   // 工具函数
   const ensureUpdate = (diagramId: string) => {
@@ -609,13 +670,60 @@ export function generatePatch(
     }
   }
 
+  // 4.5) 基于快照的属性对比兜底：
+  // 某些场景（例如撤销）可能不会提供完整的 attributesChanged 集合，
+  // 这里通过对比上次快照与当前属性，补充缺失的属性更新。
+  if (prevDiagramOrder) {
+    for (const [did, currAttrsMap] of cellAttrMap.entries()) {
+      const prevAttrsMap = prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
+      const cellsPatch = ensureCellSection(did);
+      cellsPatch[DIFF_UPDATE] = cellsPatch[DIFF_UPDATE] || {};
+      const updateBucket = cellsPatch[DIFF_UPDATE]!;
+
+      const currCells = currAttrsMap.keys();
+      for (const cid of currCells) {
+        if (insertedCellIdGlobal.has(cid)) continue; // 跳过本次新增的 cell
+        const prevAttrs = prevAttrsMap.get(cid) || {};
+        const currAttrs = currAttrsMap.get(cid) || {};
+        // 汇总键集合
+        const keys = new Set<string>([...Object.keys(prevAttrs), ...Object.keys(currAttrs)]);
+        const cellUpdate = (updateBucket[cid] = updateBucket[cid] || {});
+        let changed = false;
+        for (const k of keys) {
+          const pv = (prevAttrs as any)[k] ?? "";
+          const cv = (currAttrs as any)[k] ?? "";
+          if (pv !== cv) {
+            cellUpdate[k] = cv;
+            changed = true;
+          }
+        }
+        // 若没有任何差异，则移除空对象以保持补丁精简
+        if (!changed) {
+          if (Object.keys(cellUpdate).length === 0) {
+            delete updateBucket[cid];
+          }
+        }
+      }
+    }
+  }
+
   // 5) 更新当前文档的快照（供下次对比）
   snap.diagramOrder = currDiagramOrder.slice();
   const newCellsOrder = new Map<string, string[]>();
+  const newCellsAttrs = new Map<string, Map<string, Record<string, string>>>();
   for (const [did, arr] of currCellsOrder.entries()) {
     newCellsOrder.set(did, arr.slice());
   }
+  for (const [did, attrsMap] of cellAttrMap.entries()) {
+    const copy = new Map<string, Record<string, string>>();
+    for (const [cid, attrs] of attrsMap.entries()) {
+      // 浅拷贝 attrs（属性值均为 string）
+      copy.set(cid, { ...(attrs as Record<string, string>) });
+    }
+    newCellsAttrs.set(did, copy);
+  }
   snap.cellsOrder = newCellsOrder;
+  snap.cellAttrs = newCellsAttrs;
   docSnapshots.set(doc, snap);
 
   return patch;
