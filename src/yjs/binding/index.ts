@@ -4,6 +4,7 @@
 import * as Y from "yjs";
 import { xml2doc } from "../transformer";
 import { applyFilePatch, generatePatch } from "./patch";
+import { LOCAL_ORIGIN } from "../helper/origin";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
 import { bindCollaborator } from "./collaborator";
 import { bindUndoManager } from "./undoManager";
@@ -22,6 +23,7 @@ export function bindDrawioFile(
     doc?: Y.Doc | null;
     awareness?: Awareness;
     undoManager?: Y.UndoManager;
+    trackLocalUndoOnly?: boolean;
     cursor?:
       | boolean
       | {
@@ -43,7 +45,7 @@ export function bindDrawioFile(
   mxGraphModel.addListener("change", () => {
     const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
     file.setShadowPages(file.ui.clonePages(file.ui.pages));
-    applyFilePatch(doc, patch);
+    applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
     console.log("local patch", patch);
   });
 
@@ -70,6 +72,7 @@ export function bindDrawioFile(
   // undoManager劫持
   bindUndoManager(doc, file, {
     undoManager: options.undoManager,
+    trackLocalUndoOnly: options.trackLocalUndoOnly,
   });
 
   // 协作（光标/选区/远端光标渲染）

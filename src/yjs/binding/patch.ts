@@ -110,7 +110,11 @@ export interface FilePatch {
   };
 }
 
-export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
+export function applyFilePatch(
+  doc: Y.Doc,
+  patch: FilePatch,
+  options?: { origin?: any }
+) {
   doc.transact(() => {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     console.log(mxfile.toJSON(), patch);
@@ -356,7 +360,7 @@ export function applyFilePatch(doc: Y.Doc, patch: FilePatch) {
         }
       });
     }
-  });
+  }, options?.origin);
 }
 
 export function generatePatch(

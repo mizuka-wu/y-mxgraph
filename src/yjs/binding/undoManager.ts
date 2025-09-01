@@ -2,6 +2,7 @@
  * 绑定 yjs UndoManager 到 draw.io 的 editor.undoManager，提供 mxUndoManager 兼容层。
  */
 import * as Y from "yjs";
+import { LOCAL_ORIGIN } from "../helper/origin";
 
 type ListenerFn = (sender: any, evt?: any) => void;
 
@@ -19,15 +20,30 @@ export function bindUndoManager(
   file: any,
   options: {
     undoManager?: Y.UndoManager;
+    trackLocalUndoOnly?: boolean;
   }
 ) {
   // 1) 准备 yjs 的 UndoManager（作用域为整个 doc）
-  const yUndo: Y.UndoManager =
-    options?.undoManager ||
-    new Y.UndoManager(doc, {
-      // 仅作占位，是否捕获通过 yjs 内部策略控制
-      trackedOrigins: new Set([null]),
-    });
+  const trackLocalOnly = options?.trackLocalUndoOnly ?? true;
+  let yUndo: Y.UndoManager;
+  if (options?.undoManager) {
+    yUndo = options.undoManager;
+    if (trackLocalOnly) {
+      try {
+        const set = new Set<any>([LOCAL_ORIGIN as any]);
+        (yUndo as any).trackedOrigins = set;
+        if (typeof (yUndo as any).addTrackedOrigin === "function") {
+          (yUndo as any).addTrackedOrigin(LOCAL_ORIGIN);
+        }
+      } catch (_e) {
+        // 忽略，尽力而为
+      }
+    }
+  } else {
+    yUndo = trackLocalOnly
+      ? new Y.UndoManager(doc, { trackedOrigins: new Set([LOCAL_ORIGIN as any]) })
+      : new Y.UndoManager(doc);
+  }
 
   const editor = file.getUi().editor;
   const originUndoManager = editor.undoManager;
