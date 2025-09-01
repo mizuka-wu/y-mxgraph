@@ -5,8 +5,9 @@ import * as Y from "yjs";
 import { xml2doc } from "../transformer";
 import { applyFilePatch, generatePatch } from "./patch";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
-import { type Awareness } from "y-protocols/awareness";
 import { bindCollaborator } from "./collaborator";
+import { bindUndoManager } from "./undoManager";
+import { type Awareness } from "y-protocols/awareness";
 
 export const DEFAULT_USER_NAME_KEY = "user.name";
 export const DEFAULT_USER_COLOR_KEY = "user.color";
@@ -20,13 +21,13 @@ export function bindDrawioFile(
     mouseMoveThrottle?: number;
     doc?: Y.Doc | null;
     awareness?: Awareness;
+    undoManager?: Y.UndoManager;
     cursor?:
       | boolean
       | {
           userNameKey?: string;
           userColorKey?: string;
         };
-    debug?: boolean;
   } = {}
 ) {
   const doc = options?.doc || new Y.Doc();
@@ -56,17 +57,20 @@ export function bindDrawioFile(
         >[],
         transaction: Y.Transaction
       ) => {
+        // if (transaction.local) return;
         // 远端的origin
-        if (transaction.local) return;
         const patch = generatePatch(events);
         console.log("remote patch", patch);
 
-        /**
-         * 应用patch
-         */
+        // 应用patch
         file.patch([patch]);
       }
     );
+
+  // undoManager劫持
+  bindUndoManager(doc, file, {
+    undoManager: options.undoManager,
+  });
 
   // 协作（光标/选区/远端光标渲染）
   if (options.awareness) {
