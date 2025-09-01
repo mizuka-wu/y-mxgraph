@@ -68,9 +68,9 @@ export function bindDrawioFile(
     );
 
   // undoManager劫持
-  bindUndoManager(doc, file, {
-    undoManager: options.undoManager,
-  });
+  // bindUndoManager(doc, file, {
+  //   undoManager: options.undoManager,
+  // });
 
   // 协作（光标/选区/远端光标渲染）
   if (options.awareness) {
