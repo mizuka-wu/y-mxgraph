@@ -221,6 +221,7 @@ bindDrawioFile(file, { doc });
 ```
 
 > 提示：
+>
 > - 上述示例未将相关依赖加入本仓库默认依赖中，请按需自行安装。
 > - `bindDrawioFile` 只关心同一个 `Y.Doc` 与可选 `awareness`，无需关心具体 Provider 类型。
 > - 首次绑定时机：对中心化 Provider（如 `y-websocket`）建议在初次 `sync` 完成后再绑定，避免覆盖远端。
@@ -234,27 +235,32 @@ bindDrawioFile(file, { doc });
 - 作用：将 draw.io 的 `file` 对象与 `Y.Doc` 双向绑定。
 - 参数：
   - `file: any` draw.io 编辑器文件对象（来自 `App.main((app) => app.currentFile)`）
-  - `options?: {
+  - `options: {
+      doc: Y.Doc;                           // 外部传入的 Y.Doc（必填）
       mouseMoveThrottle?: number;           // 光标移动节流，默认 100ms
-      doc?: Y.Doc | null;                   // 传入现有 Doc；不传则内部创建
       awareness?: Awareness;                // 协作状态（用于光标/选区）
+      undoManager?: Y.UndoManager;          // 外部传入的 UndoManager，启用撤销/重做绑定
+      trackLocalUndoOnly?: boolean;        // 是否仅追踪本地撤销，默认 true
       cursor?: boolean | {                  // 是否渲染远端光标/选区
         userNameKey?: string;               // awareness 中用户名字段，默认 'user.name'
         userColorKey?: string;              // awareness 中颜色字段，默认 'user.color'
       };
       debug?: boolean;                      // 预留调试开关
     }`
-- 返回：`Y.Doc`（若传入了 `doc` 则返回同一个）
+- 返回：传入的 `Y.Doc`
 - 行为：
   - 监听本地 `mxGraphModel` 的变更并生成 patch，应用到 `Y.Doc`
   - 监听 `Y.Doc` 的远端变更并生成 patch，应用回 draw.io 的 `file`
   - 若传入 `awareness`，将绑定协作光标/选区信息
 
-### `xml2doc(xml: string, doc?: Y.Doc)`
+### `xml2doc(xml: string, doc: Y.Doc)`
 
-- 作用：将 draw.io XML 解析并填充到 `Y.Doc` 中
+- 作用：将 draw.io XML 解析并填充到外部传入的 `Y.Doc` 中
 - 支持：`<mxfile>`（多页面）或 `<mxGraphModel>`（单模型）
-- 返回：`Y.Doc`（传入时复用，不传则内部创建）
+- 参数：
+  - `xml: string` — draw.io XML 字符串
+  - `doc: Y.Doc` — 外部传入的 `Y.Doc`（必填）
+- 返回：传入的 `Y.Doc`
 
 ### `doc2xml(doc: Y.Doc, spaces = 0): string`
 
@@ -320,4 +326,4 @@ bindDrawioFile(file, { doc });
 
 ## 许可证
 
-暂未指定（TBD）。如需开放协议请在根目录添加 `LICENSE` 并在此处补充说明。
+[MIT](LICENSE) © 2025 Edward Mizuka

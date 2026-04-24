@@ -234,26 +234,31 @@ Exported from `src/yjs/index.ts`:
 - Purpose: bidirectionally bind draw.io `file` and `Y.Doc`.
 - Params:
   - `file: any` draw.io editor file object (from `App.main((app) => app.currentFile)`)
-  - `options?: {
+  - `options: {
+      doc: Y.Doc;                           // external Y.Doc (required)
       mouseMoveThrottle?: number;           // cursor move throttle (default 100ms)
-      doc?: Y.Doc | null;                   // existing Doc; created internally if omitted
       awareness?: Awareness;                // collaboration state (cursor/selection)
-      cursor?: boolean | {
+      undoManager?: Y.UndoManager;          // external UndoManager for undo/redo binding
+      trackLocalUndoOnly?: boolean;        // track local undo only (default true)
+      cursor?: boolean | {                  // render remote cursors/selections
         userNameKey?: string;               // username key in awareness (default 'user.name')
         userColorKey?: string;              // color key in awareness (default 'user.color')
       };
       debug?: boolean;                      // reserved for debugging
     }`
-- Returns: `Y.Doc` (same instance if passed in)
+- Returns: `Y.Doc`
 - Behavior:
   - Listen to local `mxGraphModel` changes -> generate patch -> apply to `Y.Doc`
   - Listen to remote `Y.Doc` changes -> generate patch -> apply back to draw.io `file`
   - If `awareness` is provided, bind collaborative cursor/selection
 
-### `xml2doc(xml: string, doc?: Y.Doc)`
-- Purpose: parse draw.io XML into `Y.Doc`
+### `xml2doc(xml: string, doc: Y.Doc)`
+- Purpose: parse draw.io XML into external `Y.Doc`
 - Supports: `<mxfile>` (multi-page) and `<mxGraphModel>` (single model)
-- Returns: `Y.Doc` (reuse if provided; otherwise created)
+- Params:
+  - `xml: string` — draw.io XML string
+  - `doc: Y.Doc` — external Y.Doc (required)
+- Returns: `Y.Doc`
 
 ### `doc2xml(doc: Y.Doc, spaces = 0): string`
 - Purpose: serialize `Y.Doc` back to draw.io XML
@@ -317,4 +322,4 @@ This repo hasn’t published to npm yet. You can:
 
 ## License
 
-TBD. Add a `LICENSE` file in the repo root and update this section accordingly.
+[MIT](LICENSE) © 2025 Edward Mizuka
