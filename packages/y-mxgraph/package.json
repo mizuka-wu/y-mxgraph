@@ -1,0 +1,57 @@
+{
+  "name": "y-mxgraph",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Yjs binding for draw.io (mxGraph) documents",
+  "keywords": [
+    "yjs",
+    "mxgraph",
+    "drawio",
+    "crdt",
+    "collaboration"
+  ],
+  "license": "MIT",
+  "main": "./dist/y-mxgraph.cjs.js",
+  "module": "./dist/y-mxgraph.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/y-mxgraph.es.js",
+      "require": "./dist/y-mxgraph.cjs.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build --config vite.config.ts && tsc --emitDeclarationOnly --declarationDir dist",
+    "dev": "tsc --watch --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "peerDependencies": {
+    "y-protocols": "^1.0.0",
+    "yjs": "^13.6.0"
+  },
+  "dependencies": {
+    "colord": "^2.9.3",
+    "lodash-es": "^4.17.21",
+    "xml-js": "^1.6.11"
+  },
+  "devDependencies": {
+    "@y-mxgraph/eslint-config": "workspace:*",
+    "@y-mxgraph/typescript-config": "workspace:*",
+    "@types/lodash-es": "^4.17.12",
+    "eslint": "^8.57.0",
+    "typescript": "~5.5.4",
+    "vite": "^5.1.4",
+    "vite-plugin-dts": "^4.0.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0"
+  }
+}

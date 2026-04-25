@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>y-mxgraph Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    #toolbar h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #e94560;
+      white-space: nowrap;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 12px;
+      color: #a0a0b0;
+      white-space: nowrap;
+    }
+
+    select, input[type="text"] {
+      background: #0f3460;
+      border: 1px solid #1a4080;
+      color: #e0e0e0;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: #e94560;
+    }
+
+    button {
+      background: #e94560;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #c73652; }
+    button:disabled { background: #555; cursor: not-allowed; }
+
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 4px 16px;
+      background: #0d1b2a;
+      border-bottom: 1px solid #0f3460;
+      font-size: 11px;
+      color: #708090;
+      flex-shrink: 0;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #555;
+      display: inline-block;
+      margin-right: 4px;
+    }
+
+    .status-dot.connected { background: #4caf50; }
+    .status-dot.loading { background: #ff9800; animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    #drawio-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #drawio-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: none;
+    }
+
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      gap: 16px;
+      z-index: 10;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #0f3460;
+      border-top-color: #e94560;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #loading-overlay p {
+      font-size: 13px;
+      color: #708090;
+    }
+
+    #room-input { width: 120px; }
+    #custom-url-input { width: 220px; }
+
+    .separator {
+      width: 1px;
+      height: 20px;
+      background: #0f3460;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <h1>y-mxgraph Demo</h1>
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <label>draw.io 版本:</label>
+      <select id="version-select">
+        <option value="24.7.17">v24.7.17 (latest)</option>
+        <option value="24.6.4">v24.6.4</option>
+        <option value="23.1.5">v23.1.5</option>
+        <option value="22.1.2">v22.1.2</option>
+        <option value="custom">自定义 URL...</option>
+      </select>
+    </div>
+
+    <div class="toolbar-group" id="custom-url-group" style="display:none">
+      <input type="text" id="custom-url-input" placeholder="https://..." />
+    </div>
+
+    <button id="load-btn">加载</button>
+
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <label>Room:</label>
+      <input type="text" id="room-input" value="y-mxgraph-demo" />
+    </div>
+
+    <button id="connect-btn" disabled>连接协作</button>
+    <button id="disconnect-btn" style="display:none">断开</button>
+  </div>
+
+  <div id="status-bar">
+    <span><span class="status-dot" id="drawio-dot"></span>draw.io: <span id="drawio-status">未加载</span></span>
+    <span><span class="status-dot" id="collab-dot"></span>协作: <span id="collab-status">未连接</span></span>
+    <span id="peer-count" style="display:none">在线: <strong id="peer-num">1</strong> 人</span>
+  </div>
+
+  <div id="drawio-container">
+    <div id="loading-overlay">
+      <div class="spinner"></div>
+      <p>请点击「加载」来启动 draw.io</p>
+    </div>
+    <iframe id="drawio-frame" allow="clipboard-read; clipboard-write"></iframe>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

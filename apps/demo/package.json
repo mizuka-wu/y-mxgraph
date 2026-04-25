@@ -1,0 +1,24 @@
+{
+  "name": "@y-mxgraph/demo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "y-mxgraph": "workspace:*",
+    "y-webrtc": "^10.3.0",
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@y-mxgraph/typescript-config": "workspace:*",
+    "@playwright/test": "^1.45.0",
+    "typescript": "~5.5.4",
+    "vite": "^5.1.4"
+  }
+}

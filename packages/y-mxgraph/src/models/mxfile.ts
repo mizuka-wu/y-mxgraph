@@ -1,0 +1,55 @@
+import * as Y from "yjs";
+import {
+  parse as parseDiagram,
+  key as diagramKey,
+  serialize as serializeDiagram,
+} from "./diagram";
+import type { Diagram, YDiagram } from "./diagram";
+import type { ElementCompact } from "xml-js";
+
+export const key = "mxfile";
+export const diagramOrderKey = diagramKey + "Order";
+
+export type YMxFile = Y.Map<any>;
+
+export interface MxFile extends ElementCompact {
+  diagram: Diagram[];
+}
+
+export function parse(object: MxFile, doc: Y.Doc) {
+  const mxfile = doc.getMap(key);
+  mxfile.set("pages", (object._attributes?.pages || "1") + "");
+
+  const diagramList = object.diagram.map((diagram) => ({
+    value: parseDiagram(diagram),
+    id: diagram._attributes?.id! as string,
+  }));
+  const diagramMap = new Y.Map<YDiagram>();
+  const diagramOrder = new Y.Array<string>();
+  diagramList.forEach((diagram) => {
+    diagramMap.set(diagram.id, diagram.value);
+  });
+  diagramOrder.push(diagramList.map((diagram) => diagram.id));
+
+  mxfile.set(diagramKey, diagramMap);
+  mxfile.set(diagramOrderKey, diagramOrder);
+  return mxfile;
+}
+
+export function serializer(yMxFile: YMxFile): ElementCompact {
+  const diagrams = yMxFile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+  const diagramOrder = yMxFile.get(
+    diagramOrderKey,
+  ) as unknown as Y.Array<string>;
+
+  const obj: any = {
+    _attributes: {
+      pages: yMxFile.get("pages") || "1",
+    },
+    [diagramKey]: diagramOrder
+      .map((id) => diagrams.get(id) as unknown as YDiagram)
+      .map((diagramElement) => serializeDiagram(diagramElement)),
+  };
+
+  return obj;
+}

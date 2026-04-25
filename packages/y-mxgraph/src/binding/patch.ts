@@ -1,0 +1,702 @@
+/**
+ * patch
+ * @todo 完善diagram的patch（需要例子， 应该就是mxGraphModel的patch）
+ * @todo insert的我没试过
+ */
+import { parse, serializer as xmlSerializer } from "../helper/xml";
+import {
+  parse as parseDiagram,
+  key as diagramKey,
+  serialize as serializeDiagram,
+  type YDiagram,
+} from "../models/diagram";
+import {
+  key as mxfileKey,
+  type YMxFile,
+  diagramOrderKey,
+} from "../models/mxfile";
+import {
+  mxCellOrderKey,
+  key as mxGraphModelKey,
+  type YMxGraphModel,
+} from "../models/mxGraphModel";
+import { key as mxCellKey } from "../models/mxCell";
+import * as Y from "yjs";
+
+const DIFF_INSERT = "i";
+const DIFF_REMOVE = "r";
+const DIFF_UPDATE = "u";
+
+type DocSnapshot = {
+  diagramOrder: string[] | null;
+  cellsOrder: Map<string, string[]>;
+  cellAttrs: Map<string, Map<string, Record<string, string>>>;
+};
+const docSnapshots = new WeakMap<Y.Doc, DocSnapshot>();
+
+function insertAfterUnique(
+  orderArr: Y.Array<string>,
+  id: string,
+  previous: string | null | undefined,
+  fallbackToEnd = false
+) {
+  const currentIds = orderArr.toArray();
+  let anchorPos = previous ? currentIds.indexOf(previous) : -1;
+  if (anchorPos === -1 && fallbackToEnd) anchorPos = currentIds.length - 1;
+  let targetIndex = anchorPos + 1;
+
+  const existingIndex = currentIds.indexOf(id);
+  if (existingIndex === -1) {
+    orderArr.insert(targetIndex, [id]);
+    return;
+  }
+
+  if (existingIndex === targetIndex) return;
+
+  if (existingIndex < targetIndex) targetIndex -= 1;
+  orderArr.delete(existingIndex, 1);
+  orderArr.insert(targetIndex, [id]);
+}
+
+function ensureUniqueOrder(orderArr: Y.Array<string>) {
+  const arr = orderArr.toArray();
+  const seen = new Set<string>();
+  const dupIdx: number[] = [];
+  for (let i = 0; i < arr.length; i++) {
+    const id = arr[i];
+    if (!id) continue;
+    if (seen.has(id)) dupIdx.push(i);
+    else seen.add(id);
+  }
+  if (dupIdx.length) {
+    dupIdx.sort((a, b) => b - a).forEach((idx) => orderArr.delete(idx, 1));
+  }
+}
+
+export interface DiagramInsert {
+  data: string;
+  id: string;
+  previous: string;
+}
+
+export interface FilePatch {
+  [DIFF_REMOVE]?: string[];
+  [DIFF_INSERT]?: DiagramInsert[];
+  [DIFF_UPDATE]?: {
+    [key: string]: {
+      name?: string;
+      previous?: string;
+      cells?: {
+        [DIFF_REMOVE]?: string[];
+        [DIFF_INSERT]?: Record<string, string>[];
+        [DIFF_UPDATE]?: {
+          [key: string]: Record<string, string>;
+        };
+      };
+    };
+  };
+}
+
+export function applyFilePatch(
+  doc: Y.Doc,
+  patch: FilePatch,
+  options?: { origin?: any }
+) {
+  doc.transact(() => {
+    const mxfile = doc.getMap(mxfileKey) as YMxFile;
+    console.log(mxfile.toJSON(), patch);
+    if (patch[DIFF_REMOVE]) {
+      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+      const orderArr = mxfile.get(
+        diagramOrderKey
+      ) as unknown as Y.Array<string>;
+      ensureUniqueOrder(orderArr);
+      const orderList = orderArr.toArray();
+
+      const removeIds = patch[DIFF_REMOVE];
+      if (removeIds && removeIds.length) {
+        const indexList = removeIds
+          .map((id) => orderList.indexOf(id))
+          .filter((i) => i !== -1)
+          .sort((a, b) => b - a);
+
+        indexList.forEach((idx) => orderArr.delete(idx, 1));
+        removeIds.forEach((id) => diagramsMap.delete(id));
+      }
+    }
+
+    if (patch[DIFF_INSERT]) {
+      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+      const orderArr = mxfile.get(
+        diagramOrderKey
+      ) as unknown as Y.Array<string>;
+      ensureUniqueOrder(orderArr);
+      const existingIds = orderArr.toArray();
+      const existingIndex = new Map<string, number>();
+      existingIds.forEach((id, idx) => existingIndex.set(id, idx));
+
+      const inserts = patch[DIFF_INSERT].map((item, order) => {
+        const object = parse(item.data) as any;
+        const diagramObj = Array.isArray(object?.diagram)
+          ? object.diagram[0]
+          : object?.diagram;
+        const diagramElement = parseDiagram(diagramObj);
+        return {
+          id: item.id,
+          previous: item.previous || "",
+          diagramElement,
+          order,
+        };
+      });
+
+      const byId = new Map(inserts.map((i) => [i.id, i] as const));
+      function computeAnchor(node: { id: string; previous: string }): {
+        anchorId: string;
+        depth: number;
+      } {
+        let depth = 1;
+        let anchorId = "";
+        let prevId = node.previous;
+        const seen = new Set<string>([node.id]);
+        while (prevId) {
+          if (seen.has(prevId)) {
+            depth = 1;
+            anchorId = "";
+            break;
+          }
+          seen.add(prevId);
+
+          const prevNode = byId.get(prevId);
+          if (prevNode) {
+            depth += 1;
+            prevId = prevNode.previous;
+            continue;
+          }
+
+          if (existingIndex.has(prevId)) {
+            anchorId = prevId;
+          } else {
+            anchorId = "";
+          }
+          break;
+        }
+        return { anchorId, depth };
+      }
+
+      const enriched = inserts.map((i) => ({ ...i, ...computeAnchor(i) }));
+
+      enriched.sort((a, b) => {
+        const aIdx = a.anchorId ? existingIndex.get(a.anchorId)! : -1;
+        const bIdx = b.anchorId ? existingIndex.get(b.anchorId)! : -1;
+        if (aIdx !== bIdx) return aIdx - bIdx;
+        if (a.depth !== b.depth) return b.depth - a.depth;
+        return b.order - a.order;
+      });
+
+      for (const item of enriched) {
+        diagramsMap.set(item.id, item.diagramElement);
+        insertAfterUnique(orderArr, item.id, item.anchorId || null);
+      }
+    }
+
+    if (patch[DIFF_UPDATE]) {
+      Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
+        const diagramsMap = mxfile.get(
+          diagramKey
+        ) as unknown as Y.Map<YDiagram>;
+        const diagram = diagramsMap.get(id) as YDiagram | undefined;
+        if (diagram) {
+          const update = patch[DIFF_UPDATE]![id];
+          if (Reflect.has(update, "name")) {
+            (diagram as unknown as Y.Map<any>).set("name", update.name || "");
+          }
+
+          if (update.cells) {
+            const yMxGraphModel = diagram.get(mxGraphModelKey) as
+              | YMxGraphModel
+              | undefined;
+            if (!yMxGraphModel) return;
+            const cellsMap = yMxGraphModel.get(mxCellKey) as
+              | Y.Map<Y.XmlElement>
+              | undefined;
+            const orderArr = yMxGraphModel.get(mxCellOrderKey) as
+              | Y.Array<string>
+              | undefined;
+            if (!cellsMap || !orderArr) return;
+            ensureUniqueOrder(orderArr as Y.Array<string>);
+
+            if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
+              const orderIds = orderArr.toArray();
+              const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
+                orderIds.indexOf(cid)
+              )
+                .filter((i) => i !== -1)
+                .sort((a, b) => b - a);
+              removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
+              update.cells[DIFF_REMOVE].forEach((cid) => cellsMap.delete(cid));
+            }
+
+            if (update.cells[DIFF_INSERT] && update.cells[DIFF_INSERT].length) {
+              for (const item of update.cells[DIFF_INSERT]) {
+                const id = (item as any)["id"] as string | undefined;
+                if (!id) continue;
+                const xmlElement = new Y.XmlElement("mxCell");
+                Object.keys(item).forEach((key) => {
+                  if (key === "previous") return;
+                  xmlElement.setAttribute(key, item[key]);
+                });
+                cellsMap.set(id, xmlElement);
+                const previous = (item as any)["previous"] as string | undefined;
+                const parent = (item as any)["parent"] as string | undefined;
+                let anchorId: string | null | undefined = null;
+                let fallbackToEnd = true;
+                if (typeof previous !== "undefined") {
+                  if (previous === "") {
+                    if (parent) {
+                      anchorId = parent;
+                      fallbackToEnd = true;
+                    } else {
+                      anchorId = null;
+                      fallbackToEnd = false;
+                    }
+                  } else {
+                    anchorId = previous;
+                    fallbackToEnd = true;
+                  }
+                } else if (parent) {
+                  anchorId = parent;
+                  fallbackToEnd = true;
+                }
+
+                insertAfterUnique(
+                  orderArr as Y.Array<string>,
+                  id,
+                  anchorId,
+                  fallbackToEnd
+                );
+              }
+            }
+
+            if (update.cells[DIFF_UPDATE]) {
+              Object.keys(update.cells[DIFF_UPDATE]).forEach((cid) => {
+                const updateObj = update.cells![DIFF_UPDATE]![cid];
+                const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
+                if (cell) {
+                  Object.keys(updateObj).forEach((k) => {
+                    if (k === "previous") return;
+                    cell.setAttribute(k, updateObj[k]);
+                  });
+                }
+              });
+
+              Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
+                const updateObj = update.cells![DIFF_UPDATE]![cellId];
+                const hasPrev = Reflect.has(updateObj, "previous");
+                const hasParent = Reflect.has(updateObj, "parent");
+                if (!hasPrev && !hasParent) return;
+
+                const prevVal = hasPrev
+                  ? ((updateObj as any).previous as string)
+                  : undefined;
+                const parentVal = hasParent
+                  ? ((updateObj as any).parent as string)
+                  : undefined;
+
+                let anchorId: string | null | undefined = null;
+                let fallbackToEnd = true;
+
+                if (hasPrev) {
+                  if (prevVal === "") {
+                    if (parentVal) {
+                      anchorId = parentVal;
+                      fallbackToEnd = true;
+                    } else {
+                      anchorId = null;
+                      fallbackToEnd = false;
+                    }
+                  } else {
+                    anchorId = prevVal;
+                    fallbackToEnd = true;
+                  }
+                } else if (parentVal) {
+                  anchorId = parentVal;
+                  fallbackToEnd = true;
+                }
+
+                const currentIds = orderArr.toArray();
+                const currentIndex = currentIds.indexOf(cellId);
+
+                if (currentIndex === -1) {
+                  let newCell = cellsMap.get(cellId) as Y.XmlElement | undefined;
+                  if (!newCell) {
+                    newCell = new Y.XmlElement("mxCell");
+                    newCell.setAttribute("id", cellId);
+                    Object.keys(updateObj).forEach((k) => {
+                      if (k === "previous") return;
+                      newCell!.setAttribute(k, (updateObj as any)[k]);
+                    });
+                    cellsMap.set(cellId, newCell);
+                  }
+                  insertAfterUnique(
+                    orderArr as Y.Array<string>,
+                    cellId,
+                    anchorId,
+                    fallbackToEnd
+                  );
+                  return;
+                }
+
+                insertAfterUnique(
+                  orderArr as Y.Array<string>,
+                  cellId,
+                  anchorId,
+                  fallbackToEnd
+                );
+              });
+            }
+          }
+
+          if (Reflect.has(update, "previous")) {
+            const previous = update.previous || null;
+            const orderArr = mxfile.get(
+              diagramOrderKey
+            ) as unknown as Y.Array<string>;
+            ensureUniqueOrder(orderArr);
+            insertAfterUnique(orderArr, id, previous, false);
+          }
+        }
+      });
+    }
+  }, options?.origin);
+}
+
+export function initDocSnapshot(doc: Y.Doc) {
+  try {
+    const mxfile = doc.getMap(mxfileKey) as YMxFile;
+    const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+    const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
+    const diagramOrder = orderArr ? orderArr.toArray().slice() : [];
+
+    const snap: DocSnapshot = {
+      diagramOrder,
+      cellsOrder: new Map<string, string[]>(),
+      cellAttrs: new Map<string, Map<string, Record<string, string>>>(),
+    };
+
+    const diagrams: YDiagram[] = diagramOrder
+      .map((id) => diagramsMap.get(id) as YDiagram | undefined)
+      .filter((d): d is YDiagram => !!d);
+    for (const d of diagrams) {
+      const did = (d.get("id") as unknown as string) || "";
+      if (!did) continue;
+      const gm = d.get(mxGraphModelKey) as YMxGraphModel | undefined;
+      if (gm) {
+        const order = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+        const ids = order ? order.toArray().slice() : [];
+        snap.cellsOrder.set(did, ids);
+        const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+        const attrMap = new Map<string, Record<string, string>>();
+        if (cellsMap) {
+          for (const cid of ids) {
+            const el = cellsMap.get(cid) as Y.XmlElement | undefined;
+            if (el) {
+              attrMap.set(
+                cid,
+                (el.getAttributes() as Record<string, string>) || {}
+              );
+            }
+          }
+        }
+        snap.cellAttrs.set(did, attrMap);
+      } else {
+        snap.cellsOrder.set(did, []);
+        snap.cellAttrs.set(did, new Map());
+      }
+    }
+
+    docSnapshots.set(doc, snap);
+  } catch (_e) {
+    // 初始化失败忽略，等待后续 generatePatch 覆盖
+  }
+}
+
+export function generatePatch(
+  events: Y.YEvent<
+    Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile | YDiagram
+  >[]
+): FilePatch {
+  const patch: FilePatch = {};
+
+  if (!events || events.length === 0) return patch;
+
+  const doc = (events[0] as any)?.transaction?.doc as Y.Doc | undefined;
+  if (!doc) return patch;
+  const mxfile = doc.getMap(mxfileKey) as YMxFile;
+  const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+  const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
+
+  let snap = docSnapshots.get(doc);
+  if (!snap) {
+    snap = {
+      diagramOrder: null,
+      cellsOrder: new Map<string, string[]>(),
+      cellAttrs: new Map<string, Map<string, Record<string, string>>>(),
+    };
+    docSnapshots.set(doc, snap);
+  }
+  const prevDiagramOrder = snap.diagramOrder;
+  const prevCellsOrder = snap.cellsOrder;
+  const prevCellsAttrs = snap.cellAttrs;
+
+  const ensureUpdate = (diagramId: string) => {
+    patch[DIFF_UPDATE] = patch[DIFF_UPDATE] || {};
+    patch[DIFF_UPDATE]![diagramId] = patch[DIFF_UPDATE]![diagramId] || {};
+    return patch[DIFF_UPDATE]![diagramId]!;
+  };
+  const ensureCellSection = (diagramId: string) => {
+    const u = ensureUpdate(diagramId);
+    u.cells = u.cells || {};
+    return u.cells!;
+  };
+
+  const currDiagramOrder = orderArr.toArray();
+  const diagramsList = currDiagramOrder
+    .map((id) => diagramsMap.get(id) as YDiagram | undefined)
+    .filter((d): d is YDiagram => !!d);
+  const currCellsOrder = new Map<string, string[]>();
+  const cellAttrMap = new Map<string, Map<string, Record<string, string>>>();
+
+  for (const d of diagramsList) {
+    const did = (d.get("id") as unknown as string) || "";
+    const attrs = new Map<string, Record<string, string>>();
+    const gm = d.get(mxGraphModelKey) as YMxGraphModel | undefined;
+    if (gm) {
+      const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+      const orderArr = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+      if (cellsMap && orderArr) {
+        const ids = orderArr.toArray();
+        currCellsOrder.set(did, ids);
+        for (const cid of ids) {
+          const c = cellsMap.get(cid) as Y.XmlElement | undefined;
+          if (c)
+            attrs.set(cid, (c.getAttributes() as Record<string, string>) || {});
+        }
+      } else {
+        currCellsOrder.set(did, []);
+      }
+    } else {
+      currCellsOrder.set(did, []);
+    }
+    cellAttrMap.set(did, attrs);
+  }
+
+  const insertedDiagramIdGlobal = new Set<string>();
+  const insertedCellIdGlobal = new Set<string>();
+
+  if (prevDiagramOrder) {
+    const prevSet = new Set(prevDiagramOrder);
+    const currSet = new Set(currDiagramOrder);
+
+    const removed = prevDiagramOrder.filter(
+      (id: string) => !currSet.has(id) && id
+    );
+    if (removed.length) patch[DIFF_REMOVE] = removed;
+    const removedDiagramSet = new Set(removed);
+
+    const inserted = currDiagramOrder.filter(
+      (id: string) => !prevSet.has(id) && id
+    );
+    if (inserted.length) {
+      patch[DIFF_INSERT] = patch[DIFF_INSERT] || [];
+      for (const id of inserted) {
+        const index = currDiagramOrder.indexOf(id);
+        const previous = index <= 0 ? "" : currDiagramOrder[index - 1];
+        const yDiagram = diagramsMap.get(id) as YDiagram | undefined;
+        if (!yDiagram) continue;
+        const data = xmlSerializer({ diagram: serializeDiagram(yDiagram) });
+        patch[DIFF_INSERT]!.push({ id, previous, data });
+        insertedDiagramIdGlobal.add(id);
+      }
+    }
+
+    const prevNeighbor = (order: string[], id: string) => {
+      const i = order.indexOf(id);
+      return i <= 0 ? "" : order[i - 1];
+    };
+    const common = currDiagramOrder.filter((id) => prevSet.has(id) && id);
+    for (const id of common) {
+      const prevP = prevNeighbor(prevDiagramOrder, id);
+      const currP = prevNeighbor(currDiagramOrder, id);
+      if (prevP !== currP) {
+        if (prevP && removedDiagramSet.has(prevP)) continue;
+        const u = ensureUpdate(id);
+        u.previous = currP;
+      }
+    }
+  }
+
+  const allDiagramIds = new Set<string>([
+    ...(prevDiagramOrder || []),
+    ...currDiagramOrder,
+  ]);
+  for (const did of allDiagramIds) {
+    if (!did) continue;
+    const prevCells = prevCellsOrder.get(did) || [];
+    const currCells = currCellsOrder.get(did) || [];
+    if (!prevCells.length && !currCells.length) continue;
+
+    const prevSet = new Set(prevCells);
+    const currSet = new Set(currCells);
+
+    const removed = prevCells.filter((cid: string) => !currSet.has(cid) && cid);
+    if (removed.length) {
+      const cells = ensureCellSection(did);
+      cells[DIFF_REMOVE] = (cells[DIFF_REMOVE] || []).concat(removed);
+    }
+    const removedCellSet = new Set(removed);
+
+    const inserted = currCells.filter(
+      (cid: string) => !prevSet.has(cid) && cid
+    );
+    if (inserted.length) {
+      const cells = ensureCellSection(did);
+      cells[DIFF_INSERT] = cells[DIFF_INSERT] || [];
+      const attrsMap = cellAttrMap.get(did) || new Map();
+      for (const cid of inserted) {
+        const attrs = attrsMap.get(cid) || {};
+        const index = currCells.indexOf(cid);
+        const previous = index <= 0 ? "" : currCells[index - 1];
+        cells[DIFF_INSERT]!.push({
+          ...(attrs as Record<string, string>),
+          previous,
+        });
+        insertedCellIdGlobal.add(cid);
+      }
+    }
+
+    const prevNeighbor = (order: string[], id: string) => {
+      const i = order.indexOf(id);
+      return i <= 0 ? "" : order[i - 1];
+    };
+    const commonCells = currCells.filter((cid) => prevSet.has(cid) && cid);
+    for (const cid of commonCells) {
+      const prevP = prevNeighbor(prevCells, cid);
+      const currP = prevNeighbor(currCells, cid);
+      if (prevP !== currP) {
+        if (prevP && removedCellSet.has(prevP)) continue;
+        const cells = ensureCellSection(did);
+        cells[DIFF_UPDATE] = cells[DIFF_UPDATE] || {};
+        const cellUpdate = (cells[DIFF_UPDATE]![cid] =
+          cells[DIFF_UPDATE]![cid] || {});
+        (cellUpdate as any).previous = currP;
+      }
+    }
+  }
+
+  {
+    const diagramSet = new Set<Y.Map<any>>(diagramsList as unknown as Y.Map<any>[]);
+    for (const ev of events) {
+      const target: any = (ev as any).target;
+      if (!(target instanceof Y.Map)) continue;
+      if (!diagramSet.has(target)) continue;
+      const changed: Set<string> = (ev as any).keysChanged || new Set();
+      if (!changed || !changed.has("name")) continue;
+      const did = (target.get("id") as unknown as string) || "";
+      if (!did || insertedDiagramIdGlobal.has(did)) continue;
+      const u = ensureUpdate(did);
+      u.name = (target.get("name") as unknown as string) || "";
+    }
+  }
+
+  if (!prevDiagramOrder) {
+    for (const d of diagramsList) {
+      const did = (d.get("id") as unknown as string) || "";
+      if (!did) continue;
+      const u = ensureUpdate(did);
+      u.name = (d.get("name") as unknown as string) || "";
+    }
+  }
+
+  for (const ev of events) {
+    const target: any = (ev as any).target;
+    if (!(target instanceof Y.XmlElement)) continue;
+    const el = target as Y.XmlElement;
+    if (el.nodeName !== "mxCell") continue;
+
+    const changed: Set<string> =
+      (ev as any).attributesChanged || (ev as any).keysChanged || new Set();
+    if (!changed || (changed as Set<string>).size === 0) continue;
+
+    const cellId = el.getAttribute("id");
+    if (!cellId || insertedCellIdGlobal.has(cellId)) continue;
+
+    const idsEntries = Array.from(currCellsOrder.entries());
+    let diagramId = "";
+    for (const [did, ids] of idsEntries) {
+      if (ids.includes(cellId)) {
+        diagramId = did;
+        break;
+      }
+    }
+    if (!diagramId) continue;
+
+    const cellsPatch = ensureCellSection(diagramId);
+    cellsPatch[DIFF_UPDATE] = cellsPatch[DIFF_UPDATE] || {};
+    const cellUpdate = (cellsPatch[DIFF_UPDATE]![cellId] =
+      cellsPatch[DIFF_UPDATE]![cellId] || {});
+    for (const key of Array.from(changed)) {
+      cellUpdate[key] = el.getAttribute(key) || "";
+    }
+  }
+
+  if (prevDiagramOrder) {
+    for (const [did, currAttrsMap] of cellAttrMap.entries()) {
+      const prevAttrsMap = prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
+      const cellsPatch = ensureCellSection(did);
+      cellsPatch[DIFF_UPDATE] = cellsPatch[DIFF_UPDATE] || {};
+      const updateBucket = cellsPatch[DIFF_UPDATE]!;
+
+      const currCells = currAttrsMap.keys();
+      for (const cid of currCells) {
+        if (insertedCellIdGlobal.has(cid)) continue;
+        const prevAttrs = prevAttrsMap.get(cid) || {};
+        const currAttrs = currAttrsMap.get(cid) || {};
+        const keys = new Set<string>([...Object.keys(prevAttrs), ...Object.keys(currAttrs)]);
+        const cellUpdate = (updateBucket[cid] = updateBucket[cid] || {});
+        let changed = false;
+        for (const k of keys) {
+          const pv = (prevAttrs as any)[k] ?? "";
+          const cv = (currAttrs as any)[k] ?? "";
+          if (pv !== cv) {
+            cellUpdate[k] = cv;
+            changed = true;
+          }
+        }
+        if (!changed) {
+          if (Object.keys(cellUpdate).length === 0) {
+            delete updateBucket[cid];
+          }
+        }
+      }
+    }
+  }
+
+  snap.diagramOrder = currDiagramOrder.slice();
+  const newCellsOrder = new Map<string, string[]>();
+  const newCellsAttrs = new Map<string, Map<string, Record<string, string>>>();
+  for (const [did, arr] of currCellsOrder.entries()) {
+    newCellsOrder.set(did, arr.slice());
+  }
+  for (const [did, attrsMap] of cellAttrMap.entries()) {
+    const copy = new Map<string, Record<string, string>>();
+    for (const [cid, attrs] of attrsMap.entries()) {
+      copy.set(cid, { ...(attrs as Record<string, string>) });
+    }
+    newCellsAttrs.set(did, copy);
+  }
+  snap.cellsOrder = newCellsOrder;
+  snap.cellAttrs = newCellsAttrs;
+  docSnapshots.set(doc, snap);
+
+  return patch;
+}
