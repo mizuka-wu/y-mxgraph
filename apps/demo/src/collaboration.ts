@@ -84,8 +84,25 @@ export function bindDrawioFile(
     // 使用 App.main 双回调模式
     App.main(
       (ui: any) => {
+        if (!ui.diagramContainer) {
+          ui.createUi();
+        }
         const app = ui;
         const file = app.currentFile;
+
+        // 手动初始化画布（如果需要）
+        if (!ui.editor.graph.container) {
+          ui.editor.graph.init(ui.diagramContainer);
+        }
+
+        // 确保画布正确初始化
+        if (!ui.editor.graph.container) {
+          ui.editor.graph.init(ui.diagramContainer);
+        }
+
+        // 强制尺寸更新
+        ui.editor.graph.sizeDidChange();
+
         if (file) {
           doBind(app, file);
         } else {
@@ -97,7 +114,13 @@ export function bindDrawioFile(
       () => {
         // 自定义 UI 创建函数
         const Editor = (window as any).Editor;
-        const container = document.getElementById("drawio-container");
+        const container = document.getElementById("drawio-container")!;
+
+        // 手动添加必需的 CSS 类
+        if (!container.classList.contains("geEditor")) {
+          container.classList.add("geEditor");
+        }
+
         const editor = new Editor(false, null, null, null, true);
         return new App(editor, container);
       },

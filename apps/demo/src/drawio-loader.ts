@@ -51,6 +51,8 @@ export function loadDrawioScript(
     (window as any).DRAWIO_BASE_URL = cdnBase;
     (window as any).drawDevUrl = cdnBase;
     (window as any).mxDevUrl = cdnBase;
+    (window as any).RESOURCES_PATH =
+      `https://cdn.jsdelivr.net/gh/jgraph/drawio/src/main/webapp/resources`;
     (window as any).STENCIL_PATH =
       `https://cdn.jsdelivr.net/gh/jgraph/drawio/src/main/webapp/stencils`;
     (window as any).SHAPES_PATH =
@@ -63,6 +65,8 @@ export function loadDrawioScript(
     (window as any).urlParams = (window as any).urlParams || {};
     (window as any).urlParams["dev"] = "1";
     (window as any).urlParams["math"] = "0";
+    (window as any).urlParams["stealth"] = "1";
+    (window as any).urlParams["chrome"] = "0";
 
     // 设置 demo 文件 hash（让 draw.io 自动加载）
     window.location.hash = "#R" + encodeURIComponent(DEMO_FILE);
