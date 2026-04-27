@@ -13,10 +13,6 @@ export function getUIElements() {
     customUrlInput: document.getElementById(
       "custom-url-input",
     ) as HTMLInputElement,
-    connectBtn: document.getElementById("connect-btn") as HTMLButtonElement,
-    disconnectBtn: document.getElementById(
-      "disconnect-btn",
-    ) as HTMLButtonElement,
     roomInput: document.getElementById("room-input") as HTMLInputElement,
 
     // 容器
@@ -92,35 +88,14 @@ export function showLoading(elements: UIElements, message: string): void {
   elements.loadingOverlay.style.display = "flex";
   elements.drawioContainer.style.display = "none";
   elements.loadingText.textContent = message;
-  elements.connectBtn.disabled = true;
 }
 
 /**
- * 显示已就绪状态
+ * 显示就绪状态
  */
 export function showReady(elements: UIElements): void {
   elements.loadingOverlay.style.display = "none";
   elements.drawioContainer.style.display = "block";
-  elements.connectBtn.disabled = false;
-}
-
-/**
- * 显示连接中状态
- */
-export function showConnecting(elements: UIElements): void {
-  elements.connectBtn.disabled = true;
-  elements.connectBtn.style.display = "none";
-  elements.disconnectBtn.style.display = "inline-block";
-}
-
-/**
- * 显示断开连接状态
- */
-export function showDisconnected(elements: UIElements): void {
-  elements.connectBtn.style.display = "inline-block";
-  elements.disconnectBtn.style.display = "none";
-  elements.peerCountEl.style.display = "none";
-  elements.connectBtn.disabled = false;
 }
 
 /**

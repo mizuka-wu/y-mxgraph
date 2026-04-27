@@ -61,37 +61,45 @@ export function bindDrawioFile(
 
   const tryBind = () => {
     const App = (window as any).App;
-    if (!App) {
+    const Editor = (window as any).Editor;
+    if (!App || !Editor) {
       setTimeout(tryBind, 500);
       return;
     }
 
-    App.main((app: any) => {
-      const file = app.currentFile;
+    // 手动创建 Editor 和 App
+    const container = document.getElementById("drawio-container");
+    if (!container) {
+      setTimeout(tryBind, 500);
+      return;
+    }
 
-      const doBind = (f: any) => {
-        const binding = new Binding(f, {
-          doc,
-          awareness: provider.awareness,
-          undoManager,
-        });
+    const editor = new Editor(false, null, null, null, true);
+    const app = new App(editor, container);
 
-        // 暴露到 window 便于调试
-        Reflect.set(window, "__doc__", doc);
-        Reflect.set(window, "__provider__", provider);
-        Reflect.set(window, "__binding__", binding);
+    const doBind = (f: any) => {
+      const binding = new Binding(f, {
+        doc,
+        awareness: provider.awareness,
+        undoManager,
+      });
 
-        onBind(binding);
-      };
+      // 暴露到 window 便于调试
+      Reflect.set(window, "__doc__", doc);
+      Reflect.set(window, "__provider__", provider);
+      Reflect.set(window, "__binding__", binding);
 
-      if (file) {
-        doBind(file);
-      } else {
-        app.editor.addListener("fileLoaded", () => {
-          doBind(app.currentFile);
-        });
-      }
-    });
+      onBind(binding);
+    };
+
+    const file = app.currentFile;
+    if (file) {
+      doBind(file);
+    } else {
+      editor.addListener("fileLoaded", () => {
+        doBind(app.currentFile);
+      });
+    }
   };
 
   // 延迟执行以确保 App 完全初始化
