@@ -16,8 +16,7 @@ import {
   showConnecting,
   showDisconnected,
   toggleCustomUrl,
-  restoreFromURL,
-  setVersionInURL,
+  restoreRoomFromURL,
 } from "./ui.js";
 
 // === 状态 ===
@@ -34,9 +33,15 @@ ui.versionSelect.addEventListener("change", () => {
 
   toggleCustomUrl(ui, isCustom);
 
-  // 非自定义版本切换时刷新页面
+  // 非自定义版本切换时刷新页面（保留房间参数）
   if (!isCustom) {
-    setVersionInURL(version);
+    const url = new URL(location.href);
+    if (version === "latest") {
+      url.searchParams.delete("version");
+    } else {
+      url.searchParams.set("version", version);
+    }
+    location.href = url.toString();
   }
 });
 
@@ -79,8 +84,14 @@ ui.disconnectBtn.addEventListener("click", () => {
 
 // === 初始化 ===
 async function init() {
-  // 从 URL 恢复状态
-  const { version } = restoreFromURL(ui, Object.keys(DRAWIO_VERSIONS));
+  // 从 URL 恢复房间
+  restoreRoomFromURL(ui);
+
+  // 获取版本（优先 URL 参数，默认 latest）
+  const urlVersion = new URLSearchParams(location.search).get("version");
+  const version =
+    urlVersion && DRAWIO_VERSIONS[urlVersion] ? urlVersion : "latest";
+  ui.versionSelect.value = version;
   toggleCustomUrl(ui, version === "custom");
 
   // 加载 draw.io

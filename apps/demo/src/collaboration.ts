@@ -55,16 +55,17 @@ export function bindDrawioFile(
   provider: WebrtcProvider,
   onBind: (binding: Binding) => void,
 ): () => void {
-  const App = (window as any).App;
-  if (!App) {
-    throw new Error("draw.io App not loaded");
-  }
-
   const undoManager = new Y.UndoManager(doc, {
     trackedOrigins: new Set([LOCAL_ORIGIN]),
   });
 
   const tryBind = () => {
+    const App = (window as any).App;
+    if (!App) {
+      setTimeout(tryBind, 500);
+      return;
+    }
+
     App.main((app: any) => {
       const file = app.currentFile;
 

@@ -6,8 +6,6 @@ export interface LoaderCallbacks {
   onError: (message: string) => void;
 }
 
-let loadedScript: HTMLScriptElement | null = null;
-
 /**
  * 获取 draw.io 脚本 URL
  */
@@ -19,7 +17,18 @@ export function getDrawioUrl(version: string, customUrl?: string): string {
 }
 
 /**
+ * 获取 CDN 基础路径
+ */
+function getCdnBaseUrl(version: string): string {
+  if (version === "latest") {
+    return "https://cdn.jsdelivr.net/gh/jgraph/drawio/src/main/webapp/";
+  }
+  return `https://cdn.jsdelivr.net/gh/jgraph/drawio@${version}/src/main/webapp/`;
+}
+
+/**
  * 加载 draw.io 脚本
+ * 页面刷新切换版本，无需处理旧脚本清理
  */
 export function loadDrawioScript(
   version: string,
@@ -27,12 +36,6 @@ export function loadDrawioScript(
   customUrl?: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    // 移除之前加载的脚本
-    if (loadedScript) {
-      loadedScript.remove();
-      loadedScript = null;
-    }
-
     const url = getDrawioUrl(version, customUrl);
     if (!url) {
       callbacks.onError("无效的 draw.io URL");
@@ -42,13 +45,22 @@ export function loadDrawioScript(
 
     callbacks.onLoading();
 
+    // 设置全局 CDN 配置（正式加载前）
+    const cdnBase = getCdnBaseUrl(version);
+    (window as any).drawDevUrl = cdnBase;
+    (window as any).mxDevUrl = cdnBase;
+    (window as any).PLUGINS_BASE_PATH = cdnBase;
+
+    // 开发模式
+    (window as any).urlParams = (window as any).urlParams || {};
+    (window as any).urlParams["dev"] = "1";
+
     const script = document.createElement("script");
     script.src = url;
     script.async = true;
 
     script.onload = () => {
-      loadedScript = script;
-      // 等待脚本初始化
+      // 等待脚本初始化完成
       setTimeout(() => {
         callbacks.onReady(version);
         resolve();
@@ -69,23 +81,4 @@ export function loadDrawioScript(
  */
 export function isDrawioLoaded(): boolean {
   return !!(window as any).App;
-}
-
-/**
- * 获取 App 实例
- */
-export function getApp(): any {
-  return (window as any).App;
-}
-
-/**
- * 卸载 draw.io 脚本
- */
-export function unloadDrawio(): void {
-  if (loadedScript) {
-    loadedScript.remove();
-    loadedScript = null;
-  }
-  // 清理 window 上的 App 对象
-  delete (window as any).App;
 }

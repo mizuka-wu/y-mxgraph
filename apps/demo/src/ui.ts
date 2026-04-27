@@ -4,18 +4,32 @@
 export function getUIElements() {
   return {
     // 控件
-    versionSelect: document.getElementById("version-select") as HTMLSelectElement,
-    customUrlGroup: document.getElementById("custom-url-group") as HTMLDivElement,
-    customUrlInput: document.getElementById("custom-url-input") as HTMLInputElement,
+    versionSelect: document.getElementById(
+      "version-select",
+    ) as HTMLSelectElement,
+    customUrlGroup: document.getElementById(
+      "custom-url-group",
+    ) as HTMLDivElement,
+    customUrlInput: document.getElementById(
+      "custom-url-input",
+    ) as HTMLInputElement,
     connectBtn: document.getElementById("connect-btn") as HTMLButtonElement,
-    disconnectBtn: document.getElementById("disconnect-btn") as HTMLButtonElement,
+    disconnectBtn: document.getElementById(
+      "disconnect-btn",
+    ) as HTMLButtonElement,
     roomInput: document.getElementById("room-input") as HTMLInputElement,
 
     // 容器
     drawioWrapper: document.getElementById("drawio-wrapper") as HTMLDivElement,
-    drawioContainer: document.getElementById("drawio-container") as HTMLDivElement,
-    loadingOverlay: document.getElementById("loading-overlay") as HTMLDivElement,
-    loadingText: document.querySelector("#loading-overlay p") as HTMLParagraphElement,
+    drawioContainer: document.getElementById(
+      "drawio-container",
+    ) as HTMLDivElement,
+    loadingOverlay: document.getElementById(
+      "loading-overlay",
+    ) as HTMLDivElement,
+    loadingText: document.querySelector(
+      "#loading-overlay p",
+    ) as HTMLParagraphElement,
 
     // 状态显示
     drawioStatusEl: document.getElementById("drawio-status") as HTMLSpanElement,
@@ -117,39 +131,12 @@ export function toggleCustomUrl(elements: UIElements, show: boolean): void {
 }
 
 /**
- * 从 URL 参数恢复状态
+ * 从 URL 恢复房间名称
  */
-export function restoreFromURL(
-  elements: UIElements,
-  validVersions: string[],
-): { room: string; version: string } {
-  const params = new URLSearchParams(location.search);
-
-  // 恢复房间
-  const room = params.get("room") || "";
+export function restoreRoomFromURL(elements: UIElements): string {
+  const room = new URLSearchParams(location.search).get("room") || "";
   if (room) {
     elements.roomInput.value = room;
   }
-
-  // 恢复版本
-  const savedVersion = params.get("version");
-  const version = savedVersion && validVersions.includes(savedVersion)
-    ? savedVersion
-    : "latest";
-  elements.versionSelect.value = version;
-
-  return { room, version };
-}
-
-/**
- * 设置版本到 URL 参数
- */
-export function setVersionInURL(version: string): void {
-  const url = new URL(location.href);
-  if (version === "latest") {
-    url.searchParams.delete("version");
-  } else {
-    url.searchParams.set("version", version);
-  }
-  location.href = url.toString();
+  return room;
 }
