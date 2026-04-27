@@ -25,24 +25,29 @@ export interface BindDrawioFileOptions {
  * Y-MXGraph 绑定类，管理 draw.io 文件与 Y.Doc 的双向同步
  */
 export class Binding {
+  /** Y.Doc 实例，用于协同数据存储 */
   readonly doc: Y.Doc;
-  private file: DrawioFile;
+  /** mxGraph 的数据模型，用于监听本地变更 */
   private mxGraphModel: MxGraphModel;
+  /** 本地变更抑制标志，防止循环同步 */
   private suppressLocalApply = false;
+  /** mxGraph change 事件监听器 */
   private mxListener: () => void;
+  /** Yjs 文档深度变更监听器 */
   private docObserver: (
     events: Y.YEvent<
       Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
     >[],
     transaction: Y.Transaction,
   ) => void;
+  /** 协作功能清理函数（awareness 光标/选区） */
   private cleanupCollaborator?: () => void;
+  /** UndoManager 绑定清理函数 */
   private cleanupUndoManager?: () => void;
 
   constructor(file: DrawioFile, options: BindDrawioFileOptions) {
     const { doc, awareness, undoManager, mouseMoveThrottle, cursor } = options;
 
-    this.file = file;
     this.doc = doc;
 
     const ui = file.getUi();
@@ -58,7 +63,10 @@ export class Binding {
     // 本地变更监听
     this.mxListener = () => {
       if (this.suppressLocalApply) return;
-      const patch = file.ui.diffPages(file.shadowPages, file.ui.pages) as import("./patch").FilePatch;
+      const patch = file.ui.diffPages(
+        file.shadowPages,
+        file.ui.pages,
+      ) as import("./patch").FilePatch;
       file.setShadowPages(file.ui.clonePages(file.ui.pages));
       applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
     };
