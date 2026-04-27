@@ -36,22 +36,21 @@ export function doc2xml(doc: Y.Doc, spaces = 0): string {
     return serializer(
       {
         [mxfileKey]: serializerMxFile(
-          doc.share.get(mxfileKey) as unknown as YMxFile
+          doc.share.get(mxfileKey) as unknown as YMxFile,
         ),
       },
-      spaces
+      spaces,
     );
   } else if (doc.share.has(mxGraphModelKey)) {
     return serializer(
       {
         [mxGraphModelKey]: serializerMxGraphModel(
-          doc.share.get(mxGraphModelKey) as unknown as YMxGraphModel
+          doc.share.get(mxGraphModelKey) as unknown as YMxGraphModel,
         ),
       },
-      spaces
+      spaces,
     );
   }
 
-  console.warn("无支持的文件类型");
   return "";
 }

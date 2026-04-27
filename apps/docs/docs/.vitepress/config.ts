@@ -14,7 +14,11 @@ export default defineConfig({
       "/guide/": [
         {
           text: "指南",
-          items: [{ text: "快速开始", link: "/guide/getting-started" }],
+          items: [
+            { text: "快速开始", link: "/guide/getting-started" },
+            { text: "实现原理", link: "/guide/architecture" },
+            { text: "与原版差异", link: "/guide/implementation-diff" },
+          ],
         },
       ],
       "/api/": [
