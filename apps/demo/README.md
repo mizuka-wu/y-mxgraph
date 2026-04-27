@@ -1,0 +1,116 @@
+# @y-mxgraph/demo
+
+y-mxgraph 的在线演示应用，展示 draw.io 与 Yjs 实时协作的完整集成。
+
+## 启动
+
+```bash
+pnpm --filter @y-mxgraph/demo dev
+```
+
+浏览器访问 `http://localhost:5174`。
+
+## 功能
+
+- 选择不同版本的 draw.io（latest / 指定版本 / 自定义 URL）
+- 通过 URL 参数 `?room=<name>` 或页面输入框设置协作房间
+- 多人实时协作编辑，同一房间内的操作实时同步
+- 加载过程分步进度显示
+
+## URL 参数
+
+| 参数        | 说明                                           | 示例               |
+|-------------|------------------------------------------------|--------------------|
+| `version`   | draw.io 版本，对应 `DRAWIO_VERSIONS` 中的 key | `?version=29.7.9`  |
+| `room`      | 协作房间名                                     | `?room=my-room`    |
+
+## 源码结构
+
+```text
+src/
+├── main.ts           # 入口：初始化、版本切换、加载流程编排
+├── config.ts         # 常量：版本列表、信令服务器、默认房间、示例文件
+├── drawio-loader.ts  # draw.io CDN 加载器
+├── collaboration.ts  # Yjs 协作：创建连接、绑定 draw.io 文件
+└── ui.ts             # DOM 操作工具函数
+```
+
+### `config.ts`
+
+集中管理所有配置常量：
+
+- `DRAWIO_VERSIONS` — 版本名 → `app.min.js` CDN URL 的映射表
+- `SIGNALING_SERVERS` — WebRTC 信令服务器列表（空数组时使用 y-webrtc 默认服务器）
+- `DEFAULT_ROOM` — 默认协作房间名
+- `DEMO_FILE` — 初始示例图形的 XML 内容
+
+### `drawio-loader.ts`
+
+负责以生产模式从 CDN 加载 draw.io，解决 Vite dev 环境下无法加载本地 draw.io 资源的问题。
+
+**关键设计：**
+
+1. **禁用 dev 模式** — 不设置 `urlParams.dev = "1"`，避免 draw.io 尝试加载本地相对路径资源
+2. **CDN 路径全覆盖** — 在加载前将 `mxBasePath`、`RESOURCES_PATH`、`STENCIL_PATH` 等全局变量指向 jsDelivr CDN
+3. **`mxscript` 拦截器** — 注入全局 `mxscript` 函数，将 `app.min.js` 内部调用的相对路径（如 `js/PostConfig.js`）自动补全为 CDN 绝对地址
+4. **两阶段加载** — 先加载 `PreConfig.js`，成功后再加载 `app.min.js`，与 draw.io 官方 `bootstrap.js` 生产流程一致
+5. **`onProgress` 回调** — 在 `preconfig` / `app` / `init` 三个阶段分别回调，驱动 loading overlay 的步骤进度 UI
+
+```typescript
+loadDrawioScript(version, {
+  onLoading:  () => { /* 开始加载 */ },
+  onProgress: (step) => { /* "preconfig" | "app" | "init" */ },
+  onReady:    (version) => { /* 加载完成 */ },
+  onError:    (message) => { /* 加载失败 */ },
+});
+```
+
+### `collaboration.ts`
+
+封装 Yjs + y-webrtc 协作逻辑。
+
+**`createCollaboration(roomName, callbacks)`**  
+创建 `Y.Doc` 和 `WebrtcProvider`，监听连接状态和 peer 数量变化，返回 `CollabState`。
+
+**`bindDrawioFile(doc, provider, onBind)`**  
+等待 `window.App` 就绪后，调用 `App.main` 双回调模式：
+
+- 第二个回调（UI 工厂）：创建 `Editor` 和 `App` 实例，挂载到 `#drawio-container`，并为容器添加 `geEditor` class 以触发 draw.io 的 CSS Grid 布局
+- 第一个回调（就绪回调）：调用 `ui.refresh()` + 触发 `resize` 事件强制重新计算布局，再创建 `Binding` 实例完成 Yjs 绑定
+
+调试时可通过 `window.__doc__`、`window.__provider__`、`window.__binding__` 访问运行时对象。
+
+**`disconnectCollaboration(state)`**
+  
+销毁 Binding、Provider、Doc，清理调试引用。
+
+### `ui.ts`
+
+纯 DOM 操作，无业务逻辑。提供：
+
+- `getUIElements()` — 统一获取所有 DOM 引用，返回类型化对象
+- `updateDrawioStatus` / `updateCollabStatus` / `updatePeerCount` — 状态栏更新
+- `showLoading(elements, message)` — 显示加载遮罩，用 `style.removeProperty("display")` 而非 `display = "block"`，避免覆盖 `grapheditor.css` 的 `display: grid` 布局
+- `showReady(elements)` — 隐藏加载遮罩
+- `toggleCustomUrl` — 自定义 URL 输入框显隐
+- `restoreRoomFromURL` — 从 URL 参数 `?room=` 恢复房间名
+
+### `main.ts`
+
+应用入口，编排初始化流程：
+
+1. `restoreRoomFromURL` 恢复房间
+2. 从 URL 参数 `?version=` 读取版本，回填到下拉框
+3. `showLoading` 显示遮罩
+4. `loadDrawioScript` 加载 draw.io，`onProgress` 驱动步骤进度 UI
+5. `onReady` 后调用 `connectCollaboration`：创建协作连接 → 绑定文件
+
+## CSS 架构说明
+
+draw.io 新版（v26+）使用 **CSS Grid** 布局（`.geEditor { display: grid }`），由 `grapheditor.css` 定义。
+
+注意事项：
+
+- 不要用 `element.style.display = "block/none"` 操作 `#drawio-container`（inline style 优先级会覆盖 grid），统一用 `style.removeProperty("display")`
+- 应用的自定义样式（按钮、输入框等）应加 `#toolbar` 前缀限定作用域，避免污染 draw.io 内部同类元素
+- `#drawio-container` 本身就是 `.geEditor` 容器，`position: absolute; inset: 0` 填满父级即可，宽高由 CSS 继承
