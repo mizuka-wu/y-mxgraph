@@ -17,13 +17,13 @@ export interface MxGraphModel extends ElementCompact {
   };
 }
 
-export type YMxGraphModel = Y.Map<any>;
+export type YMxGraphModel = Y.Map<unknown>;
 
 export function parse(object: MxGraphModel, doc?: Y.Doc) {
-  const mxCells = (object.root[mxCellKey] || []).map((cell) => {
+  const mxCells = (object.root[mxCellKey] || []).map((cell: MxCellModel) => {
     return {
       value: parseMxCell(cell),
-      id: cell._attributes?.id! as string,
+      id: (cell._attributes?.id || "") as string,
     };
   });
 

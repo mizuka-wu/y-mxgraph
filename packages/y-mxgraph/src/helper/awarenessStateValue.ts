@@ -10,17 +10,17 @@ export function getAwarenessStateValue<T>(
   const clientState = states.get(id as number);
   if (!clientState) return null;
   if (!key) return clientState as T;
-  return getByPath(clientState, key);
+  return getByPath(clientState, key) as T | null;
 }
 
-function getByPath(obj: any, path: string) {
+function getByPath(obj: unknown, path: string): unknown {
   const parts = path.split(".");
-  let cur: any = obj;
+  let cur: unknown = obj;
   for (const part of parts) {
     if (cur == null) return null;
-    const key: any =
+    const key: string | number =
       Array.isArray(cur) && /^\d+$/.test(part) ? Number(part) : part;
-    cur = cur?.[key];
+    cur = (cur as Record<string, unknown>)?.[key];
   }
   return cur;
 }
@@ -34,23 +34,23 @@ export function setAwarenessStateValue(
   const id = clientId != null ? Number(clientId) : awareness.clientID;
   if (id !== awareness.clientID) return false;
   if (!key) {
-    awareness.setLocalState(value as any);
+    awareness.setLocalState(value as Record<string, unknown>);
     return true;
   }
-  const current = awareness.getLocalState() || {};
+  const current = (awareness.getLocalState() || {}) as Record<string, unknown>;
   const next = setByPath(current, key, value);
   awareness.setLocalState(next);
   return true;
 }
 
-function setByPath(obj: any, path: string, value: any) {
+function setByPath(obj: unknown, path: string, value: unknown): Record<string, unknown> {
   const parts = path.split(".");
-  const root: any = Array.isArray(obj) ? obj.slice() : { ...obj };
-  let cur: any = root;
+  const root = Array.isArray(obj) ? obj.slice() : { ...(obj as Record<string, unknown>) };
+  let cur: Record<string | number, unknown> = root as Record<string | number, unknown>;
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     const isIndex = /^\d+$/.test(part);
-    const key: any = isIndex ? Number(part) : part;
+    const key: string | number = isIndex ? Number(part) : part;
     const isLast = i === parts.length - 1;
     if (isLast) {
       cur[key] = value;
@@ -60,11 +60,11 @@ function setByPath(obj: any, path: string, value: any) {
       if (next == null) {
         next = nextIsIndex ? [] : {};
       } else {
-        next = Array.isArray(next) ? next.slice() : { ...next };
+        next = Array.isArray(next) ? next.slice() : { ...(next as Record<string, unknown>) };
       }
       cur[key] = next;
-      cur = next;
+      cur = next as Record<string | number, unknown>;
     }
   }
-  return root;
+  return root as Record<string, unknown>;
 }

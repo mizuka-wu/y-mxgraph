@@ -38,23 +38,23 @@ export function serialize(xmlElement: Y.XmlElement) {
     ...xmlElement.getAttributes(),
   };
 
-  let mxGeometry: any = null;
+  let mxGeometry: ElementCompact | null = null;
 
-  if (Reflect.has(attributes, mxGeometryAttributeKey)) {
-    const mxGeometryString = Reflect.get(attributes, mxGeometryAttributeKey);
+  if (mxGeometryAttributeKey in attributes) {
+    const mxGeometryString = attributes[mxGeometryAttributeKey];
     try {
-      mxGeometry = Reflect.get(
-        xml2js(mxGeometryString!, { compact: true }),
-        mxGeometryKey
-      );
-      mxGeometry._attributes["as"] = "geometry";
-    } catch {
-      //
+      const parsed = xml2js(mxGeometryString!, { compact: true }) as Record<string, ElementCompact>;
+      mxGeometry = parsed[mxGeometryKey] ?? null;
+      if (mxGeometry && mxGeometry._attributes) {
+        mxGeometry._attributes["as"] = "geometry";
+      }
+    } catch (e) {
+      console.warn("[y-mxgraph] Failed to parse mxGeometry:", e);
     }
-    Reflect.deleteProperty(attributes, mxGeometryAttributeKey);
+    delete attributes[mxGeometryAttributeKey];
   }
 
-  const obj: any = {
+  const obj: Record<string, unknown> = {
     _attributes: attributes,
   };
 

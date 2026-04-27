@@ -16,13 +16,15 @@ import {
 export function xml2doc(xml: string, doc: Y.Doc): Y.Doc {
   const object = parse(xml);
 
-  if (object.mxfile) {
+  const mxfile = (object as Record<string, unknown>).mxfile;
+  const mxGraphModel = (object as Record<string, unknown>).mxGraphModel;
+  if (mxfile) {
     doc.transact(() => {
-      parseMxFile(object.mxfile, doc);
+      parseMxFile(mxfile as import("../models/mxfile").MxFile, doc);
     });
-  } else if (object.mxGraphModel) {
+  } else if (mxGraphModel) {
     doc.transact(() => {
-      parseMxGraphModel(object.mxGraphModel, doc);
+      parseMxGraphModel(mxGraphModel as import("../models/mxGraphModel").MxGraphModel, doc);
     });
   } else {
     throw new Error("不支持的文件格式");

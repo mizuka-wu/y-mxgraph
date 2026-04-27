@@ -1,21 +1,23 @@
 import { type Awareness } from "y-protocols/awareness";
 import { getId } from "../../helper/getId";
 import { type RemoteCursor } from "./index";
+import type { DrawioFile, MxGraph } from "../../types/drawio";
 
 export const SELECTION_OPACITY = 70;
 export const CacheKey = "__remoteSelection__";
 
 export function bindSelection(
-  file: any,
-  options: { awareness: Awareness; graph?: any },
+  file: DrawioFile,
+  options: { awareness: Awareness; graph?: MxGraph },
 ) {
   const graph = options.graph || file.getUi().editor.graph;
   const awareness = options.awareness;
 
-  const handler = function (_: any, evt: any) {
+  const handler = function (_sender: unknown, _evt: unknown) {
+    const evt = _evt as { getProperty(key: string): unknown };
     const pageId = file.getUi().currentPage?.getId();
-    const added = (evt.getProperty("added") || []).map(getId);
-    const removed = (evt.getProperty("removed") || []).map(getId);
+    const added = ((evt.getProperty("added") as unknown[] | undefined) || []).map(getId as (item: unknown) => string | number | null);
+    const removed = ((evt.getProperty("removed") as unknown[] | undefined) || []).map(getId as (item: unknown) => string | number | null);
     awareness.setLocalStateField("selection", {
       added,
       removed,
@@ -32,18 +34,17 @@ export function bindSelection(
 }
 
 export function renderRemoteSelections(
-  ui: any,
+  ui: { editor: { graph: MxGraph }; currentPage?: { getId(): string } | null },
   remotes: Map<number, RemoteCursor>,
 ) {
-  if (!Reflect.has(ui, CacheKey)) {
-    Reflect.set(
-      ui,
-      CacheKey,
-      new Map<number, Map<string, { destroy: () => void }>>(),
-    );
+  if (!(CacheKey in ui)) {
+    (ui as Record<string, unknown>)[CacheKey] = new Map<
+      number,
+      Map<string, { destroy: () => void }>
+    >();
   }
 
-  const cache = Reflect.get(ui, CacheKey) as Map<
+  const cache = (ui as Record<string, unknown>)[CacheKey] as Map<
     number,
     Map<string, { destroy: () => void }>
   >;
@@ -97,7 +98,7 @@ export function renderRemoteSelections(
       cache.set(clientId, highlightCellMap);
     }
 
-    selectionState.removed.forEach((id) => {
+    selectionState.removed.forEach((id: string) => {
       const h = highlightCellMap.get(id);
       if (!h) return;
       h.destroy();
@@ -106,7 +107,7 @@ export function renderRemoteSelections(
 
     const graph = ui.editor.graph;
 
-    selectionState.added.forEach((id) => {
+    selectionState.added.forEach((id: string) => {
       if (highlightCellMap.has(id)) return;
       const cell = graph.model.getCell(id);
       if (cell) {

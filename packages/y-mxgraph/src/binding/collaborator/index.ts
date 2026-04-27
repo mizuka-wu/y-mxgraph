@@ -6,6 +6,7 @@ import {
 import { generateColor, generateRandomName } from "../../helper/random";
 import { bindCursor, renderRemoteCursors } from "./cursor";
 import { bindSelection, renderRemoteSelections } from "./selection";
+import type { DrawioFile, MxGraph } from "../../types/drawio";
 
 export const DEFAULT_USER_NAME_KEY = "user.name";
 export const DEFAULT_USER_COLOR_KEY = "user.color";
@@ -32,10 +33,10 @@ export type RemoteCursor = {
 };
 
 export function bindCollaborator(
-  file: any,
+  file: DrawioFile,
   options: {
     awareness: Awareness;
-    graph?: any;
+    graph?: MxGraph;
     cursor?: boolean | { userNameKey?: string; userColorKey?: string };
     mouseMoveThrottle?: number;
   },
@@ -87,9 +88,10 @@ export function bindCollaborator(
       const states = awareness.getStates();
       const remotes = new Map<number, RemoteCursor>();
 
+      const changedClientIds = new Set([...update.added, ...update.updated]);
       for (const [clientId] of states.entries()) {
         if (clientId === awareness.clientID) continue;
-        if (!update.updated.includes(clientId)) continue;
+        if (!changedClientIds.has(clientId)) continue;
 
         const name =
           getAwarenessStateValue<string>(awareness, userNameKey, clientId) ||

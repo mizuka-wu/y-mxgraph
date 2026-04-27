@@ -4,6 +4,7 @@ import { createCursorImage } from "../../helper/cursor";
 
 import { type Awareness } from "y-protocols/awareness";
 import { type RemoteCursor } from "./index";
+import type { DrawioFile, MxGraph } from "../../types/drawio";
 
 export const CacheKey = "__remoteCursor__";
 
@@ -14,7 +15,7 @@ function createCursorEl(color: string, username: string) {
   cursor.style.transition = "all 0.3s ease-in-out";
 
   const img = document.createElement("img");
-  img.style.transform = "rotate(-45deg)translateX(-14px)";
+  img.style.transform = "rotate(-45deg) translateX(-14px)";
   img.setAttribute("src", createCursorImage(color));
   img.style.width = "10px";
   img.style.transition = "all 0.3s ease-in-out";
@@ -38,10 +39,10 @@ function createCursorEl(color: string, username: string) {
 }
 
 export function bindCursor(
-  file: any,
+  file: DrawioFile,
   options: {
     awareness: Awareness;
-    graph?: any;
+    graph?: MxGraph;
     mouseMoveThrottle?: number;
   },
 ) {
@@ -49,15 +50,15 @@ export function bindCursor(
   const awareness = options.awareness;
   const mouseMoveThrottle = options.mouseMoveThrottle ?? 100;
 
-  const listener: any = {
+  const listener = {
     startX: 0,
     startY: 0,
     scrollLeft: 0,
     scrollTop: 0,
-    mouseDown: function (_: any) {},
-    mouseUp: function (_: any) {},
+    mouseDown: function () {},
+    mouseUp: function () {},
     mouseMove: throttle(function (
-      _: any,
+      _sender: unknown,
       event: { graphX: number; graphY: number; evt: MouseEvent },
     ) {
       const containerRect = graph.container.getBoundingClientRect();
@@ -102,14 +103,14 @@ export function bindCursor(
 }
 
 export function renderRemoteCursors(
-  ui: any,
+  ui: { editor: { graph: MxGraph }; currentPage?: { getId(): string } | null; diagramContainer: HTMLElement },
   remotes: Map<number, RemoteCursor>,
 ) {
-  if (!Reflect.has(ui, CacheKey)) {
-    Reflect.set(ui, CacheKey, new Map<number, HTMLDivElement>());
+  if (!(CacheKey in ui)) {
+    (ui as Record<string, unknown>)[CacheKey] = new Map<number, HTMLDivElement>();
   }
 
-  const cache = Reflect.get(ui, CacheKey) as Map<number, HTMLDivElement>;
+  const cache = (ui as Record<string, unknown>)[CacheKey] as Map<number, HTMLDivElement>;
   const currentPageId = ui.currentPage?.getId();
 
   if (!currentPageId) {

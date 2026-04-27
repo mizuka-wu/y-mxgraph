@@ -1,6 +1,6 @@
 import { xml2js, js2xml, type ElementCompact } from "xml-js";
 
-function deepProcess(node: any): void {
+function deepProcess(node: unknown): void {
   if (node == null) return;
 
   if (Array.isArray(node)) {
@@ -12,11 +12,12 @@ function deepProcess(node: any): void {
 
   if (typeof node !== "object") return;
 
-  const keys = Object.keys(node);
+  const obj = node as Record<string, unknown>;
+  const keys = Object.keys(obj);
   for (const key of keys) {
     if (key === "_attributes") continue;
 
-    let value = node[key];
+    let value = obj[key];
     const keyLower = key.toLowerCase();
 
     if (
@@ -24,8 +25,8 @@ function deepProcess(node: any): void {
       value !== undefined &&
       !Array.isArray(value)
     ) {
-      node[key] = [value];
-      value = node[key];
+      obj[key] = [value];
+      value = obj[key];
     }
 
     if (Array.isArray(value)) {
@@ -37,7 +38,7 @@ function deepProcess(node: any): void {
 }
 
 export function parse(xml: string) {
-  const result = xml2js(xml, { compact: true }) as any;
+  const result = xml2js(xml, { compact: true }) as Record<string, unknown>;
   deepProcess(result);
   return result;
 }

@@ -19,6 +19,10 @@ export function createCursorImage(color: string) {
     '" version="1.1">' +
     path +
     "</svg>";
-  const encoded = btoa(unescape(encodeURIComponent(svg)));
+  const bytes = new Uint8Array(svg.length);
+  for (let i = 0; i < svg.length; i++) {
+    bytes[i] = svg.charCodeAt(i);
+  }
+  const encoded = btoa(String.fromCharCode.apply(null, bytes as unknown as number[]));
   return "data:image/svg+xml;base64," + encoded;
 }

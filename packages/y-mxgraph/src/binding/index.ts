@@ -6,6 +6,7 @@ import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
 import { LOCAL_ORIGIN } from "../helper/origin";
 import { key as mxfileKey, type YMxFile } from "../models/mxfile";
+import type { DrawioFile, MxGraphModel } from "../types/drawio";
 
 export interface BindDrawioFileOptions {
   doc: Y.Doc;
@@ -25,8 +26,8 @@ export interface BindDrawioFileOptions {
  */
 export class Binding {
   readonly doc: Y.Doc;
-  private file: any;
-  private mxGraphModel: any;
+  private file: DrawioFile;
+  private mxGraphModel: MxGraphModel;
   private suppressLocalApply = false;
   private mxListener: () => void;
   private docObserver: (
@@ -38,7 +39,7 @@ export class Binding {
   private cleanupCollaborator?: () => void;
   private cleanupUndoManager?: () => void;
 
-  constructor(file: any, options: BindDrawioFileOptions) {
+  constructor(file: DrawioFile, options: BindDrawioFileOptions) {
     const { doc, awareness, undoManager, mouseMoveThrottle, cursor } = options;
 
     this.file = file;
@@ -57,7 +58,7 @@ export class Binding {
     // 本地变更监听
     this.mxListener = () => {
       if (this.suppressLocalApply) return;
-      const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
+      const patch = file.ui.diffPages(file.shadowPages, file.ui.pages) as import("./patch").FilePatch;
       file.setShadowPages(file.ui.clonePages(file.ui.pages));
       applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
     };
@@ -70,7 +71,7 @@ export class Binding {
       >[],
       transaction: Y.Transaction,
     ) => {
-      if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) {
+      if (transaction.local && transaction.origin === LOCAL_ORIGIN) {
         generatePatch(events);
         return;
       }
@@ -118,7 +119,7 @@ export class Binding {
    * 静态工厂方法，创建 Binding 实例
    * 与 `new Binding()` 等价
    */
-  static create(file: any, options: BindDrawioFileOptions): Binding {
+  static create(file: DrawioFile, options: BindDrawioFileOptions): Binding {
     return new Binding(file, options);
   }
 }

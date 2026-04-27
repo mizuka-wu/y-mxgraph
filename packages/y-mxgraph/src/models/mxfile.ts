@@ -10,7 +10,7 @@ import type { ElementCompact } from "xml-js";
 export const key = "mxfile";
 export const diagramOrderKey = diagramKey + "Order";
 
-export type YMxFile = Y.Map<any>;
+export type YMxFile = Y.Map<unknown>;
 
 export interface MxFile extends ElementCompact {
   diagram: Diagram[];
@@ -22,7 +22,7 @@ export function parse(object: MxFile, doc: Y.Doc) {
 
   const diagramList = object.diagram.map((diagram) => ({
     value: parseDiagram(diagram),
-    id: diagram._attributes?.id! as string,
+    id: (diagram._attributes?.id || "") as string,
   }));
   const diagramMap = new Y.Map<YDiagram>();
   const diagramOrder = new Y.Array<string>();
@@ -42,14 +42,14 @@ export function serializer(yMxFile: YMxFile): ElementCompact {
     diagramOrderKey,
   ) as unknown as Y.Array<string>;
 
-  const obj: any = {
+  const obj: Record<string, unknown> = {
     _attributes: {
-      pages: yMxFile.get("pages") || "1",
+      pages: (yMxFile.get("pages") as string) || "1",
     },
     [diagramKey]: diagramOrder
       .map((id) => diagrams.get(id) as unknown as YDiagram)
       .map((diagramElement) => serializeDiagram(diagramElement)),
   };
 
-  return obj;
+  return obj as ElementCompact;
 }

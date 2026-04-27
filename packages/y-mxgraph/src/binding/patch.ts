@@ -95,7 +95,7 @@ export interface FilePatch {
 export function applyFilePatch(
   doc: Y.Doc,
   patch: FilePatch,
-  options?: { origin?: any },
+  options?: { origin?: unknown },
 ) {
   doc.transact(() => {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
@@ -130,11 +130,11 @@ export function applyFilePatch(
       existingIds.forEach((id, idx) => existingIndex.set(id, idx));
 
       const inserts = patch[DIFF_INSERT].map((item, order) => {
-        const object = parse(item.data) as any;
+        const object = parse(item.data) as Record<string, unknown>;
         const diagramObj = Array.isArray(object?.diagram)
-          ? object.diagram[0]
+          ? (object.diagram as unknown[])[0]
           : object?.diagram;
-        const diagramElement = parseDiagram(diagramObj);
+        const diagramElement = parseDiagram(diagramObj as import("../models/diagram").Diagram);
         return {
           id: item.id,
           previous: item.previous || "",
@@ -144,10 +144,10 @@ export function applyFilePatch(
       });
 
       const byId = new Map(inserts.map((i) => [i.id, i] as const));
-      function computeAnchor(node: { id: string; previous: string }): {
+      const computeAnchor = (node: { id: string; previous: string }): {
         anchorId: string;
         depth: number;
-      } {
+      } => {
         let depth = 1;
         let anchorId = "";
         let prevId = node.previous;
@@ -201,8 +201,8 @@ export function applyFilePatch(
         const diagram = diagramsMap.get(id) as YDiagram | undefined;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
-          if (Reflect.has(update, "name")) {
-            (diagram as unknown as Y.Map<any>).set("name", update.name || "");
+          if ("name" in update) {
+            (diagram as unknown as Y.Map<unknown>).set("name", update.name || "");
           }
 
           if (update.cells) {
@@ -232,7 +232,7 @@ export function applyFilePatch(
 
             if (update.cells[DIFF_INSERT] && update.cells[DIFF_INSERT].length) {
               for (const item of update.cells[DIFF_INSERT]) {
-                const id = (item as any)["id"] as string | undefined;
+                const id = item["id"] as string | undefined;
                 if (!id) continue;
                 const xmlElement = new Y.XmlElement("mxCell");
                 Object.keys(item).forEach((key) => {
@@ -240,10 +240,8 @@ export function applyFilePatch(
                   xmlElement.setAttribute(key, item[key]);
                 });
                 cellsMap.set(id, xmlElement);
-                const previous = (item as any)["previous"] as
-                  | string
-                  | undefined;
-                const parent = (item as any)["parent"] as string | undefined;
+                const previous = item["previous"] as string | undefined;
+                const parent = item["parent"] as string | undefined;
                 let anchorId: string | null | undefined = null;
                 let fallbackToEnd = true;
                 if (typeof previous !== "undefined") {
@@ -287,15 +285,15 @@ export function applyFilePatch(
 
               Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
                 const updateObj = update.cells![DIFF_UPDATE]![cellId];
-                const hasPrev = Reflect.has(updateObj, "previous");
-                const hasParent = Reflect.has(updateObj, "parent");
+                const hasPrev = "previous" in updateObj;
+                const hasParent = "parent" in updateObj;
                 if (!hasPrev && !hasParent) return;
 
                 const prevVal = hasPrev
-                  ? ((updateObj as any).previous as string)
+                  ? (updateObj.previous as string)
                   : undefined;
                 const parentVal = hasParent
-                  ? ((updateObj as any).parent as string)
+                  ? (updateObj.parent as string)
                   : undefined;
 
                 let anchorId: string | null | undefined = null;
@@ -331,7 +329,7 @@ export function applyFilePatch(
                     newCell.setAttribute("id", cellId);
                     Object.keys(updateObj).forEach((k) => {
                       if (k === "previous") return;
-                      newCell!.setAttribute(k, (updateObj as any)[k]);
+                      newCell!.setAttribute(k, updateObj[k] as string);
                     });
                     cellsMap.set(cellId, newCell);
                   }
@@ -354,7 +352,7 @@ export function applyFilePatch(
             }
           }
 
-          if (Reflect.has(update, "previous")) {
+          if ("previous" in update) {
             const previous = update.previous || null;
             const orderArr = mxfile.get(
               diagramOrderKey,
@@ -413,8 +411,8 @@ export function initDocSnapshot(doc: Y.Doc) {
     }
 
     docSnapshots.set(doc, snap);
-  } catch (_e) {
-    // 初始化失败忽略，等待后续 generatePatch 覆盖
+  } catch (e) {
+    console.warn("[y-mxgraph] initDocSnapshot failed:", e);
   }
 }
 
@@ -427,7 +425,7 @@ export function generatePatch(
 
   if (!events || events.length === 0) return patch;
 
-  const doc = (events[0] as any)?.transaction?.doc as Y.Doc | undefined;
+  const doc = (events[0] as unknown as { transaction?: { doc?: Y.Doc } } | undefined)?.transaction?.doc;
   if (!doc) return patch;
   const mxfile = doc.getMap(mxfileKey) as YMxFile;
   const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
@@ -586,20 +584,20 @@ export function generatePatch(
         cells[DIFF_UPDATE] = cells[DIFF_UPDATE] || {};
         const cellUpdate = (cells[DIFF_UPDATE]![cid] =
           cells[DIFF_UPDATE]![cid] || {});
-        (cellUpdate as any).previous = currP;
+        (cellUpdate as Record<string, unknown>).previous = currP;
       }
     }
   }
 
   {
-    const diagramSet = new Set<Y.Map<any>>(
-      diagramsList as unknown as Y.Map<any>[],
+    const diagramSet = new Set<Y.Map<unknown>>(
+      diagramsList as unknown as Y.Map<unknown>[],
     );
     for (const ev of events) {
-      const target: any = (ev as any).target;
+      const target = (ev as unknown as { target?: unknown }).target;
       if (!(target instanceof Y.Map)) continue;
       if (!diagramSet.has(target)) continue;
-      const changed: Set<string> = (ev as any).keysChanged || new Set();
+      const changed: Set<string> = (ev as unknown as { keysChanged?: Set<string> }).keysChanged || new Set();
       if (!changed || !changed.has("name")) continue;
       const did = (target.get("id") as unknown as string) || "";
       if (!did || insertedDiagramIdGlobal.has(did)) continue;
@@ -617,14 +615,16 @@ export function generatePatch(
     }
   }
 
-  for (const ev of events) {
-    const target: any = (ev as any).target;
-    if (!(target instanceof Y.XmlElement)) continue;
-    const el = target as Y.XmlElement;
-    if (el.nodeName !== "mxCell") continue;
+    for (const ev of events) {
+      const target = (ev as unknown as { target?: unknown }).target;
+      if (!(target instanceof Y.XmlElement)) continue;
+      const el = target as Y.XmlElement;
+      if (el.nodeName !== "mxCell") continue;
 
-    const changed: Set<string> =
-      (ev as any).attributesChanged || (ev as any).keysChanged || new Set();
+      const changed: Set<string> =
+        (ev as unknown as { attributesChanged?: Set<string> }).attributesChanged ||
+        (ev as unknown as { keysChanged?: Set<string> }).keysChanged ||
+        new Set();
     if (!changed || (changed as Set<string>).size === 0) continue;
 
     const cellId = el.getAttribute("id");
@@ -669,8 +669,8 @@ export function generatePatch(
         const cellUpdate = (updateBucket[cid] = updateBucket[cid] || {});
         let changed = false;
         for (const k of keys) {
-          const pv = (prevAttrs as any)[k] ?? "";
-          const cv = (currAttrs as any)[k] ?? "";
+          const pv = prevAttrs[k] ?? "";
+          const cv = currAttrs[k] ?? "";
           if (pv !== cv) {
             cellUpdate[k] = cv;
             changed = true;
@@ -694,7 +694,7 @@ export function generatePatch(
   for (const [did, attrsMap] of cellAttrMap.entries()) {
     const copy = new Map<string, Record<string, string>>();
     for (const [cid, attrs] of attrsMap.entries()) {
-      copy.set(cid, { ...(attrs as Record<string, string>) });
+      copy.set(cid, { ...attrs });
     }
     newCellsAttrs.set(did, copy);
   }

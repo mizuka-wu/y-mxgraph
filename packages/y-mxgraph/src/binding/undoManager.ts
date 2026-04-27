@@ -4,10 +4,11 @@
  */
 import * as Y from "yjs";
 import { LOCAL_ORIGIN } from "../helper/origin";
+import type { DrawioFile } from "../types/drawio";
 
-type ListenerFn = (sender: any, evt?: any) => void;
+type ListenerFn = (sender: unknown, evt?: unknown) => void;
 
-function createMxEventObject(name: string, props?: Record<string, any>) {
+function createMxEventObject(name: string, props?: Record<string, unknown>) {
   const _props = props || {};
   return {
     name,
@@ -16,23 +17,23 @@ function createMxEventObject(name: string, props?: Record<string, any>) {
   };
 }
 
-export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
+export function bindUndoManager(doc: Y.Doc, file: DrawioFile, yUndo: Y.UndoManager) {
   const editor = file.getUi().editor;
   const originUndoManager = editor.undoManager;
 
   let lastTxnLocalOrigin = false;
   const beforeTxnHandler = (t: Y.Transaction) => {
-    lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
+    lastTxnLocalOrigin = !!(t.local || t.origin === LOCAL_ORIGIN);
   };
   const afterTxnHandler = (t: Y.Transaction) => {
-    lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
+    lastTxnLocalOrigin = !!(t.local || t.origin === LOCAL_ORIGIN);
   };
   doc.on("beforeTransaction", beforeTxnHandler);
   doc.on("afterTransaction", afterTxnHandler);
 
   const pairs: Array<[string, ListenerFn]> = [];
   const raw = Array.isArray(originUndoManager?.eventListeners)
-    ? (originUndoManager.eventListeners as any[])
+    ? (originUndoManager.eventListeners as unknown[])
     : [];
   for (let i = 0; i + 1 < raw.length; i += 2) {
     const key = String(raw[i]);
@@ -40,9 +41,22 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
     pairs.push([key, fn]);
   }
 
-  const mxLike: any = {
+  const mxLike: Record<string, unknown> & {
+    eventListeners: Array<string | ListenerFn>;
+    history: unknown[];
+    indexOfNextAdd: number;
+    _y: Y.UndoManager;
+    addListener(name: string, fn: ListenerFn): void;
+    fireEvent(evt: unknown): void;
+    clear(): void;
+    canUndo(): boolean;
+    canRedo(): boolean;
+    undo(): void;
+    redo(): void;
+    undoableEditHappened(_edit: unknown): void;
+  } = {
     eventListeners: [] as Array<string | ListenerFn>,
-    history: [] as any[],
+    history: [] as unknown[],
     indexOfNextAdd: 0,
     _y: yUndo,
 
@@ -50,9 +64,10 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
       this.eventListeners.push(name, fn);
     },
 
-    fireEvent(evt: any) {
+    fireEvent(evt: unknown) {
       const eventName: string =
-        evt?.name || (evt?.getName ? evt.getName() : "");
+        (evt as { name?: string } | undefined)?.name ||
+        ((evt as { getName?: () => string } | undefined)?.getName?.() ?? "");
       for (let i = 0; i + 1 < this.eventListeners.length; i += 2) {
         const key = this.eventListeners[i];
         const listener = this.eventListeners[i + 1] as ListenerFn;
@@ -60,7 +75,7 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
           try {
             listener(this, evt);
           } catch (e) {
-            // swallow
+            console.warn("[y-mxgraph] undoManager event listener error:", e);
           }
         }
       }
@@ -94,13 +109,14 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
       this._y.redo();
     },
 
-    undoableEditHappened(_edit: any) {
+    undoableEditHappened() {
       // no-op: 让 yjs 基于事务决定是否入栈
     },
   };
 
-  const bridgeHandlers: Array<[string, () => void]> = [];
-  const bridge = (mxEventName: "add" | "clear", yEventName: string) => {
+  type YUndoEventName = "stack-item-added" | "stack-cleared" | "stack-item-popped" | "stack-item-updated";
+  const bridgeHandlers: Array<[YUndoEventName, () => void]> = [];
+  const bridge = (mxEventName: "add" | "clear", yEventName: YUndoEventName) => {
     const handler = () => {
       if (mxEventName !== "clear" && !lastTxnLocalOrigin) {
         return;
@@ -127,14 +143,14 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
       const evt = createMxEventObject(mxEventName, { edit: { changes: [] } });
       mxLike.fireEvent(evt);
     };
-    yUndo.on(yEventName as any, handler);
+    yUndo.on(yEventName, handler);
     bridgeHandlers.push([yEventName, handler]);
   };
 
   bridge("add", "stack-item-added");
   bridge("clear", "stack-cleared");
 
-  const poppedHandler = (e: any) => {
+  const poppedHandler = (e: { type?: string; reason?: string; kind?: string }) => {
     const t = e && (e.type || e.reason || e.kind);
     if (t === "undo") {
       if (mxLike.indexOfNextAdd > 0) mxLike.indexOfNextAdd--;
@@ -147,13 +163,13 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
       mxLike.fireEvent(evt);
     }
   };
-  yUndo.on("stack-item-popped" as any, poppedHandler);
+  yUndo.on("stack-item-popped", poppedHandler);
 
   const updatedHandler = () => {
     const evt = createMxEventObject("redo", { edit: { changes: [] } });
     mxLike.fireEvent(evt);
   };
-  yUndo.on("stack-item-updated" as any, updatedHandler);
+  yUndo.on("stack-item-updated", updatedHandler);
 
   pairs.forEach(([key, fn]) => {
     const k = key.toLowerCase();
@@ -172,10 +188,10 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
     doc.off("beforeTransaction", beforeTxnHandler);
     doc.off("afterTransaction", afterTxnHandler);
     bridgeHandlers.forEach(([event, handler]) => {
-      yUndo.off(event as any, handler);
+      yUndo.off(event, handler);
     });
-    yUndo.off("stack-item-popped" as any, poppedHandler);
-    yUndo.off("stack-item-updated" as any, updatedHandler);
+    yUndo.off("stack-item-popped", poppedHandler);
+    yUndo.off("stack-item-updated", updatedHandler);
     // 恢复原始 undoManager
     editor.undoManager = originUndoManager;
     editor.undoListener = originUndoManager?.undoListener;

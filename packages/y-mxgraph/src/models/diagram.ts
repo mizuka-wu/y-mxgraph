@@ -14,7 +14,7 @@ export interface Diagram extends ElementCompact {
   mxGraphModel: MxGraphModel;
 }
 
-export type YDiagram = Y.Map<any>;
+export type YDiagram = Y.Map<unknown>;
 
 export function parse(object: Diagram): YDiagram {
   const yDiagramElement = new Y.Map();

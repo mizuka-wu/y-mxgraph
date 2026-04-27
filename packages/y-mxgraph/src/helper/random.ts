@@ -12,10 +12,10 @@ export function generateRandomName(): string {
   let id = "";
   if (
     typeof crypto !== "undefined" &&
-    typeof (crypto as any).getRandomValues === "function"
+    typeof (crypto as Crypto).getRandomValues === "function"
   ) {
     const bytes = new Uint8Array(len);
-    (crypto as any).getRandomValues(bytes);
+    (crypto as Crypto).getRandomValues(bytes);
     for (let i = 0; i < len; i++) {
       id += alphabet[bytes[i] % alphabet.length];
     }
