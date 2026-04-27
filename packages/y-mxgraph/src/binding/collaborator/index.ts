@@ -38,7 +38,7 @@ export function bindCollaborator(
     graph?: any;
     cursor?: boolean | { userNameKey?: string; userColorKey?: string };
     mouseMoveThrottle?: number;
-  }
+  },
 ) {
   const graph = options.graph || file.getUi().editor.graph;
   const awareness = options.awareness;
@@ -65,56 +65,66 @@ export function bindCollaborator(
     setAwarenessStateValue(awareness, userColorKey, userColor);
   }
 
-  bindCursor(file, {
+  const cleanupCursor = bindCursor(file, {
     awareness,
     graph,
     mouseMoveThrottle,
   });
-  bindSelection(file, {
+  const cleanupSelection = bindSelection(file, {
     awareness,
     graph,
   });
 
   const showCursor = options.cursor ?? true;
+  let cleanupAwareness: (() => void) | undefined;
 
   if (typeof showCursor === "boolean" && showCursor) {
-    awareness.on(
-      "update",
-      (update: { added: number[]; removed: number[]; updated: number[] }) => {
-        const states = awareness.getStates();
-        const remotes = new Map<number, RemoteCursor>();
+    const awarenessHandler = (update: {
+      added: number[];
+      removed: number[];
+      updated: number[];
+    }) => {
+      const states = awareness.getStates();
+      const remotes = new Map<number, RemoteCursor>();
 
-        for (const [clientId] of states.entries()) {
-          if (clientId === awareness.clientID) continue;
-          if (!update.updated.includes(clientId)) continue;
+      for (const [clientId] of states.entries()) {
+        if (clientId === awareness.clientID) continue;
+        if (!update.updated.includes(clientId)) continue;
 
-          const name =
-            getAwarenessStateValue<string>(awareness, userNameKey, clientId) ||
-            clientId + "";
-          const color =
-            getAwarenessStateValue<string>(awareness, userColorKey, clientId) ||
-            "#000000";
+        const name =
+          getAwarenessStateValue<string>(awareness, userNameKey, clientId) ||
+          clientId + "";
+        const color =
+          getAwarenessStateValue<string>(awareness, userColorKey, clientId) ||
+          "#000000";
 
-          remotes.set(clientId, {
+        remotes.set(clientId, {
+          clientId,
+          cursorState: getAwarenessStateValue<CursorState>(
+            awareness,
+            "cursor",
             clientId,
-            cursorState: getAwarenessStateValue<CursorState>(
-              awareness,
-              "cursor",
-              clientId
-            ),
-            selectionState: getAwarenessStateValue<SelectionState>(
-              awareness,
-              "selection",
-              clientId
-            ),
-            userColor: color,
-            userName: name,
-          });
-        }
-
-        renderRemoteCursors(file.getUi(), remotes);
-        renderRemoteSelections(file.getUi(), remotes);
+          ),
+          selectionState: getAwarenessStateValue<SelectionState>(
+            awareness,
+            "selection",
+            clientId,
+          ),
+          userColor: color,
+          userName: name,
+        });
       }
-    );
+
+      renderRemoteCursors(file.getUi(), remotes);
+      renderRemoteSelections(file.getUi(), remotes);
+    };
+    awareness.on("update", awarenessHandler);
+    cleanupAwareness = () => awareness.off("update", awarenessHandler);
   }
+
+  return () => {
+    cleanupCursor?.();
+    cleanupSelection?.();
+    cleanupAwareness?.();
+  };
 }

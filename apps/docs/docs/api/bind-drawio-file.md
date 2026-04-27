@@ -8,7 +8,7 @@
 function bindDrawioFile(
   file: any,
   options: BindDrawioFileOptions
-): Y.Doc
+): BindDrawioFileResult
 ```
 
 ## 参数
@@ -36,9 +36,37 @@ interface BindDrawioFileOptions {
 
 ## 返回值
 
-返回绑定的 `Y.Doc` 实例。
+```ts
+interface BindDrawioFileResult {
+  doc: Y.Doc;                    // 绑定的 Y.Doc 实例
+  destroy: (deep?: boolean) => void;  // 清理函数
+}
+```
+
+### destroy(deep?: boolean)
+
+**默认行为** (`destroy()` 或 `destroy(false)`):
+
+- 解除核心绑定监听器
+  - mxGraphModel `change` 监听器
+  - Y.Doc `observeDeep` 监听器
+
+**深度清理** (`destroy(true)`):
+
+- 解除上述核心监听器
+- 额外解除子系统监听器
+  - Awareness 监听器（光标、选区）
+  - UndoManager 监听器
+  - 恢复原始 `editor.undoManager`
+
+**使用建议**:
+
+- 页面刷新/关闭时调用 `destroy()` 即可（Awareness/UndoManager 随页面销毁）
+- 动态切换 draw.io 文件时调用 `destroy(true)` 完全清理
 
 ## 示例
+
+### 基础用法
 
 ```ts
 import * as Y from 'yjs';
@@ -47,7 +75,28 @@ import { bindDrawioFile, LOCAL_ORIGIN } from 'y-mxgraph';
 const doc = new Y.Doc();
 
 App.main((app) => {
-  bindDrawioFile(app.currentFile, { doc });
+  const binding = bindDrawioFile(app.currentFile, { doc });
+  
+  // 卸载时清理
+  window.addEventListener('beforeunload', () => {
+    binding.destroy();
+  });
+});
+```
+
+### 配合 React/Vue 使用
+
+```ts
+// React
+useEffect(() => {
+  const binding = bindDrawioFile(file, { doc, awareness });
+  // 组件卸载时完全清理
+  return () => binding.destroy(true);
+}, [file, doc]);
+
+// Vue
+onUnmounted(() => {
+  binding.destroy(true);
 });
 ```
 

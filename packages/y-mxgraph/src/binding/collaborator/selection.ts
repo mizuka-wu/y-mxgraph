@@ -7,7 +7,7 @@ export const CacheKey = "__remoteSelection__";
 
 export function bindSelection(
   file: any,
-  options: { awareness: Awareness; graph?: any }
+  options: { awareness: Awareness; graph?: any },
 ) {
   const graph = options.graph || file.getUi().editor.graph;
   const awareness = options.awareness;
@@ -25,17 +25,21 @@ export function bindSelection(
 
   const selectionModel = graph.getSelectionModel();
   selectionModel.addListener("change", handler);
+
+  return () => {
+    selectionModel.removeListener("change", handler);
+  };
 }
 
 export function renderRemoteSelections(
   ui: any,
-  remotes: Map<number, RemoteCursor>
+  remotes: Map<number, RemoteCursor>,
 ) {
   if (!Reflect.has(ui, CacheKey)) {
     Reflect.set(
       ui,
       CacheKey,
-      new Map<number, Map<string, { destroy: () => void }>>()
+      new Map<number, Map<string, { destroy: () => void }>>(),
     );
   }
 
@@ -111,7 +115,7 @@ export function renderRemoteSelections(
           userColor,
           60000,
           SELECTION_OPACITY,
-          3
+          3,
         );
         highlightCellMap.set(id, highlightCell);
       }

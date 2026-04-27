@@ -348,6 +348,6 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
 
 ## 限制与注意事项
 
-1. **无销毁方法**: 当前实现不提供 `destroy()`，页面卸载时直接丢弃
+1. **销毁方法**: 提供 `destroy(deep?: boolean)`，建议组件卸载时调用 `destroy(true)` 完全清理
 2. **单文档**: 每个 draw.io file 绑定一个 Y.Doc，不支持多文档
 3. **draw.io 依赖**: 依赖 `file.ui.diffPages()` 等内部 API，可能随 draw.io 版本变化

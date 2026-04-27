@@ -94,6 +94,11 @@ export function bindCursor(
     });
   };
   graph.container.addEventListener("mouseleave", handleMouseLeave);
+
+  return () => {
+    graph.removeMouseListener(listener);
+    graph.container.removeEventListener("mouseleave", handleMouseLeave);
+  };
 }
 
 export function renderRemoteCursors(

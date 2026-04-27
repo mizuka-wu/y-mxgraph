@@ -21,12 +21,14 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
   const originUndoManager = editor.undoManager;
 
   let lastTxnLocalOrigin = false;
-  doc.on("beforeTransaction", (t: Y.Transaction) => {
+  const beforeTxnHandler = (t: Y.Transaction) => {
     lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
-  });
-  doc.on("afterTransaction", (t: Y.Transaction) => {
+  };
+  const afterTxnHandler = (t: Y.Transaction) => {
     lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
-  });
+  };
+  doc.on("beforeTransaction", beforeTxnHandler);
+  doc.on("afterTransaction", afterTxnHandler);
 
   const pairs: Array<[string, ListenerFn]> = [];
   const raw = Array.isArray(originUndoManager?.eventListeners)
@@ -97,8 +99,9 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
     },
   };
 
+  const bridgeHandlers: Array<[string, () => void]> = [];
   const bridge = (mxEventName: "add" | "clear", yEventName: string) => {
-    yUndo.on(yEventName as any, () => {
+    const handler = () => {
       if (mxEventName !== "clear" && !lastTxnLocalOrigin) {
         return;
       }
@@ -123,13 +126,15 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
 
       const evt = createMxEventObject(mxEventName, { edit: { changes: [] } });
       mxLike.fireEvent(evt);
-    });
+    };
+    yUndo.on(yEventName as any, handler);
+    bridgeHandlers.push([yEventName, handler]);
   };
 
   bridge("add", "stack-item-added");
   bridge("clear", "stack-cleared");
 
-  yUndo.on("stack-item-popped" as any, (e: any) => {
+  const poppedHandler = (e: any) => {
     const t = e && (e.type || e.reason || e.kind);
     if (t === "undo") {
       if (mxLike.indexOfNextAdd > 0) mxLike.indexOfNextAdd--;
@@ -141,12 +146,14 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
       const evt = createMxEventObject("redo", { edit: { changes: [] } });
       mxLike.fireEvent(evt);
     }
-  });
+  };
+  yUndo.on("stack-item-popped" as any, poppedHandler);
 
-  yUndo.on("stack-item-updated" as any, () => {
+  const updatedHandler = () => {
     const evt = createMxEventObject("redo", { edit: { changes: [] } });
     mxLike.fireEvent(evt);
-  });
+  };
+  yUndo.on("stack-item-updated" as any, updatedHandler);
 
   pairs.forEach(([key, fn]) => {
     const k = key.toLowerCase();
@@ -161,5 +168,18 @@ export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
     // no-op in yjs mode
   };
 
-  return mxLike;
+  const destroy = () => {
+    doc.off("beforeTransaction", beforeTxnHandler);
+    doc.off("afterTransaction", afterTxnHandler);
+    bridgeHandlers.forEach(([event, handler]) => {
+      yUndo.off(event as any, handler);
+    });
+    yUndo.off("stack-item-popped" as any, poppedHandler);
+    yUndo.off("stack-item-updated" as any, updatedHandler);
+    // 恢复原始 undoManager
+    editor.undoManager = originUndoManager;
+    editor.undoListener = originUndoManager?.undoListener;
+  };
+
+  return destroy;
 }

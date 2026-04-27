@@ -20,6 +20,11 @@ export interface BindDrawioFileOptions {
       };
 }
 
+export interface BindDrawioFileResult {
+  doc: Y.Doc;
+  destroy: (deep?: boolean) => void;
+}
+
 export function bindDrawioFile(file: any, options: BindDrawioFileOptions) {
   const { doc, awareness, undoManager, mouseMoveThrottle, cursor } = options;
 
@@ -34,43 +39,38 @@ export function bindDrawioFile(file: any, options: BindDrawioFileOptions) {
 
   let suppressLocalApply = false;
 
-  mxGraphModel.addListener("change", () => {
+  const mxListener = () => {
     if (suppressLocalApply) return;
     const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
     file.setShadowPages(file.ui.clonePages(file.ui.pages));
     applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
-  });
+  };
+  mxGraphModel.addListener("change", mxListener);
 
-  doc
-    .getMap(mxfileKey)
-    .observeDeep(
-      (
-        events: Y.YEvent<
-          Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
-        >[],
-        transaction: Y.Transaction,
-      ) => {
-        if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) {
-          generatePatch(events);
-          return;
-        }
-        const patch = generatePatch(events);
-        suppressLocalApply = true;
-        try {
-          file.patch([patch]);
-          file.setShadowPages(file.ui.clonePages(file.ui.pages));
-        } finally {
-          suppressLocalApply = false;
-        }
-      },
-    );
+  const docObserver = (
+    events: Y.YEvent<
+      Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
+    >[],
+    transaction: Y.Transaction,
+  ) => {
+    if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) {
+      generatePatch(events);
+      return;
+    }
+    const patch = generatePatch(events);
+    suppressLocalApply = true;
+    try {
+      file.patch([patch]);
+      file.setShadowPages(file.ui.clonePages(file.ui.pages));
+    } finally {
+      suppressLocalApply = false;
+    }
+  };
+  doc.getMap(mxfileKey).observeDeep(docObserver);
 
-  if (undoManager) {
-    bindUndoManager(doc, file, undoManager);
-  }
-
+  let cleanupCollaborator: (() => void) | undefined;
   if (awareness) {
-    bindCollaborator(file, {
+    cleanupCollaborator = bindCollaborator(file, {
       awareness,
       graph,
       cursor: cursor ?? true,
@@ -78,5 +78,19 @@ export function bindDrawioFile(file: any, options: BindDrawioFileOptions) {
     });
   }
 
-  return doc;
+  let cleanupUndoManager: (() => void) | undefined;
+  if (undoManager) {
+    cleanupUndoManager = bindUndoManager(doc, file, undoManager);
+  }
+
+  const destroy = (deep = false) => {
+    mxGraphModel.removeListener("change", mxListener);
+    doc.getMap(mxfileKey).unobserveDeep(docObserver);
+    if (deep) {
+      cleanupCollaborator?.();
+      cleanupUndoManager?.();
+    }
+  };
+
+  return { doc, destroy };
 }

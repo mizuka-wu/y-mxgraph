@@ -9,8 +9,8 @@
 | `options.doc` | 可选，默认 `new Y.Doc()` | **必填** | 外部必须传入 Y.Doc，便于与 Provider 共享 |
 | `options.trackLocalUndoOnly` | 存在 | **已移除** | undoManager 完全由外部控制，无需内部配置 |
 | `options.undoManager` | 支持内部创建 | **仅支持外部传入** | 简化 API，用户自行配置 trackedOrigins |
-| 返回值 | `Y.Doc` | `Y.Doc` | 保持一致 |
-| `destroy()` 方法 | 无 | 无 | 当前实现未提供销毁方法 |
+| 返回值 | `Y.Doc` | **`{ doc, destroy }`** | 新增 `destroy()` 清理方法 |
+| `destroy()` 方法 | 无 | **有** | 解除所有监听器，恢复原始 undoManager |
 
 ## 功能差异
 
@@ -37,6 +37,7 @@ bindUndoManager(doc, file, yUndo: Y.UndoManager)  // 直接使用外部实例
 ```
 
 **差异说明**：
+
 - 原始实现支持 `trackLocalUndoOnly: false`（追踪所有事务）
 - 当前实现强制只追踪 `LOCAL_ORIGIN` 标记的本地事务
 - 这是**有意为之的设计简化**：undoManager 由外部创建，应在外部配置 `trackedOrigins`
@@ -122,14 +123,17 @@ const undoManager = new Y.UndoManager(yDoc, {
   trackedOrigins: new Set([LOCAL_ORIGIN]),  // 需要外部配置
 });
 
-bindDrawioFile(file, {
+const binding = bindDrawioFile(file, {
   doc: yDoc,  // 必填
   undoManager,  // 直接使用外部创建的实例
 });
+
+// 卸载时清理
+binding.destroy();
 ```
 
 ### 关键注意点
 
 1. **必须外部创建 Y.Doc** - 不再内部创建，便于与 Provider 共享
 2. **必须外部配置 trackedOrigins** - 使用 `LOCAL_ORIGIN` 常量
-3. **无自动清理** - 当前实现不提供 `destroy()` 方法
+3. **记得调用 destroy()** - 组件卸载或页面关闭时清理，防止内存泄漏
