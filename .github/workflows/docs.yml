@@ -1,13 +1,8 @@
 name: Deploy Docs
 
+# Superseded by deploy.yml which builds docs + demo together.
+# Kept here for manual standalone docs deploys only.
 on:
-  push:
-    branches:
-      - main
-      - master
-    paths:
-      - "apps/docs/**"
-      - "packages/y-mxgraph/src/**"
   workflow_dispatch:
 
 permissions:

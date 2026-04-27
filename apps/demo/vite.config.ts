@@ -6,5 +6,8 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    // Production base path when served under the docs site
+    // Override with VITE_BASE env var for standalone deploys
   },
+  base: process.env.VITE_BASE ?? "/",
 });

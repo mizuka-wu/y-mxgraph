@@ -1,8 +1,10 @@
-name: Deploy Demo
+name: Deploy
 
-# Superseded by deploy.yml which builds docs + demo together.
-# Kept here for manual standalone demo deploys only.
 on:
+  push:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -12,7 +14,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -31,13 +33,26 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # 1. Build the library (docs and demo both depend on it)
       - run: pnpm --filter y-mxgraph build
 
+      # 2. Build docs (outputs to apps/docs/docs/.vitepress/dist)
+      - run: pnpm --filter @y-mxgraph/docs build
+
+      # 3. Build demo with base path /y-mxgraph/demo/
       - run: pnpm --filter @y-mxgraph/demo build
+        env:
+          VITE_BASE: /y-mxgraph/demo/
+
+      # 4. Move demo dist into docs dist as a subdirectory
+      - name: Merge demo into docs output
+        run: |
+          mkdir -p apps/docs/docs/.vitepress/dist/demo
+          cp -r apps/demo/dist/. apps/docs/docs/.vitepress/dist/demo/
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/demo/dist
+          path: apps/docs/docs/.vitepress/dist
 
   deploy:
     needs: build
