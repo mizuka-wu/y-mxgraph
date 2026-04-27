@@ -13,16 +13,16 @@ export function bindSelection(
   const graph = options.graph || file.getUi().editor.graph;
   const awareness = options.awareness;
 
-  const handler = function (_sender: unknown, _evt: unknown) {
-    const evt = _evt as { getProperty(key: string): unknown };
+  const handler = function () {
     const pageId = file.getUi().currentPage?.getId();
-    const added = ((evt.getProperty("added") as unknown[] | undefined) || []).map(getId as (item: unknown) => string | number | null);
-    const removed = ((evt.getProperty("removed") as unknown[] | undefined) || []).map(getId as (item: unknown) => string | number | null);
-    awareness.setLocalStateField("selection", {
-      added,
-      removed,
-      pageId,
-    });
+    const cells = graph.getSelectionModel().cells as Record<string, unknown>;
+    const ids = Object.keys(cells || {})
+      .map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (key) => getId(cells[key] as any) as string,
+      )
+      .filter(Boolean);
+    awareness.setLocalStateField("selection", { ids, pageId });
   };
 
   const selectionModel = graph.getSelectionModel();
@@ -65,7 +65,7 @@ export function renderRemoteSelections(
   });
 
   Array.from(remotes.values()).forEach((remote) => {
-    if (remote.cursorState?.pageId === currentPageId) {
+    if (remote.selectionState?.pageId === currentPageId) {
       currentPageRemotes.push(remote);
     } else {
       otherPageRemotes.push(remote);
@@ -89,25 +89,27 @@ export function renderRemoteSelections(
 
   if (!currentPageRemotes.length) return;
 
-  currentPageRemotes.forEach(({ clientId, selectionState, userColor }) => {
-    if (!selectionState) return;
+  const graph = ui.editor.graph;
 
+  currentPageRemotes.forEach(({ clientId, selectionState, userColor }) => {
     let highlightCellMap = cache.get(clientId);
     if (!highlightCellMap) {
       highlightCellMap = new Map<string, { destroy: () => void }>();
       cache.set(clientId, highlightCellMap);
     }
 
-    selectionState.removed.forEach((id: string) => {
-      const h = highlightCellMap.get(id);
-      if (!h) return;
-      h.destroy();
-      highlightCellMap.delete(id);
+    const currentIds = new Set<string>(selectionState?.ids ?? []);
+
+    // 移除不再选中的高亮
+    Array.from(highlightCellMap.keys()).forEach((id) => {
+      if (!currentIds.has(id)) {
+        highlightCellMap.get(id)?.destroy();
+        highlightCellMap.delete(id);
+      }
     });
 
-    const graph = ui.editor.graph;
-
-    selectionState.added.forEach((id: string) => {
+    // 添加新选中的高亮
+    currentIds.forEach((id) => {
       if (highlightCellMap.has(id)) return;
       const cell = graph.model.getCell(id);
       if (cell) {

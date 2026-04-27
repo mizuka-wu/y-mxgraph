@@ -23,6 +23,7 @@ export interface MxGraphModel {
 
 /** mxGraph 选区模型 */
 export interface SelectionModel {
+  cells: Record<string, unknown>;
   addListener(event: string, fn: (...args: unknown[]) => void): void;
   removeListener(event: string, fn: (...args: unknown[]) => void): void;
 }

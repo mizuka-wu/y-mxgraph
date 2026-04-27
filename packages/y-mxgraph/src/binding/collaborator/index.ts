@@ -19,8 +19,7 @@ type CursorState = {
 };
 
 type SelectionState = {
-  added: string[];
-  removed: string[];
+  ids: string[];
   pageId?: string | null;
 };
 
