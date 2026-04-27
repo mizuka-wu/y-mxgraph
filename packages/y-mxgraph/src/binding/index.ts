@@ -54,11 +54,12 @@ export class Binding {
     const graph = ui.editor.graph;
     this.mxGraphModel = graph.model;
 
-    if (!doc.share.has(mxfileKey)) {
+    const docHasData = doc.share.has(mxfileKey);
+    if (!docHasData) {
       xml2doc(file.data, doc);
     }
 
-    initDocSnapshot(doc);
+    initDocSnapshot(doc, docHasData);
 
     // 本地变更监听
     this.mxListener = () => {
@@ -93,6 +94,22 @@ export class Binding {
       }
     };
     doc.getMap(mxfileKey).observeDeep(this.docObserver);
+
+    // doc 已有远端数据时（新客户端加入），立即把 doc 当前状态同步到 draw.io
+    if (docHasData) {
+      // 直接调用 generatePatch 传入空 events + 当前 doc
+      // resetSnapshot=true 使 snapshot.prevDiagramOrder=[], 所有 diagram/cells 被识别为 insert
+      const fullPatch = generatePatch([], doc);
+      if (Object.keys(fullPatch).length > 0) {
+        this.suppressLocalApply = true;
+        try {
+          file.patch([fullPatch]);
+          file.setShadowPages(file.ui.clonePages(file.ui.pages));
+        } finally {
+          this.suppressLocalApply = false;
+        }
+      }
+    }
 
     // 协作功能
     if (awareness) {

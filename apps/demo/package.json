@@ -11,13 +11,15 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "y-mxgraph": "workspace:*",
+    "idb-keyval": "^6.2.2",
+    "y-mxgraph": "file:../../packages/y-mxgraph/dist",
+    "y-protocols": "^1.0.6",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.27"
   },
   "devDependencies": {
-    "@y-mxgraph/typescript-config": "workspace:*",
     "@playwright/test": "^1.45.0",
+    "@y-mxgraph/typescript-config": "workspace:*",
     "typescript": "~5.5.4",
     "vite": "^5.1.4"
   }

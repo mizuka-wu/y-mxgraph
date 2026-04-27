@@ -134,7 +134,9 @@ export function applyFilePatch(
         const diagramObj = Array.isArray(object?.diagram)
           ? (object.diagram as unknown[])[0]
           : object?.diagram;
-        const diagramElement = parseDiagram(diagramObj as import("../models/diagram").Diagram);
+        const diagramElement = parseDiagram(
+          diagramObj as import("../models/diagram").Diagram,
+        );
         return {
           id: item.id,
           previous: item.previous || "",
@@ -144,7 +146,10 @@ export function applyFilePatch(
       });
 
       const byId = new Map(inserts.map((i) => [i.id, i] as const));
-      const computeAnchor = (node: { id: string; previous: string }): {
+      const computeAnchor = (node: {
+        id: string;
+        previous: string;
+      }): {
         anchorId: string;
         depth: number;
       } => {
@@ -175,7 +180,7 @@ export function applyFilePatch(
           break;
         }
         return { anchorId, depth };
-      }
+      };
 
       const enriched = inserts.map((i) => ({ ...i, ...computeAnchor(i) }));
 
@@ -202,7 +207,10 @@ export function applyFilePatch(
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
           if ("name" in update) {
-            (diagram as unknown as Y.Map<unknown>).set("name", update.name || "");
+            (diagram as unknown as Y.Map<unknown>).set(
+              "name",
+              update.name || "",
+            );
           }
 
           if (update.cells) {
@@ -366,12 +374,18 @@ export function applyFilePatch(
   }, options?.origin);
 }
 
-export function initDocSnapshot(doc: Y.Doc) {
+export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
   try {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
     const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
-    const diagramOrder = orderArr ? orderArr.toArray().slice() : [];
+    // resetSnapshot=true 时把 diagramOrder 设为空数组，
+    // 使第一次 generatePatch 把所有现有 diagram/cells 都识别为 insert
+    const diagramOrder = resetSnapshot
+      ? []
+      : orderArr
+        ? orderArr.toArray().slice()
+        : [];
 
     const snap: DocSnapshot = {
       diagramOrder,
@@ -420,13 +434,16 @@ export function generatePatch(
   events: Y.YEvent<
     Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile | YDiagram
   >[],
+  explicitDoc?: Y.Doc,
 ): FilePatch {
   const patch: FilePatch = {};
 
-  if (!events || events.length === 0) return patch;
-
-  const doc = (events[0] as unknown as { transaction?: { doc?: Y.Doc } } | undefined)?.transaction?.doc;
+  const doc =
+    explicitDoc ??
+    (events[0] as unknown as { transaction?: { doc?: Y.Doc } } | undefined)
+      ?.transaction?.doc;
   if (!doc) return patch;
+  if (!explicitDoc && (!events || events.length === 0)) return patch;
   const mxfile = doc.getMap(mxfileKey) as YMxFile;
   const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
   const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
@@ -597,7 +614,9 @@ export function generatePatch(
       const target = (ev as unknown as { target?: unknown }).target;
       if (!(target instanceof Y.Map)) continue;
       if (!diagramSet.has(target)) continue;
-      const changed: Set<string> = (ev as unknown as { keysChanged?: Set<string> }).keysChanged || new Set();
+      const changed: Set<string> =
+        (ev as unknown as { keysChanged?: Set<string> }).keysChanged ||
+        new Set();
       if (!changed || !changed.has("name")) continue;
       const did = (target.get("id") as unknown as string) || "";
       if (!did || insertedDiagramIdGlobal.has(did)) continue;
@@ -615,16 +634,17 @@ export function generatePatch(
     }
   }
 
-    for (const ev of events) {
-      const target = (ev as unknown as { target?: unknown }).target;
-      if (!(target instanceof Y.XmlElement)) continue;
-      const el = target as Y.XmlElement;
-      if (el.nodeName !== "mxCell") continue;
+  for (const ev of events) {
+    const target = (ev as unknown as { target?: unknown }).target;
+    if (!(target instanceof Y.XmlElement)) continue;
+    const el = target as Y.XmlElement;
+    if (el.nodeName !== "mxCell") continue;
 
-      const changed: Set<string> =
-        (ev as unknown as { attributesChanged?: Set<string> }).attributesChanged ||
-        (ev as unknown as { keysChanged?: Set<string> }).keysChanged ||
-        new Set();
+    const changed: Set<string> =
+      (ev as unknown as { attributesChanged?: Set<string> })
+        .attributesChanged ||
+      (ev as unknown as { keysChanged?: Set<string> }).keysChanged ||
+      new Set();
     if (!changed || (changed as Set<string>).size === 0) continue;
 
     const cellId = el.getAttribute("id");

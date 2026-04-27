@@ -20,9 +20,15 @@ importers:
 
   apps/demo:
     dependencies:
+      idb-keyval:
+        specifier: ^6.2.2
+        version: 6.2.2
       y-mxgraph:
-        specifier: workspace:*
-        version: link:../../packages/y-mxgraph
+        specifier: file:../../packages/y-mxgraph/dist
+        version: file:packages/y-mxgraph/dist(y-protocols@1.0.7)(yjs@13.6.30)
+      y-protocols:
+        specifier: ^1.0.6
+        version: 1.0.7(yjs@13.6.30)
       y-webrtc:
         specifier: ^10.3.0
         version: 10.3.0(yjs@13.6.30)
@@ -2833,6 +2839,10 @@ packages:
     resolution: {integrity: sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg==}
     dev: true
 
+  /idb-keyval@6.2.2:
+    resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
+    dev: false
+
   /ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
     dev: false
@@ -4249,3 +4259,15 @@ packages:
   /zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
     dev: true
+
+  file:packages/y-mxgraph/dist(y-protocols@1.0.7)(yjs@13.6.30):
+    resolution: {directory: packages/y-mxgraph/dist, type: directory}
+    id: file:packages/y-mxgraph/dist
+    name: y-mxgraph
+    peerDependencies:
+      y-protocols: ^1.0.0
+      yjs: ^13.6.0
+    dependencies:
+      y-protocols: 1.0.7(yjs@13.6.30)
+      yjs: 13.6.30
+    dev: false
