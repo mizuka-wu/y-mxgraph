@@ -1,11 +1,5 @@
 import { DRAWIO_VERSIONS } from "./config.js";
 
-export interface LoaderCallbacks {
-  onLoading: () => void;
-  onReady: (version: string) => void;
-  onError: (message: string) => void;
-}
-
 /**
  * 获取 draw.io 脚本 URL
  */
@@ -28,11 +22,14 @@ function getCdnBaseUrl(version: string): string {
 
 /**
  * 加载 draw.io 脚本
- * 页面刷新切换版本，无需处理旧脚本清理
  */
 export function loadDrawioScript(
   version: string,
-  callbacks: LoaderCallbacks,
+  callbacks: {
+    onLoading: () => void;
+    onReady: (version: string) => void;
+    onError: (message: string) => void;
+  },
   customUrl?: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -45,7 +42,7 @@ export function loadDrawioScript(
 
     callbacks.onLoading();
 
-    // 设置全局 CDN 配置（正式加载前）
+    // 设置全局 CDN 配置
     const cdnBase = getCdnBaseUrl(version);
     (window as any).drawDevUrl = cdnBase;
     (window as any).mxDevUrl = cdnBase;
@@ -60,7 +57,6 @@ export function loadDrawioScript(
     script.async = true;
 
     script.onload = () => {
-      // 等待脚本初始化完成
       setTimeout(() => {
         callbacks.onReady(version);
         resolve();
@@ -68,7 +64,7 @@ export function loadDrawioScript(
     };
 
     script.onerror = () => {
-      callbacks.onError("加载失败，请检查版本或 URL");
+      callbacks.onError("加载失败");
       reject(new Error("Failed to load script"));
     };
 
