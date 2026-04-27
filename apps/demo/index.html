@@ -1,16 +1,21 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>y-mxgraph Demo</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #1a1a2e;
-      color: #e0e0e0;
+      background: #ffffff;
+      color: #333333;
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -22,8 +27,8 @@
       align-items: center;
       gap: 12px;
       padding: 8px 16px;
-      background: #16213e;
-      border-bottom: 1px solid #0f3460;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
       flex-shrink: 0;
       flex-wrap: wrap;
     }
@@ -31,7 +36,7 @@
     #toolbar h1 {
       font-size: 15px;
       font-weight: 600;
-      color: #e94560;
+      color: #2563eb;
       white-space: nowrap;
     }
 
@@ -43,26 +48,28 @@
 
     label {
       font-size: 12px;
-      color: #a0a0b0;
+      color: #6c757d;
       white-space: nowrap;
     }
 
-    select, input[type="text"] {
-      background: #0f3460;
-      border: 1px solid #1a4080;
-      color: #e0e0e0;
+    select,
+    input[type="text"] {
+      background: #ffffff;
+      border: 1px solid #ced4da;
+      color: #333333;
       border-radius: 4px;
       padding: 4px 8px;
       font-size: 12px;
       outline: none;
     }
 
-    select:focus, input[type="text"]:focus {
-      border-color: #e94560;
+    select:focus,
+    input[type="text"]:focus {
+      border-color: #2563eb;
     }
 
     button {
-      background: #e94560;
+      background: #2563eb;
       color: white;
       border: none;
       border-radius: 4px;
@@ -73,18 +80,24 @@
       transition: background 0.2s;
     }
 
-    button:hover { background: #c73652; }
-    button:disabled { background: #555; cursor: not-allowed; }
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    button:disabled {
+      background: #adb5bd;
+      cursor: not-allowed;
+    }
 
     #status-bar {
       display: flex;
       align-items: center;
       gap: 16px;
       padding: 4px 16px;
-      background: #0d1b2a;
-      border-bottom: 1px solid #0f3460;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
       font-size: 11px;
-      color: #708090;
+      color: #6c757d;
       flex-shrink: 0;
     }
 
@@ -92,30 +105,42 @@
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #555;
+      background: #adb5bd;
       display: inline-block;
       margin-right: 4px;
     }
 
-    .status-dot.connected { background: #4caf50; }
-    .status-dot.loading { background: #ff9800; animation: pulse 1s infinite; }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
+    .status-dot.connected {
+      background: #22c55e;
     }
 
-    #drawio-container {
+    .status-dot.loading {
+      background: #f59e0b;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
+    }
+
+    #drawio-wrapper {
       flex: 1;
       position: relative;
       overflow: hidden;
     }
 
-    #drawio-frame {
+    #drawio-container {
       width: 100%;
       height: 100%;
-      border: none;
-      display: none;
+      overflow: hidden;
     }
 
     #loading-overlay {
@@ -125,7 +150,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #1a1a2e;
+      background: #ffffff;
       gap: 16px;
       z-index: 10;
     }
@@ -133,31 +158,39 @@
     .spinner {
       width: 40px;
       height: 40px;
-      border: 3px solid #0f3460;
-      border-top-color: #e94560;
+      border: 3px solid #e9ecef;
+      border-top-color: #2563eb;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     #loading-overlay p {
       font-size: 13px;
-      color: #708090;
+      color: #6c757d;
     }
 
-    #room-input { width: 120px; }
-    #custom-url-input { width: 220px; }
+    #room-input {
+      width: 120px;
+    }
+
+    #custom-url-input {
+      width: 220px;
+    }
 
     .separator {
       width: 1px;
       height: 20px;
-      background: #0f3460;
+      background: #dee2e6;
     }
   </style>
 </head>
+
 <body>
   <div id="toolbar">
     <h1>y-mxgraph Demo</h1>
@@ -166,10 +199,11 @@
     <div class="toolbar-group">
       <label>draw.io 版本:</label>
       <select id="version-select">
-        <option value="24.7.17">v24.7.17 (latest)</option>
-        <option value="24.6.4">v24.6.4</option>
-        <option value="23.1.5">v23.1.5</option>
-        <option value="22.1.2">v22.1.2</option>
+        <option value="latest">latest</option>
+        <option value="29.7.9">v29.7.9</option>
+        <option value="28.2.9">v28.2.9</option>
+        <option value="27.1.6">v27.1.6</option>
+        <option value="26.2.15">v26.2.15</option>
         <option value="custom">自定义 URL...</option>
       </select>
     </div>
@@ -197,14 +231,15 @@
     <span id="peer-count" style="display:none">在线: <strong id="peer-num">1</strong> 人</span>
   </div>
 
-  <div id="drawio-container">
+  <div id="drawio-wrapper">
     <div id="loading-overlay">
       <div class="spinner"></div>
-      <p>请点击「加载」来启动 draw.io</p>
+      <p>正在加载 draw.io...</p>
     </div>
-    <iframe id="drawio-frame" allow="clipboard-read; clipboard-write"></iframe>
+    <div id="drawio-container"></div>
   </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>
+
 </html>

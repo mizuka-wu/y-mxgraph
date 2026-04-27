@@ -1,0 +1,155 @@
+/**
+ * DOM 元素引用集合
+ */
+export function getUIElements() {
+  return {
+    // 控件
+    versionSelect: document.getElementById("version-select") as HTMLSelectElement,
+    customUrlGroup: document.getElementById("custom-url-group") as HTMLDivElement,
+    customUrlInput: document.getElementById("custom-url-input") as HTMLInputElement,
+    connectBtn: document.getElementById("connect-btn") as HTMLButtonElement,
+    disconnectBtn: document.getElementById("disconnect-btn") as HTMLButtonElement,
+    roomInput: document.getElementById("room-input") as HTMLInputElement,
+
+    // 容器
+    drawioWrapper: document.getElementById("drawio-wrapper") as HTMLDivElement,
+    drawioContainer: document.getElementById("drawio-container") as HTMLDivElement,
+    loadingOverlay: document.getElementById("loading-overlay") as HTMLDivElement,
+    loadingText: document.querySelector("#loading-overlay p") as HTMLParagraphElement,
+
+    // 状态显示
+    drawioStatusEl: document.getElementById("drawio-status") as HTMLSpanElement,
+    drawioDot: document.getElementById("drawio-dot") as HTMLSpanElement,
+    collabStatusEl: document.getElementById("collab-status") as HTMLSpanElement,
+    collabDot: document.getElementById("collab-dot") as HTMLSpanElement,
+    peerCountEl: document.getElementById("peer-count") as HTMLSpanElement,
+    peerNumEl: document.getElementById("peer-num") as HTMLSpanElement,
+  };
+}
+
+export type UIElements = ReturnType<typeof getUIElements>;
+
+/**
+ * 状态样式
+ */
+export type DrawioStatus = "loading" | "ready" | "error";
+export type CollabStatus = "connected" | "disconnected" | "loading";
+
+/**
+ * 更新 draw.io 状态显示
+ */
+export function updateDrawioStatus(
+  elements: UIElements,
+  status: DrawioStatus,
+  text: string,
+): void {
+  elements.drawioStatusEl.textContent = text;
+  elements.drawioDot.className = "status-dot";
+  if (status === "ready") elements.drawioDot.classList.add("connected");
+  else if (status === "loading") elements.drawioDot.classList.add("loading");
+}
+
+/**
+ * 更新协作状态显示
+ */
+export function updateCollabStatus(
+  elements: UIElements,
+  status: CollabStatus,
+  text: string,
+): void {
+  elements.collabStatusEl.textContent = text;
+  elements.collabDot.className = "status-dot";
+  if (status === "connected") elements.collabDot.classList.add("connected");
+  else if (status === "loading") elements.collabDot.classList.add("loading");
+}
+
+/**
+ * 更新在线人数显示
+ */
+export function updatePeerCount(elements: UIElements, count: number): void {
+  elements.peerNumEl.textContent = String(count);
+  elements.peerCountEl.style.display = count > 0 ? "inline" : "none";
+}
+
+/**
+ * 显示加载中状态
+ */
+export function showLoading(elements: UIElements, message: string): void {
+  elements.loadingOverlay.style.display = "flex";
+  elements.drawioContainer.style.display = "none";
+  elements.loadingText.textContent = message;
+  elements.connectBtn.disabled = true;
+}
+
+/**
+ * 显示已就绪状态
+ */
+export function showReady(elements: UIElements): void {
+  elements.loadingOverlay.style.display = "none";
+  elements.drawioContainer.style.display = "block";
+  elements.connectBtn.disabled = false;
+}
+
+/**
+ * 显示连接中状态
+ */
+export function showConnecting(elements: UIElements): void {
+  elements.connectBtn.disabled = true;
+  elements.connectBtn.style.display = "none";
+  elements.disconnectBtn.style.display = "inline-block";
+}
+
+/**
+ * 显示断开连接状态
+ */
+export function showDisconnected(elements: UIElements): void {
+  elements.connectBtn.style.display = "inline-block";
+  elements.disconnectBtn.style.display = "none";
+  elements.peerCountEl.style.display = "none";
+  elements.connectBtn.disabled = false;
+}
+
+/**
+ * 切换自定义 URL 输入框显示
+ */
+export function toggleCustomUrl(elements: UIElements, show: boolean): void {
+  elements.customUrlGroup.style.display = show ? "flex" : "none";
+}
+
+/**
+ * 从 URL 参数恢复状态
+ */
+export function restoreFromURL(
+  elements: UIElements,
+  validVersions: string[],
+): { room: string; version: string } {
+  const params = new URLSearchParams(location.search);
+
+  // 恢复房间
+  const room = params.get("room") || "";
+  if (room) {
+    elements.roomInput.value = room;
+  }
+
+  // 恢复版本
+  const savedVersion = params.get("version");
+  const version = savedVersion && validVersions.includes(savedVersion)
+    ? savedVersion
+    : "latest";
+  elements.versionSelect.value = version;
+
+  return { room, version };
+}
+
+/**
+ * 设置版本到 URL 参数
+ */
+export function setVersionInURL(version: string): void {
+  const url = new URL(location.href);
+  if (version === "latest") {
+    url.searchParams.delete("version");
+  } else {
+    url.searchParams.set("version", version);
+  }
+  location.href = url.toString();
+}
