@@ -4,21 +4,53 @@
 
 ## 整体架构
 
+y-mxgraph 作为**适配层**，将 Yjs 的变更转换为 draw.io **原生协同系统**可识别的 patch 格式，让 draw.io 误以为是其内置协同功能在同步。
+
 ```
-┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│   draw.io   │◄────►│  y-mxgraph  │◄────►│   Y.Doc     │
-│  (mxGraph)  │      │  (binding)  │      │   (CRDT)    │
-└─────────────┘      └─────────────┘      └──────┬──────┘
-                                                  │
-                       ┌─────────────┐          │
-                       │  Provider     │◄─────────┘
-                       │ (y-webrtc等) │
-                       └─────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                         draw.io                             │
+│  ┌─────────────┐      ┌──────────────────────────────┐     │
+│  │   mxGraph   │◄────►│  draw.io 原生协同系统        │     │
+│  │  (UI/画布)  │      │  (file.patch / diffPages)    │     │
+│  └─────────────┘      └──────────────┬─────────────────┘     │
+└──────────────────────────────────────│───────────────────────┘
+                                       │
+                              模拟原生协同 API
+                                       │
+                              ┌────────▼────────┐
+                              │   y-mxgraph     │
+                              │  (适配/转换层)  │
+                              └────────┬────────┘
+                                       │
+                              ┌────────▼────────┐
+                              │     Y.Doc       │
+                              │    (CRDT)       │
+                              └────────┬────────┘
+                                       │
+                              ┌────────▼────────┐
+                              │  Provider       │
+                              │ (y-webrtc等)    │
+                              └─────────────────┘
 ```
 
-## 双向绑定机制
+## 核心思想
 
-### draw.io → Y.Doc（本地变更）
+draw.io 本身具备成熟的实时协同功能（基于 WebSocket 的原生协同）。y-mxgraph 不替换 draw.io 的协同逻辑，而是**复用**它：
+
+| 方向 | 操作 | 说明 |
+|------|------|------|
+| 本地变更 | `diffPages()` → Y.Doc | 劫持 draw.io 的 diff 输出，转存到 Yjs |
+| 远端变更 | Y.Doc → `patch()` | 生成 draw.io 能识别的 patch，注入其协同系统 |
+
+**优势**：
+
+- 无需深入修改 draw.io 内部绘图逻辑
+- 自动继承 draw.io 的冲突处理、选区同步、光标协作等能力
+- Yjs 作为 CRDT 解决方案，提供强一致性和高性能的实时协同能力
+
+### draw.io → Y.Doc（本地变更捕获）
+
+复用 draw.io **原生协同的 diff 机制**：
 
 ```ts
 mxGraphModel.addListener("change", () => {
@@ -29,33 +61,38 @@ mxGraphModel.addListener("change", () => {
 ```
 
 **流程**：
-1. 用户操作触发 mxGraph `change` 事件
-2. `diffPages()` 对比 `shadowPages` 与当前 `pages` 生成 patch
-3. `applyFilePatch()` 将 patch 应用到 Y.Doc
-4. 更新 `shadowPages` 为当前状态（避免重复 diff）
-5. 使用 `LOCAL_ORIGIN` 标记，区分本地/远端事务
 
-### Y.Doc → draw.io（远端变更）
+1. 用户操作触发 mxGraph `change` 事件
+2. `diffPages()` 是 draw.io **内置**的协同 diff 算法
+3. 对比 `shadowPages`（上次同步状态）与当前 `pages` 生成 patch
+4. `applyFilePatch()` 将 patch 转换为 Yjs 的 CRDT 操作
+5. 更新 `shadowPages` 保持同步基准
+6. 使用 `LOCAL_ORIGIN` 标记，避免回环
+
+### Y.Doc → draw.io（远端变更注入）
+
+将 Yjs 变更**伪装成 draw.io 原生协同的 patch**：
 
 ```ts
 doc.getMap(mxfileKey).observeDeep((events, transaction) => {
   if (transaction.local && transaction.origin === LOCAL_ORIGIN) {
-    generatePatch(events);  // 仅更新快照
+    generatePatch(events);  // 仅更新快照，不应用到 UI
     return;
   }
-  const patch = generatePatch(events);
-  file.patch([patch]);  // 应用到 UI
+  const patch = generatePatch(events);  // 生成 draw.io 原生 patch 格式
+  file.patch([patch]);  // 调用 draw.io 内置的协同 apply 方法
   file.setShadowPages(file.ui.clonePages(file.ui.pages));
 });
 ```
 
 **流程**：
-1. Yjs 检测到远端变更（通过 Provider 同步）
+
+1. Provider 同步远端 Yjs 变更
 2. `observeDeep` 监听到 Y.Map/Y.Array 变化
-3. 跳过本地事务（`origin === LOCAL_ORIGIN`）
-4. `generatePatch()` 对比快照生成 patch
-5. `file.patch()` 应用到 draw.io UI
-6. 更新 `shadowPages` 保持同步
+3. 跳过本地事务（避免回环）
+4. `generatePatch()` 生成符合 draw.io **原生格式**的 patch
+5. `file.patch()` 是 draw.io **内置**的协同 apply 方法
+6. draw.io 按原生协同逻辑渲染变更，无需特殊处理
 
 ## Patch 结构
 
@@ -89,6 +126,7 @@ interface FilePatch {
 ```
 
 **字段说明**：
+
 - `r` (remove): 删除操作，值为 id 数组
 - `i` (insert): 插入操作，包含 XML 数据和位置信息
 - `u` (update): 更新操作，支持属性修改和排序
@@ -134,6 +172,7 @@ const docSnapshots = new WeakMap<Y.Doc, DocSnapshot>();
 ```
 
 **作用**：
+
 - 记录每次事务前的文档状态
 - 用于 `generatePatch()` 计算 diff
 - 使用 `WeakMap` 避免内存泄漏
@@ -159,6 +198,7 @@ const undoManager = new Y.UndoManager(doc, {
 ```
 
 **关键逻辑**：
+
 - 只有 `LOCAL_ORIGIN` 标记的事务进入撤销栈
 - 远端事务不进入撤销栈
 - `bindUndoManager()` 提供 mxUndoManager 兼容层
@@ -206,6 +246,7 @@ mxfile XML → xml-js → Y.Map/Y.Array/Y.XmlElement → Y.Doc
 ```
 
 **关键点**：
+
 - mxCell 转换为 `Y.XmlElement`，保留完整 XML 特性
 - 顺序信息提取到 `Y.Array`
 - diagram 结构扁平化存储
@@ -217,6 +258,7 @@ Y.Doc → 遍历 Y 数据结构 → xml-js → mxfile XML
 ```
 
 **关键点**：
+
 - 按顺序重建 XML 结构
 - 处理 `previous` 关系恢复层级
 - 支持缩进格式化
@@ -231,6 +273,7 @@ insertAfterUnique(orderArr, id, previous, fallbackToEnd);
 ```
 
 **策略**：
+
 1. 根据 `previous` 找到锚点位置
 2. 计算深度（处理连锁依赖）
 3. 按深度和顺序排序后批量插入
