@@ -1,32 +1,61 @@
-# `Turborepo` Vite starter
+# y-mxgraph
 
-This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
+Yjs binding for draw.io (mxGraph) documents, enabling real-time collaborative editing.
 
-## Using this example
+## Features
 
-Run the following command:
+- **Bidirectional binding** between draw.io files and Y.Doc
+- **Real-time collaboration** via y-webrtc, y-websocket, or any Yjs provider
+- **Undo/Redo support** with Y.UndoManager
+- **Collaborative cursors** via y-protocols Awareness
+- **Full TypeScript** support
 
-```sh
-npx create-turbo@latest -e with-vite
+## Installation
+
+```bash
+pnpm add y-mxgraph yjs y-protocols
 ```
 
-## What's inside?
+`yjs` and `y-protocols` are peer dependencies.
 
-This Turborepo includes the following packages and apps:
+## Quick Start
 
-### Apps and Packages
+```ts
+import * as Y from 'yjs';
+import { bindDrawioFile } from 'y-mxgraph';
 
-- `docs`: a vanilla [vite](https://vitejs.dev) ts app
-- `web`: another vanilla [vite](https://vitejs.dev) ts app
-- `@y-mxgraph/eslint-config`: shared `eslint` configurations
-- `@y-mxgraph/typescript-config`: `tsconfig.json`s used throughout the monorepo
+const doc = new Y.Doc();
 
-Each package and app is 100% [TypeScript](https://www.typescriptlang.org/).
+App.main((app) => {
+  bindDrawioFile(app.currentFile, { doc });
+});
+```
 
-### Utilities
+## Documentation
 
-This Turborepo has some additional tools already setup for you:
+- [Getting Started Guide](https://mizuka-wu.github.io/y-mxgraph/guide/getting-started)
+- [API Reference](https://mizuka-wu.github.io/y-mxgraph/api/)
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+## Development
+
+```bash
+# Clone
+git clone https://github.com/mizuka-wu/y-mxgraph.git
+cd y-mxgraph
+
+# Install
+pnpm install
+
+# Build
+pnpm --filter y-mxgraph build
+
+# Test
+pnpm --filter y-mxgraph test
+
+# Demo
+pnpm --filter @y-mxgraph/demo dev
+```
+
+## License
+
+MIT

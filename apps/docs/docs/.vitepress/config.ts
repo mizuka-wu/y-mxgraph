@@ -14,12 +14,7 @@ export default defineConfig({
       "/guide/": [
         {
           text: "指南",
-          items: [
-            { text: "快速开始", link: "/guide/getting-started" },
-            { text: "API 简介", link: "/guide/api" },
-            { text: "Provider 示例", link: "/guide/providers" },
-            { text: "补丁与顺序规则", link: "/guide/patch-rules" },
-          ],
+          items: [{ text: "快速开始", link: "/guide/getting-started" }],
         },
       ],
       "/api/": [

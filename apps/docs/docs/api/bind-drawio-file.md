@@ -8,7 +8,7 @@
 function bindDrawioFile(
   file: any,
   options: BindDrawioFileOptions
-): { doc: Y.Doc; destroy: () => void }
+): Y.Doc
 ```
 
 ## 参数
@@ -36,11 +36,7 @@ interface BindDrawioFileOptions {
 
 ## 返回值
 
-```ts
-{ doc: Y.Doc; destroy: () => void }
-```
-
-调用 `destroy()` 可解除所有监听器。
+返回绑定的 `Y.Doc` 实例。
 
 ## 示例
 
@@ -51,10 +47,7 @@ import { bindDrawioFile, LOCAL_ORIGIN } from 'y-mxgraph';
 const doc = new Y.Doc();
 
 App.main((app) => {
-  const { destroy } = bindDrawioFile(app.currentFile, { doc });
-
-  // 卸载时调用
-  // destroy();
+  bindDrawioFile(app.currentFile, { doc });
 });
 ```
 

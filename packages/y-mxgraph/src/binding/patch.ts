@@ -1,8 +1,3 @@
-/**
- * patch
- * @todo 完善diagram的patch（需要例子， 应该就是mxGraphModel的patch）
- * @todo insert的我没试过
- */
 import { parse, serializer as xmlSerializer } from "../helper/xml";
 import {
   parse as parseDiagram,
