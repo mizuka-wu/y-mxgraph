@@ -12,13 +12,14 @@
   },
   "dependencies": {
     "idb-keyval": "^6.2.2",
-    "y-mxgraph": "file:../../packages/y-mxgraph/dist",
+    "y-mxgraph": "workspace:*",
     "y-protocols": "^1.0.6",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@playwright/test": "^1.45.0",
+    "@types/node": "^25.6.0",
     "@y-mxgraph/typescript-config": "workspace:*",
     "typescript": "~5.5.4",
     "vite": "^5.1.4"
