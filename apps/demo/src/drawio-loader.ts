@@ -32,11 +32,12 @@ export function loadDrawioScript(
     onError: (message: string) => void;
   },
   customUrl?: string,
+  lang?: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = getDrawioUrl(version, customUrl);
     if (!url) {
-      callbacks.onError("无效的 draw.io URL");
+      callbacks.onError("Invalid draw.io URL");
       reject(new Error("Invalid URL"));
       return;
     }
@@ -64,6 +65,7 @@ export function loadDrawioScript(
     (window as any).urlParams["math"] = "0";
     (window as any).urlParams["stealth"] = "1";
     (window as any).urlParams["chrome"] = "0";
+    if (lang) (window as any).urlParams["lang"] = lang;
 
     // 屏蔽 draw.io 内置的 window.onerror 弹窗（跨域脚本错误会触发 "Script error."）
     window.onerror = () => true;
@@ -137,7 +139,7 @@ export function loadDrawioScript(
       };
 
       script.onerror = () => {
-        callbacks.onError("加载失败");
+        callbacks.onError("Failed to load app.min.js");
         reject(new Error("Failed to load app.min.js"));
       };
 
@@ -158,7 +160,7 @@ export function loadDrawioScript(
       };
 
       script.onerror = () => {
-        callbacks.onError("加载失败");
+        callbacks.onError("Failed to load script");
         reject(new Error("Failed to load script"));
       };
 

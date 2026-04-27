@@ -88,20 +88,25 @@ async function init() {
   };
 
   try {
-    await loadDrawioScript(version, {
-      onLoading: () => updateDrawioStatus(ui, "loading", t.drawioLoading),
-      onProgress: setStep,
-      onReady: (v) => {
-        showReady(ui);
-        updateDrawioStatus(ui, "ready", t.drawioLoaded(v));
-        // 加载完成后自动连接
-        connectCollaboration();
+    await loadDrawioScript(
+      version,
+      {
+        onLoading: () => updateDrawioStatus(ui, "loading", t.drawioLoading),
+        onProgress: setStep,
+        onReady: (v) => {
+          showReady(ui);
+          updateDrawioStatus(ui, "ready", t.drawioLoaded(v));
+          // 加载完成后自动连接
+          connectCollaboration();
+        },
+        onError: (msg) => {
+          updateDrawioStatus(ui, "error", t.drawioFailed);
+          ui.loadingText.textContent = msg;
+        },
       },
-      onError: (msg) => {
-        updateDrawioStatus(ui, "error", t.drawioFailed);
-        ui.loadingText.textContent = msg;
-      },
-    });
+      undefined,
+      lang,
+    );
   } catch (e) {
     console.error("[drawio] Failed to load:", e);
   }
