@@ -15,6 +15,8 @@ export interface CollabCallbacks {
     status: "connected" | "disconnected" | "loading",
     text: string,
   ) => void;
+  connectedText?: (room: string) => string;
+  reconnectingText?: string;
 }
 
 /**
@@ -38,9 +40,15 @@ export function createCollaboration(
   // 监听连接状态
   provider.on("status", (event: { connected: boolean }) => {
     if (event.connected) {
-      callbacks.onStatusChange("connected", `已连接 (${roomName})`);
+      const text = callbacks.connectedText
+        ? callbacks.connectedText(roomName)
+        : `Connected (${roomName})`;
+      callbacks.onStatusChange("connected", text);
     } else {
-      callbacks.onStatusChange("loading", "重连中...");
+      callbacks.onStatusChange(
+        "loading",
+        callbacks.reconnectingText ?? "Reconnecting...",
+      );
     }
   });
 

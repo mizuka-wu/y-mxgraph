@@ -1,3 +1,107 @@
+export type Lang = "en" | "zh";
+
+const I18N: Record<
+  Lang,
+  {
+    versionLabel: string;
+    customUrlOption: string;
+    roomLabel: string;
+    drawioNotLoaded: string;
+    collabLabel: string;
+    collabDisconnected: string;
+    onlinePrefix: string;
+    loadingDrawio: string;
+    stepPreconfig: string;
+    stepApp: string;
+    stepInit: string;
+    drawioLoading: string;
+    drawioFailed: string;
+    collabConnecting: string;
+    collabReconnecting: string;
+    collabConnected: (room: string) => string;
+    drawioLoaded: (v: string) => string;
+  }
+> = {
+  en: {
+    versionLabel: "draw.io version:",
+    customUrlOption: "Custom URL...",
+    roomLabel: "Room:",
+    drawioNotLoaded: "Not loaded",
+    collabLabel: "Collab:",
+    collabDisconnected: "Disconnected",
+    onlinePrefix: "Online:",
+    loadingDrawio: "Loading draw.io...",
+    stepPreconfig: "Loading PreConfig.js",
+    stepApp: "Loading editor (app.min.js)",
+    stepInit: "Initializing editor",
+    drawioLoading: "Loading...",
+    drawioFailed: "Failed to load",
+    collabConnecting: "Connecting...",
+    collabReconnecting: "Reconnecting...",
+    collabConnected: (room) => `Connected (${room})`,
+    drawioLoaded: (v) => `Loaded (${v})`,
+  },
+  zh: {
+    versionLabel: "draw.io 版本:",
+    customUrlOption: "自定义 URL...",
+    roomLabel: "房间:",
+    drawioNotLoaded: "未加载",
+    collabLabel: "协作:",
+    collabDisconnected: "未连接",
+    onlinePrefix: "在线:",
+    loadingDrawio: "正在加载 draw.io...",
+    stepPreconfig: "加载预配置 (PreConfig.js)",
+    stepApp: "加载编辑器 (app.min.js)",
+    stepInit: "初始化编辑器",
+    drawioLoading: "加载中...",
+    drawioFailed: "加载失败",
+    collabConnecting: "连接中...",
+    collabReconnecting: "重连中...",
+    collabConnected: (room) => `已连接 (${room})`,
+    drawioLoaded: (v) => `已加载 (${v})`,
+  },
+};
+
+export function getI18n(lang: Lang) {
+  return I18N[lang] ?? I18N.en;
+}
+
+export function applyI18n(lang: Lang): void {
+  const t = getI18n(lang);
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+
+  const setText = (sel: string, text: string) => {
+    const el = document.querySelector(sel);
+    if (el) el.textContent = text;
+  };
+
+  // Toolbar labels
+  setText("#label-version", t.versionLabel);
+  setText("#label-room", t.roomLabel);
+  const customOpt = document.querySelector(
+    "#version-select option[value='custom']",
+  ) as HTMLOptionElement | null;
+  if (customOpt) customOpt.textContent = t.customUrlOption;
+
+  // Status bar labels
+  setText("#label-drawio", "draw.io: ");
+  setText("#label-collab", t.collabLabel + " ");
+
+  // Status values (only if still showing default/initial state)
+  setText("#drawio-status", t.drawioNotLoaded);
+  setText("#collab-status", t.collabDisconnected);
+
+  // Loading overlay
+  setText("#loading-text", t.loadingDrawio);
+  setText("#step-preconfig span:last-child", t.stepPreconfig);
+  setText("#step-app span:last-child", t.stepApp);
+  setText("#step-init span:last-child", t.stepInit);
+
+  // Online peer count prefix
+  const onlineLabel = document.getElementById("label-online");
+  if (onlineLabel) onlineLabel.textContent = t.onlinePrefix + " ";
+}
+
 /**
  * DOM 元素引用集合
  */

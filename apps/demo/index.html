@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
@@ -221,14 +221,14 @@
     <div class="separator"></div>
 
     <div class="toolbar-group">
-      <label>draw.io 版本:</label>
+      <label id="label-version">draw.io version:</label>
       <select id="version-select">
         <option value="latest">latest</option>
         <option value="29.7.9">v29.7.9</option>
         <option value="28.2.9">v28.2.9</option>
         <option value="27.1.6">v27.1.6</option>
         <option value="26.2.15">v26.2.15</option>
-        <option value="custom">自定义 URL...</option>
+        <option value="custom">Custom URL...</option>
       </select>
     </div>
 
@@ -239,33 +239,36 @@
     <div class="separator"></div>
 
     <div class="toolbar-group">
-      <label>Room:</label>
+      <label id="label-room">Room:</label>
       <input type="text" id="room-input" value="y-mxgraph-demo" />
     </div>
   </div>
 
   <div id="status-bar">
-    <span><span class="status-dot" id="drawio-dot"></span>draw.io: <span id="drawio-status">未加载</span></span>
-    <span><span class="status-dot" id="collab-dot"></span>协作: <span id="collab-status">未连接</span></span>
-    <span id="peer-count" style="display:none">在线: <strong id="peer-num">1</strong> 人</span>
+    <span><span class="status-dot" id="drawio-dot"></span><span id="label-drawio">draw.io: </span><span
+        id="drawio-status">Not loaded</span></span>
+    <span><span class="status-dot" id="collab-dot"></span><span id="label-collab">Collab: </span><span
+        id="collab-status">Disconnected</span></span>
+    <span id="peer-count" style="display:none"><span id="label-online">Online: </span><strong
+        id="peer-num">1</strong></span>
   </div>
 
   <div id="drawio-wrapper">
     <div id="loading-overlay">
       <div class="spinner"></div>
-      <p id="loading-text">正在加载 draw.io...</p>
+      <p id="loading-text">Loading draw.io...</p>
       <div id="loading-steps">
         <div class="loading-step" id="step-preconfig">
           <span class="step-icon">○</span>
-          <span>加载预配置 (PreConfig.js)</span>
+          <span>Loading PreConfig.js</span>
         </div>
         <div class="loading-step" id="step-app">
           <span class="step-icon">○</span>
-          <span>加载编辑器 (app.min.js)</span>
+          <span>Loading editor (app.min.js)</span>
         </div>
         <div class="loading-step" id="step-init">
           <span class="step-icon">○</span>
-          <span>初始化编辑器</span>
+          <span>Initializing editor</span>
         </div>
       </div>
     </div>

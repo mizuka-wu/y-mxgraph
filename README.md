@@ -1,5 +1,7 @@
 # y-mxgraph
 
+[中文文档](./README.zh-CN.md)
+
 Yjs binding for draw.io (mxGraph) documents, enabling real-time collaborative editing.
 
 ## Features
@@ -22,19 +24,22 @@ pnpm add y-mxgraph yjs y-protocols
 
 ```ts
 import * as Y from 'yjs';
-import { bindDrawioFile } from 'y-mxgraph';
+import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 
 App.main((app) => {
-  bindDrawioFile(app.currentFile, { doc });
+  const binding = new Binding(app.currentFile, { doc });
+
+  window.addEventListener('beforeunload', () => binding.destroy());
 });
 ```
 
 ## Documentation
 
-- [Getting Started Guide](https://mizuka-wu.github.io/y-mxgraph/guide/getting-started)
-- [API Reference](https://mizuka-wu.github.io/y-mxgraph/api/)
+- [Getting Started](https://mizuka-wu.github.io/y-mxgraph/en/guide/getting-started)
+- [API Reference](https://mizuka-wu.github.io/y-mxgraph/en/api/)
+- [Architecture](https://mizuka-wu.github.io/y-mxgraph/en/guide/architecture)
 
 ## Development
 
@@ -54,6 +59,9 @@ pnpm --filter y-mxgraph test
 
 # Demo
 pnpm --filter @y-mxgraph/demo dev
+
+# Docs
+pnpm --filter @y-mxgraph/docs dev
 ```
 
 ## License

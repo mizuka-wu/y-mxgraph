@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import dts from "vite-plugin-dts";
 import type { Plugin } from "vite";
@@ -29,6 +30,25 @@ const pkg = {
   },
   license: "MIT",
 };
+
+function copyRootFiles(...fileNames: string[]): Plugin {
+  const rootDir = path.resolve(__dirname, "../..");
+  return {
+    name: "copy-root-files",
+    generateBundle() {
+      for (const fileName of fileNames) {
+        const filePath = path.join(rootDir, fileName);
+        if (fs.existsSync(filePath)) {
+          this.emitFile({
+            type: "asset",
+            fileName,
+            source: fs.readFileSync(filePath, "utf-8"),
+          });
+        }
+      }
+    },
+  };
+}
 
 function emitDistPackageJson(): Plugin {
   return {
@@ -69,6 +89,7 @@ export default defineConfig({
       insertTypesEntry: true,
     }),
     emitDistPackageJson(),
+    copyRootFiles("README.md", "README.zh-CN.md"),
   ],
   build: {
     lib: {

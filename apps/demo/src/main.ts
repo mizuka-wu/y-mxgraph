@@ -14,10 +14,18 @@ import {
   showReady,
   toggleCustomUrl,
   restoreRoomFromURL,
+  applyI18n,
+  getI18n,
+  type Lang,
 } from "./ui.js";
 
 // === 状态 ===
 let collabState: CollabState = { provider: null, doc: null, binding: null };
+
+// === 语言 ===
+const langParam = new URLSearchParams(location.search).get("lang");
+const lang: Lang = langParam === "zh" ? "zh" : "en";
+const t = getI18n(lang);
 
 // === UI 元素 ===
 const ui = getUIElements();
@@ -53,8 +61,11 @@ async function init() {
   ui.versionSelect.value = version;
   toggleCustomUrl(ui, version === "custom");
 
+  // 应用语言
+  applyI18n(lang);
+
   // 加载 draw.io
-  showLoading(ui, "正在加载 draw.io...");
+  showLoading(ui, t.loadingDrawio);
 
   const setStep = (step: "preconfig" | "app" | "init") => {
     const order = ["preconfig", "app", "init"] as const;
@@ -78,21 +89,21 @@ async function init() {
 
   try {
     await loadDrawioScript(version, {
-      onLoading: () => updateDrawioStatus(ui, "loading", "加载中..."),
+      onLoading: () => updateDrawioStatus(ui, "loading", t.drawioLoading),
       onProgress: setStep,
       onReady: (v) => {
         showReady(ui);
-        updateDrawioStatus(ui, "ready", `已加载 (${v})`);
+        updateDrawioStatus(ui, "ready", t.drawioLoaded(v));
         // 加载完成后自动连接
         connectCollaboration();
       },
       onError: (msg) => {
-        updateDrawioStatus(ui, "error", "加载失败");
+        updateDrawioStatus(ui, "error", t.drawioFailed);
         ui.loadingText.textContent = msg;
       },
     });
   } catch (e) {
-    console.error("[drawio] 加载失败:", e);
+    console.error("[drawio] Failed to load:", e);
   }
 }
 
@@ -102,12 +113,14 @@ async function init() {
 function connectCollaboration() {
   const roomName = ui.roomInput.value.trim() || DEFAULT_ROOM;
 
-  updateCollabStatus(ui, "loading", "连接中...");
+  updateCollabStatus(ui, "loading", t.collabConnecting);
 
   // 创建协作连接
   collabState = createCollaboration(roomName, {
     onPeerCountChange: (count) => updatePeerCount(ui, count),
     onStatusChange: (status, text) => updateCollabStatus(ui, status, text),
+    connectedText: t.collabConnected,
+    reconnectingText: t.collabReconnecting,
   });
 
   // 绑定 draw.io
