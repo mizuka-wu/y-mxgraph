@@ -1,14 +1,11 @@
-# bindDrawioFile
+# Binding
 
-将 draw.io 的 `file` 对象与 `Y.Doc` 进行双向绑定。
+`Binding` 类管理 draw.io 文件与 `Y.Doc` 的双向绑定。
 
-## 签名
+## 构造函数
 
 ```ts
-function bindDrawioFile(
-  file: any,
-  options: BindDrawioFileOptions
-): BindDrawioFileResult
+new Binding(file: any, options: BindDrawioFileOptions)
 ```
 
 ## 参数
@@ -34,34 +31,27 @@ interface BindDrawioFileOptions {
 }
 ```
 
-## 返回值
+## 实例属性
 
-```ts
-interface BindDrawioFileResult {
-  doc: Y.Doc;                    // 绑定的 Y.Doc 实例
-  destroy: (deep?: boolean) => void;  // 清理函数
-}
-```
+### `doc: Y.Doc`
 
-### destroy(deep?: boolean)
+绑定的 Y.Doc 实例，只读。
 
-**默认行为** (`destroy()` 或 `destroy(false)`):
+## 实例方法
 
-- 解除核心绑定监听器
-  - mxGraphModel `change` 监听器
-  - Y.Doc `observeDeep` 监听器
+### `destroy(deep?: boolean): void`
 
-**深度清理** (`destroy(true)`):
+销毁绑定，解除所有监听器。
 
-- 解除上述核心监听器
-- 额外解除子系统监听器
-  - Awareness 监听器（光标、选区）
-  - UndoManager 监听器
-  - 恢复原始 `editor.undoManager`
+**参数**:
+
+- `deep` - 是否深度清理，默认 `false`
+  - `false`: 只解除核心绑定监听器（mxGraphModel change, Y.Doc observeDeep）
+  - `true`: 完全清理，包括 Awareness/UndoManager 子系统，恢复原始 undoManager
 
 **使用建议**:
 
-- 页面刷新/关闭时调用 `destroy()` 即可（Awareness/UndoManager 随页面销毁）
+- 页面刷新/关闭时调用 `destroy()` 即可
 - 动态切换 draw.io 文件时调用 `destroy(true)` 完全清理
 
 ## 示例
@@ -89,12 +79,13 @@ App.main((app) => {
 ```ts
 // React
 useEffect(() => {
-  const binding = bindDrawioFile(file, { doc, awareness });
+  const binding = new Binding(file, { doc, awareness });
   // 组件卸载时完全清理
   return () => binding.destroy(true);
 }, [file, doc]);
 
 // Vue
+const binding = new Binding(file, { doc, awareness });
 onUnmounted(() => {
   binding.destroy(true);
 });
@@ -102,14 +93,30 @@ onUnmounted(() => {
 
 ## 关于 UndoManager
 
-`bindDrawioFile` 不再内部自动创建 `Y.UndoManager`。如需撤销/重做，请在外部创建后传入：
+`Binding` 不再内部自动创建 `Y.UndoManager`。如需撤销/重做，请在外部创建后传入：
 
 ```ts
 const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN]),
 });
 
-bindDrawioFile(file, { doc, undoManager });
+const binding = new Binding(file, { doc, undoManager });
 ```
 
 `LOCAL_ORIGIN` 是 `y-mxgraph` 导出的静态标识对象，用于区分本地事务和远端事务。
+
+## 兼容函数
+
+### `bindDrawioFile(file, options): Binding`
+
+兼容的工厂函数，功能与 `new Binding()` 相同。
+
+```ts
+// 两种用法等价
+const binding1 = new Binding(file, options);
+const binding2 = bindDrawioFile(file, options);
+```
+
+::: tip 推荐
+直接使用 `new Binding()` 更加直观。
+:::

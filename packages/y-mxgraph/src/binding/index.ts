@@ -20,77 +20,108 @@ export interface BindDrawioFileOptions {
       };
 }
 
-export interface BindDrawioFileResult {
-  doc: Y.Doc;
-  destroy: (deep?: boolean) => void;
-}
-
-export function bindDrawioFile(file: any, options: BindDrawioFileOptions) {
-  const { doc, awareness, undoManager, mouseMoveThrottle, cursor } = options;
-
-  const graph = file.getUi().editor.graph;
-  const mxGraphModel = graph.model;
-
-  if (!doc.share.has(mxfileKey)) {
-    xml2doc(file.data, doc);
-  }
-
-  initDocSnapshot(doc);
-
-  let suppressLocalApply = false;
-
-  const mxListener = () => {
-    if (suppressLocalApply) return;
-    const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
-    file.setShadowPages(file.ui.clonePages(file.ui.pages));
-    applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
-  };
-  mxGraphModel.addListener("change", mxListener);
-
-  const docObserver = (
+/**
+ * Y-MXGraph 绑定类，管理 draw.io 文件与 Y.Doc 的双向同步
+ */
+export class Binding {
+  readonly doc: Y.Doc;
+  private file: any;
+  private mxGraphModel: any;
+  private suppressLocalApply = false;
+  private mxListener: () => void;
+  private docObserver: (
     events: Y.YEvent<
       Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
     >[],
     transaction: Y.Transaction,
-  ) => {
-    if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) {
-      generatePatch(events);
-      return;
+  ) => void;
+  private cleanupCollaborator?: () => void;
+  private cleanupUndoManager?: () => void;
+
+  constructor(file: any, options: BindDrawioFileOptions) {
+    const { doc, awareness, undoManager, mouseMoveThrottle, cursor } = options;
+
+    this.file = file;
+    this.doc = doc;
+
+    const ui = file.getUi();
+    const graph = ui.editor.graph;
+    this.mxGraphModel = graph.model;
+
+    if (!doc.share.has(mxfileKey)) {
+      xml2doc(file.data, doc);
     }
-    const patch = generatePatch(events);
-    suppressLocalApply = true;
-    try {
-      file.patch([patch]);
+
+    initDocSnapshot(doc);
+
+    // 本地变更监听
+    this.mxListener = () => {
+      if (this.suppressLocalApply) return;
+      const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
       file.setShadowPages(file.ui.clonePages(file.ui.pages));
-    } finally {
-      suppressLocalApply = false;
+      applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
+    };
+    this.mxGraphModel.addListener("change", this.mxListener);
+
+    // 远端变更监听
+    this.docObserver = (
+      events: Y.YEvent<
+        Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
+      >[],
+      transaction: Y.Transaction,
+    ) => {
+      if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) {
+        generatePatch(events);
+        return;
+      }
+      const patch = generatePatch(events);
+      this.suppressLocalApply = true;
+      try {
+        file.patch([patch]);
+        file.setShadowPages(file.ui.clonePages(file.ui.pages));
+      } finally {
+        this.suppressLocalApply = false;
+      }
+    };
+    doc.getMap(mxfileKey).observeDeep(this.docObserver);
+
+    // 协作功能
+    if (awareness) {
+      this.cleanupCollaborator = bindCollaborator(file, {
+        awareness,
+        graph,
+        cursor: cursor ?? true,
+        mouseMoveThrottle,
+      });
     }
-  };
-  doc.getMap(mxfileKey).observeDeep(docObserver);
 
-  let cleanupCollaborator: (() => void) | undefined;
-  if (awareness) {
-    cleanupCollaborator = bindCollaborator(file, {
-      awareness,
-      graph,
-      cursor: cursor ?? true,
-      mouseMoveThrottle,
-    });
+    // UndoManager
+    if (undoManager) {
+      this.cleanupUndoManager = bindUndoManager(doc, file, undoManager);
+    }
   }
 
-  let cleanupUndoManager: (() => void) | undefined;
-  if (undoManager) {
-    cleanupUndoManager = bindUndoManager(doc, file, undoManager);
-  }
-
-  const destroy = (deep = false) => {
-    mxGraphModel.removeListener("change", mxListener);
-    doc.getMap(mxfileKey).unobserveDeep(docObserver);
+  /**
+   * 销毁绑定，解除所有监听器
+   * @param deep - 是否深度清理（包括 awareness/undoManager），默认 false
+   */
+  destroy(deep = false): void {
+    this.mxGraphModel.removeListener("change", this.mxListener);
+    this.doc.getMap(mxfileKey).unobserveDeep(this.docObserver);
     if (deep) {
-      cleanupCollaborator?.();
-      cleanupUndoManager?.();
+      this.cleanupCollaborator?.();
+      this.cleanupUndoManager?.();
     }
-  };
+  }
+}
 
-  return { doc, destroy };
+/**
+ * 兼容的工厂函数，返回 Binding 实例
+ * @deprecated 直接使用 new Binding() 替代
+ */
+export function bindDrawioFile(
+  file: any,
+  options: BindDrawioFileOptions,
+): Binding {
+  return new Binding(file, options);
 }

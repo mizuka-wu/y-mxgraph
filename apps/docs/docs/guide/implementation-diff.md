@@ -117,19 +117,22 @@ const doc = bindDrawioFile(file, {
   trackLocalUndoOnly: true,  // 已移除
 });
 
-// 当前实现
+// 当前实现（推荐 Class API）
 const yDoc = new Y.Doc();
 const undoManager = new Y.UndoManager(yDoc, {
   trackedOrigins: new Set([LOCAL_ORIGIN]),  // 需要外部配置
 });
 
-const binding = bindDrawioFile(file, {
+const binding = new Binding(file, {
   doc: yDoc,  // 必填
   undoManager,  // 直接使用外部创建的实例
 });
 
 // 卸载时清理
-binding.destroy();
+binding.destroy(true);
+
+// 或者使用兼容的工厂函数
+const binding2 = bindDrawioFile(file, { doc: yDoc, undoManager });
 ```
 
 ### 关键注意点

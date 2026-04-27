@@ -4,9 +4,9 @@
 
 | 名称 | 类型 | 说明 |
 |---|---|---|
-| `bindDrawioFile` | function | 将 draw.io file 与 Y.Doc 双向绑定 |
-| `BindDrawioFileOptions` | type | bindDrawioFile 的 options 类型 |
-| `BindDrawioFileResult` | type | bindDrawioFile 的返回值类型 |
+| `Binding` | class | draw.io file 与 Y.Doc 的绑定类 |
+| `bindDrawioFile` | function | 兼容的工厂函数（推荐直接使用 new Binding()） |
+| `BindDrawioFileOptions` | type | Binding 构造函数的 options 类型 |
 | `xml2doc` | function | draw.io XML → Y.Doc |
 | `doc2xml` | function | Y.Doc → draw.io XML |
 | `LOCAL_ORIGIN` | object | 标记本地事务的 origin 标识 |
@@ -15,6 +15,7 @@
 
 ```ts
 import {
+  Binding,
   bindDrawioFile,
   xml2doc,
   doc2xml,
@@ -22,5 +23,5 @@ import {
   DEFAULT_USER_NAME_KEY,
   DEFAULT_USER_COLOR_KEY,
 } from 'y-mxgraph';
-import type { BindDrawioFileOptions, BindDrawioFileResult } from 'y-mxgraph';
+import type { BindDrawioFileOptions } from 'y-mxgraph';
 ```
