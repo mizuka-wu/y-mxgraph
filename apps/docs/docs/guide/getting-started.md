@@ -12,7 +12,7 @@ pnpm add y-mxgraph yjs y-protocols
 
 ```ts
 import * as Y from 'yjs';
-import { bindDrawioFile, LOCAL_ORIGIN } from 'y-mxgraph';
+import { Binding } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 
@@ -20,7 +20,7 @@ const doc = new Y.Doc();
 App.main((app) => {
   const file = app.currentFile;
 
-  bindDrawioFile(file, { doc });
+  const binding = new Binding(file, { doc });
 });
 ```
 
@@ -29,7 +29,7 @@ App.main((app) => {
 ```ts
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { bindDrawioFile, LOCAL_ORIGIN } from 'y-mxgraph';
+import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider('my-room', doc, {
@@ -43,11 +43,29 @@ App.main((app) => {
     trackedOrigins: new Set([LOCAL_ORIGIN]),
   });
 
-  bindDrawioFile(file, {
+  const binding = new Binding(file, {
     doc,
     awareness: provider.awareness,
     undoManager,
   });
+});
+```
+
+## 销毁绑定
+
+组件卸载或切换文件时，调用 `destroy()` 方法清理监听器：
+
+```ts
+// React 示例
+useEffect(() => {
+  const binding = new Binding(file, { doc, awareness });
+  return () => binding.destroy(true); // 组件卸载时完全清理
+}, [file, doc]);
+
+// Vue 示例
+const binding = new Binding(file, { doc, awareness });
+onUnmounted(() => {
+  binding.destroy(true);
 });
 ```
 

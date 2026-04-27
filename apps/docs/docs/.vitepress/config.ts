@@ -26,7 +26,7 @@ export default defineConfig({
           text: "API 参考",
           items: [
             { text: "概览", link: "/api/" },
-            { text: "bindDrawioFile", link: "/api/bind-drawio-file" },
+            { text: "Binding 类", link: "/api/binding" },
             { text: "xml2doc", link: "/api/xml2doc" },
             { text: "doc2xml", link: "/api/doc2xml" },
             { text: "LOCAL_ORIGIN", link: "/api/local-origin" },

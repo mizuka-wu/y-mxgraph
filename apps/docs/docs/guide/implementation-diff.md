@@ -9,7 +9,7 @@
 | `options.doc` | 可选，默认 `new Y.Doc()` | **必填** | 外部必须传入 Y.Doc，便于与 Provider 共享 |
 | `options.trackLocalUndoOnly` | 存在 | **已移除** | undoManager 完全由外部控制，无需内部配置 |
 | `options.undoManager` | 支持内部创建 | **仅支持外部传入** | 简化 API，用户自行配置 trackedOrigins |
-| 返回值 | `Y.Doc` | **`{ doc, destroy }`** | 新增 `destroy()` 清理方法 |
+| API 形式 | 工厂函数 | **`Binding` 类** | 推荐 `new Binding()`，自带 `destroy()` 方法 |
 | `destroy()` 方法 | 无 | **有** | 解除所有监听器，恢复原始 undoManager |
 
 ## 功能差异
