@@ -5,7 +5,6 @@
 | 名称 | 类型 | 说明 |
 |---|---|---|
 | `Binding` | class | draw.io file 与 Y.Doc 的绑定类 |
-| `bindDrawioFile` | function | 兼容的工厂函数（推荐直接使用 new Binding()） |
 | `BindDrawioFileOptions` | type | Binding 构造函数的 options 类型 |
 | `xml2doc` | function | draw.io XML → Y.Doc |
 | `doc2xml` | function | Y.Doc → draw.io XML |
@@ -16,7 +15,6 @@
 ```ts
 import {
   Binding,
-  bindDrawioFile,
   xml2doc,
   doc2xml,
   LOCAL_ORIGIN,

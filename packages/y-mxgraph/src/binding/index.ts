@@ -113,15 +113,12 @@ export class Binding {
       this.cleanupUndoManager?.();
     }
   }
-}
 
-/**
- * 兼容的工厂函数，返回 Binding 实例
- * @deprecated 直接使用 new Binding() 替代
- */
-export function bindDrawioFile(
-  file: any,
-  options: BindDrawioFileOptions,
-): Binding {
-  return new Binding(file, options);
+  /**
+   * 静态工厂方法，创建 Binding 实例
+   * 与 `new Binding()` 等价
+   */
+  static create(file: any, options: BindDrawioFileOptions): Binding {
+    return new Binding(file, options);
+  }
 }

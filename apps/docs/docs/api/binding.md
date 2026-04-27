@@ -104,19 +104,3 @@ const binding = new Binding(file, { doc, undoManager });
 ```
 
 `LOCAL_ORIGIN` 是 `y-mxgraph` 导出的静态标识对象，用于区分本地事务和远端事务。
-
-## 兼容函数
-
-### `bindDrawioFile(file, options): Binding`
-
-兼容的工厂函数，功能与 `new Binding()` 相同。
-
-```ts
-// 两种用法等价
-const binding1 = new Binding(file, options);
-const binding2 = bindDrawioFile(file, options);
-```
-
-::: tip 推荐
-直接使用 `new Binding()` 更加直观。
-:::

@@ -62,7 +62,7 @@ bindUndoManager(doc, file, yUndo: Y.UndoManager)  // 直接使用外部实例
 
 | 导出项 | 原始实现 | 当前实现 | 状态 |
 |--------|----------|----------|------|
-| `bindDrawioFile` | ✅ | ✅ | 保留 |
+| `Binding` | ❌ (函数) | ✅ (Class) | 改为类 |
 | `xml2doc` | ✅ | ✅ | 保留 |
 | `doc2xml` | ✅ | ✅ | 保留 |
 | `LOCAL_ORIGIN` | ✅ | ✅ | 保留 |
@@ -111,7 +111,7 @@ function bindDrawioFile(file: any, options: { ... } = {})
 
 ```ts
 // 原始实现
-const doc = bindDrawioFile(file, {
+const binding = bindDrawioFile(file, {
   doc: new Y.Doc(),  // 可选
   undoManager: myUndoManager,  // 内部会配置 trackedOrigins
   trackLocalUndoOnly: true,  // 已移除
@@ -130,9 +130,6 @@ const binding = new Binding(file, {
 
 // 卸载时清理
 binding.destroy(true);
-
-// 或者使用兼容的工厂函数
-const binding2 = bindDrawioFile(file, { doc: yDoc, undoManager });
 ```
 
 ### 关键注意点
