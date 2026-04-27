@@ -42,6 +42,9 @@ export function loadDrawioScript(
 
     callbacks.onLoading();
 
+    // 设置默认配置
+    (window as any).mxIsElectron = false;
+
     // 设置全局 CDN 配置
     const cdnBase = getCdnBaseUrl(version);
     (window as any).drawDevUrl = cdnBase;
