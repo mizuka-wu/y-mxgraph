@@ -69,6 +69,41 @@ onUnmounted(() => {
 });
 ```
 
+## 接入注意事项
+
+### ⚠️ 初始化 XML 的 diagram id 必须稳定
+
+`Binding` 初始化时，draw.io 会先渲染 `file.data`（即传入的 XML）中的页面。如果此时 Y.Doc **已有其他客户端的数据**（`docHasData = true`），本地 XML 中的 diagram id 与 doc 中的 id 不一致，会导致：
+
+- draw.io 出现两个 page：一个来自本地 XML（孤立，未同步），一个来自 Y.Doc（正常同步）
+- 孤立的 page 不会写入 Y.Doc，也不会同步给其他协作者
+
+**y-mxgraph 目前不会自动清除孤立 page**，这是一个已知风险点。请务必确保初始化 XML 使用固定、稳定的 diagram id。
+
+#### ❌ 错误示例
+
+```ts
+// 每次渲染 id 都不同，后进房间者可能看到短暂的孤立 page
+const xml = `<mxfile>
+  <diagram name="Page-1" id="${Math.random()}">
+    ...
+  </diagram>
+</mxfile>`;
+```
+
+#### ✅ 正确示例
+
+```ts
+// 使用固定 id，与房间/项目绑定，保证所有客户端一致
+const xml = `<mxfile>
+  <diagram name="Page-1" id="page-main">
+    ...
+  </diagram>
+</mxfile>`;
+```
+
+---
+
 ## 本地开发
 
 ```bash
