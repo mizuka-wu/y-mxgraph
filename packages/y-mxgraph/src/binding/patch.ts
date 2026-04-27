@@ -38,7 +38,7 @@ function insertAfterUnique(
   orderArr: Y.Array<string>,
   id: string,
   previous: string | null | undefined,
-  fallbackToEnd = false
+  fallbackToEnd = false,
 ) {
   const currentIds = orderArr.toArray();
   let anchorPos = previous ? currentIds.indexOf(previous) : -1;
@@ -100,15 +100,14 @@ export interface FilePatch {
 export function applyFilePatch(
   doc: Y.Doc,
   patch: FilePatch,
-  options?: { origin?: any }
+  options?: { origin?: any },
 ) {
   doc.transact(() => {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
-    console.log(mxfile.toJSON(), patch);
     if (patch[DIFF_REMOVE]) {
       const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
       const orderArr = mxfile.get(
-        diagramOrderKey
+        diagramOrderKey,
       ) as unknown as Y.Array<string>;
       ensureUniqueOrder(orderArr);
       const orderList = orderArr.toArray();
@@ -128,7 +127,7 @@ export function applyFilePatch(
     if (patch[DIFF_INSERT]) {
       const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
       const orderArr = mxfile.get(
-        diagramOrderKey
+        diagramOrderKey,
       ) as unknown as Y.Array<string>;
       ensureUniqueOrder(orderArr);
       const existingIds = orderArr.toArray();
@@ -202,7 +201,7 @@ export function applyFilePatch(
     if (patch[DIFF_UPDATE]) {
       Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
         const diagramsMap = mxfile.get(
-          diagramKey
+          diagramKey,
         ) as unknown as Y.Map<YDiagram>;
         const diagram = diagramsMap.get(id) as YDiagram | undefined;
         if (diagram) {
@@ -228,7 +227,7 @@ export function applyFilePatch(
             if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
               const orderIds = orderArr.toArray();
               const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
-                orderIds.indexOf(cid)
+                orderIds.indexOf(cid),
               )
                 .filter((i) => i !== -1)
                 .sort((a, b) => b - a);
@@ -246,7 +245,9 @@ export function applyFilePatch(
                   xmlElement.setAttribute(key, item[key]);
                 });
                 cellsMap.set(id, xmlElement);
-                const previous = (item as any)["previous"] as string | undefined;
+                const previous = (item as any)["previous"] as
+                  | string
+                  | undefined;
                 const parent = (item as any)["parent"] as string | undefined;
                 let anchorId: string | null | undefined = null;
                 let fallbackToEnd = true;
@@ -272,7 +273,7 @@ export function applyFilePatch(
                   orderArr as Y.Array<string>,
                   id,
                   anchorId,
-                  fallbackToEnd
+                  fallbackToEnd,
                 );
               }
             }
@@ -327,7 +328,9 @@ export function applyFilePatch(
                 const currentIndex = currentIds.indexOf(cellId);
 
                 if (currentIndex === -1) {
-                  let newCell = cellsMap.get(cellId) as Y.XmlElement | undefined;
+                  let newCell = cellsMap.get(cellId) as
+                    | Y.XmlElement
+                    | undefined;
                   if (!newCell) {
                     newCell = new Y.XmlElement("mxCell");
                     newCell.setAttribute("id", cellId);
@@ -341,7 +344,7 @@ export function applyFilePatch(
                     orderArr as Y.Array<string>,
                     cellId,
                     anchorId,
-                    fallbackToEnd
+                    fallbackToEnd,
                   );
                   return;
                 }
@@ -350,7 +353,7 @@ export function applyFilePatch(
                   orderArr as Y.Array<string>,
                   cellId,
                   anchorId,
-                  fallbackToEnd
+                  fallbackToEnd,
                 );
               });
             }
@@ -359,7 +362,7 @@ export function applyFilePatch(
           if (Reflect.has(update, "previous")) {
             const previous = update.previous || null;
             const orderArr = mxfile.get(
-              diagramOrderKey
+              diagramOrderKey,
             ) as unknown as Y.Array<string>;
             ensureUniqueOrder(orderArr);
             insertAfterUnique(orderArr, id, previous, false);
@@ -402,7 +405,7 @@ export function initDocSnapshot(doc: Y.Doc) {
             if (el) {
               attrMap.set(
                 cid,
-                (el.getAttributes() as Record<string, string>) || {}
+                (el.getAttributes() as Record<string, string>) || {},
               );
             }
           }
@@ -423,7 +426,7 @@ export function initDocSnapshot(doc: Y.Doc) {
 export function generatePatch(
   events: Y.YEvent<
     Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile | YDiagram
-  >[]
+  >[],
 ): FilePatch {
   const patch: FilePatch = {};
 
@@ -498,13 +501,13 @@ export function generatePatch(
     const currSet = new Set(currDiagramOrder);
 
     const removed = prevDiagramOrder.filter(
-      (id: string) => !currSet.has(id) && id
+      (id: string) => !currSet.has(id) && id,
     );
     if (removed.length) patch[DIFF_REMOVE] = removed;
     const removedDiagramSet = new Set(removed);
 
     const inserted = currDiagramOrder.filter(
-      (id: string) => !prevSet.has(id) && id
+      (id: string) => !prevSet.has(id) && id,
     );
     if (inserted.length) {
       patch[DIFF_INSERT] = patch[DIFF_INSERT] || [];
@@ -556,7 +559,7 @@ export function generatePatch(
     const removedCellSet = new Set(removed);
 
     const inserted = currCells.filter(
-      (cid: string) => !prevSet.has(cid) && cid
+      (cid: string) => !prevSet.has(cid) && cid,
     );
     if (inserted.length) {
       const cells = ensureCellSection(did);
@@ -594,7 +597,9 @@ export function generatePatch(
   }
 
   {
-    const diagramSet = new Set<Y.Map<any>>(diagramsList as unknown as Y.Map<any>[]);
+    const diagramSet = new Set<Y.Map<any>>(
+      diagramsList as unknown as Y.Map<any>[],
+    );
     for (const ev of events) {
       const target: any = (ev as any).target;
       if (!(target instanceof Y.Map)) continue;
@@ -651,7 +656,8 @@ export function generatePatch(
 
   if (prevDiagramOrder) {
     for (const [did, currAttrsMap] of cellAttrMap.entries()) {
-      const prevAttrsMap = prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
+      const prevAttrsMap =
+        prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
       const cellsPatch = ensureCellSection(did);
       cellsPatch[DIFF_UPDATE] = cellsPatch[DIFF_UPDATE] || {};
       const updateBucket = cellsPatch[DIFF_UPDATE]!;
@@ -661,7 +667,10 @@ export function generatePatch(
         if (insertedCellIdGlobal.has(cid)) continue;
         const prevAttrs = prevAttrsMap.get(cid) || {};
         const currAttrs = currAttrsMap.get(cid) || {};
-        const keys = new Set<string>([...Object.keys(prevAttrs), ...Object.keys(currAttrs)]);
+        const keys = new Set<string>([
+          ...Object.keys(prevAttrs),
+          ...Object.keys(currAttrs),
+        ]);
         const cellUpdate = (updateBucket[cid] = updateBucket[cid] || {});
         let changed = false;
         for (const k of keys) {

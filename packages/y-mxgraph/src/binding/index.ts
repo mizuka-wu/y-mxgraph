@@ -1,14 +1,11 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
-import {
-  generatePatch,
-  applyFilePatch,
-  initDocSnapshot,
-} from "./patch";
-import { xml2doc, doc2xml } from "../transformer";
+import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
+import { xml2doc } from "../transformer";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
 import { LOCAL_ORIGIN } from "../helper/origin";
+import { key as mxfileKey, type YMxFile } from "../models/mxfile";
 
 export interface BindDrawioFileOptions {
   doc: Y.Doc;
@@ -23,92 +20,50 @@ export interface BindDrawioFileOptions {
       };
 }
 
-export function bindDrawioFile(
-  file: any,
-  options: BindDrawioFileOptions
-) {
+export function bindDrawioFile(file: any, options: BindDrawioFileOptions) {
   const { doc, awareness, undoManager, mouseMoveThrottle, cursor } = options;
 
-  const ui = file.getUi();
-  const editor = ui.editor;
-  const graph = editor.graph;
+  const graph = file.getUi().editor.graph;
   const mxGraphModel = graph.model;
 
-  let initialized = false;
-
-  function initFromFile() {
-    if (initialized) return;
-    initialized = true;
-
-    const xmlData = new XMLSerializer().serializeToString(
-      file.ui.getXmlFileData()
-    );
-
-    doc.transact(() => {
-      xml2doc(xmlData, doc);
-    }, LOCAL_ORIGIN);
-
-    initDocSnapshot(doc);
+  if (!doc.share.has(mxfileKey)) {
+    xml2doc(file.data, doc);
   }
 
-  initFromFile();
+  initDocSnapshot(doc);
 
-  let applying = false;
+  let suppressLocalApply = false;
 
-  const docObserver = (
-    events: Y.YEvent<any>[],
-    transaction: Y.Transaction
-  ) => {
-    if (transaction.origin === LOCAL_ORIGIN) return;
-    if (applying) return;
-
-    const patch = generatePatch(events);
-    applying = true;
-    try {
-      applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
-      const xml = doc2xml(doc);
-      if (xml) {
-        (file as any).mergeFile?.(xml);
-      }
-    } finally {
-      applying = false;
-    }
-  };
-
-  doc.on("update", (_update: Uint8Array, _origin: any, _doc: Y.Doc, tr: Y.Transaction) => {
-    if (tr.origin === LOCAL_ORIGIN) return;
-    if (applying) return;
-
-    const xml = doc2xml(doc);
-    if (xml) {
-      applying = true;
-      try {
-        (file as any).mergeFile?.(xml);
-      } finally {
-        applying = false;
-      }
-    }
+  mxGraphModel.addListener("change", () => {
+    if (suppressLocalApply) return;
+    const patch = file.ui.diffPages(file.shadowPages, file.ui.pages);
+    file.setShadowPages(file.ui.clonePages(file.ui.pages));
+    applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
   });
 
-  const mxListener = (_sender: any, _evt: any) => {
-    if (applying) return;
-
-    const xmlData = new XMLSerializer().serializeToString(
-      file.ui.getXmlFileData()
+  doc
+    .getMap(mxfileKey)
+    .observeDeep(
+      (
+        events: Y.YEvent<
+          Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
+        >[],
+        transaction: Y.Transaction,
+      ) => {
+        if (transaction.local && transaction.origin === (LOCAL_ORIGIN as any)) {
+          generatePatch(events);
+          return;
+        }
+        const patch = generatePatch(events);
+        suppressLocalApply = true;
+        try {
+          file.patch([patch]);
+          file.setShadowPages(file.ui.clonePages(file.ui.pages));
+        } finally {
+          suppressLocalApply = false;
+        }
+      },
     );
-
-    applying = true;
-    try {
-      doc.transact(() => {
-        const events = xml2doc(xmlData, doc);
-        void events;
-      }, LOCAL_ORIGIN);
-    } finally {
-      applying = false;
-    }
-  };
-
-  mxGraphModel.addListener("change", mxListener);
 
   if (undoManager) {
     bindUndoManager(doc, file, undoManager);
@@ -123,12 +78,5 @@ export function bindDrawioFile(
     });
   }
 
-  void docObserver;
-
-  return {
-    doc,
-    destroy() {
-      mxGraphModel.removeListener("change", mxListener);
-    },
-  };
+  return doc;
 }

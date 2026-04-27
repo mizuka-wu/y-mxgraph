@@ -3,6 +3,7 @@
  * 仅在外部传入 undoManager 时调用。
  */
 import * as Y from "yjs";
+import { LOCAL_ORIGIN } from "../helper/origin";
 
 type ListenerFn = (sender: any, evt?: any) => void;
 
@@ -15,20 +16,16 @@ function createMxEventObject(name: string, props?: Record<string, any>) {
   };
 }
 
-export function bindUndoManager(
-  doc: Y.Doc,
-  file: any,
-  yUndo: Y.UndoManager
-) {
+export function bindUndoManager(doc: Y.Doc, file: any, yUndo: Y.UndoManager) {
   const editor = file.getUi().editor;
   const originUndoManager = editor.undoManager;
 
   let lastTxnLocalOrigin = false;
   doc.on("beforeTransaction", (t: Y.Transaction) => {
-    lastTxnLocalOrigin = !!(t.local || (t.origin != null));
+    lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
   });
   doc.on("afterTransaction", (t: Y.Transaction) => {
-    lastTxnLocalOrigin = !!(t.local || (t.origin != null));
+    lastTxnLocalOrigin = !!(t.local || t.origin === (LOCAL_ORIGIN as any));
   });
 
   const pairs: Array<[string, ListenerFn]> = [];
@@ -52,7 +49,8 @@ export function bindUndoManager(
     },
 
     fireEvent(evt: any) {
-      const eventName: string = evt?.name || (evt?.getName ? evt.getName() : "");
+      const eventName: string =
+        evt?.name || (evt?.getName ? evt.getName() : "");
       for (let i = 0; i + 1 < this.eventListeners.length; i += 2) {
         const key = this.eventListeners[i];
         const listener = this.eventListeners[i + 1] as ListenerFn;
@@ -99,10 +97,7 @@ export function bindUndoManager(
     },
   };
 
-  const bridge = (
-    mxEventName: "add" | "clear",
-    yEventName: string
-  ) => {
+  const bridge = (mxEventName: "add" | "clear", yEventName: string) => {
     yUndo.on(yEventName as any, () => {
       if (mxEventName !== "clear" && !lastTxnLocalOrigin) {
         return;
@@ -112,7 +107,7 @@ export function bindUndoManager(
           if (mxLike.indexOfNextAdd < mxLike.history.length) {
             mxLike.history.splice(
               mxLike.indexOfNextAdd,
-              mxLike.history.length - mxLike.indexOfNextAdd
+              mxLike.history.length - mxLike.indexOfNextAdd,
             );
           }
           mxLike.history.push({});
@@ -141,7 +136,8 @@ export function bindUndoManager(
       const evt = createMxEventObject("undo", { edit: { changes: [] } });
       mxLike.fireEvent(evt);
     } else if (t === "redo") {
-      if (mxLike.indexOfNextAdd < mxLike.history.length) mxLike.indexOfNextAdd++;
+      if (mxLike.indexOfNextAdd < mxLike.history.length)
+        mxLike.indexOfNextAdd++;
       const evt = createMxEventObject("redo", { edit: { changes: [] } });
       mxLike.fireEvent(evt);
     }
