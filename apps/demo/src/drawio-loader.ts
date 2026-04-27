@@ -58,8 +58,16 @@ export function loadDrawioScript(
 
     // 设置全局 CDN 配置
     const cdnBase = getCdnBaseUrl(version);
+    (window as any).mxLoadStylesheets = false;
+    (window as any).DRAWIO_BASE_URL = cdnBase;
+    (window as any).DRAW_MATH_URL = getMathPath(version);
     (window as any).drawDevUrl = cdnBase;
     (window as any).mxDevUrl = cdnBase;
+    (window as any).STENCIL_PATH =
+      `https://cdn.jsdelivr.net/gh/jgraph/drawio/src/main/webapp/stencils`;
+    (window as any).SHAPES_PATH =
+      `https://cdn.jsdelivr.net/gh/jgraph/drawio/src/main/webapp/shapes`;
+    (window as any).mxBasePath = `${cdnBase}mxgraph`;
     (window as any).PLUGINS_BASE_PATH = cdnBase;
     (window as any).DRAW_MATH_URL = `${cdnBase}${getMathPath(version)}`;
 
