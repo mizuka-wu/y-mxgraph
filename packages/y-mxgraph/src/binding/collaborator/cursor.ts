@@ -43,7 +43,7 @@ export function bindCursor(
     awareness: Awareness;
     graph?: any;
     mouseMoveThrottle?: number;
-  }
+  },
 ) {
   const graph = options.graph || file.getUi().editor.graph;
   const awareness = options.awareness;
@@ -58,7 +58,7 @@ export function bindCursor(
     mouseUp: function (_: any) {},
     mouseMove: throttle(function (
       _: any,
-      event: { graphX: number; graphY: number; evt: MouseEvent }
+      event: { graphX: number; graphY: number; evt: MouseEvent },
     ) {
       const containerRect = graph.container.getBoundingClientRect();
       const { translate, scale } = graph.view;
@@ -66,12 +66,12 @@ export function bindCursor(
       const x = Math.round(
         (event.evt.clientX - containerRect.x + graph.container.scrollLeft) /
           scale -
-          translate.x
+          translate.x,
       );
       const y = Math.round(
         (event.evt.clientY - containerRect.y + graph.container.scrollTop) /
           scale -
-          translate.y
+          translate.y,
       );
 
       awareness.setLocalStateField("cursor", {
@@ -79,16 +79,26 @@ export function bindCursor(
         y,
         pageId: file.getUi().currentPage?.getId(),
       });
-    },
-    mouseMoveThrottle),
+    }, mouseMoveThrottle),
   };
 
   graph.addMouseListener(listener);
+
+  // 鼠标离开画布时隐藏光标
+  const handleMouseLeave = () => {
+    awareness.setLocalStateField("cursor", {
+      x: 0,
+      y: 0,
+      pageId: file.getUi().currentPage?.getId(),
+      hide: true,
+    });
+  };
+  graph.container.addEventListener("mouseleave", handleMouseLeave);
 }
 
 export function renderRemoteCursors(
   ui: any,
-  remotes: Map<number, RemoteCursor>
+  remotes: Map<number, RemoteCursor>,
 ) {
   if (!Reflect.has(ui, CacheKey)) {
     Reflect.set(ui, CacheKey, new Map<number, HTMLDivElement>());
@@ -141,6 +151,16 @@ export function renderRemoteCursors(
     ({ clientId, cursorState, userColor, userName }) => {
       if (!cursorState) return;
       let el = cache.get(clientId);
+
+      // 隐藏状态：移除光标元素
+      if (cursorState.hide) {
+        if (el) {
+          el.remove();
+          cache.delete(clientId);
+        }
+        return;
+      }
+
       if (!el) {
         el = createCursorEl(userColor, userName);
         ui.diagramContainer.appendChild(el);
@@ -153,21 +173,25 @@ export function renderRemoteCursors(
       const cx = Math.max(
         graph.container.scrollLeft,
         Math.min(
-          graph.container.scrollLeft + graph.container.clientWidth - el.clientWidth,
-          x
-        )
+          graph.container.scrollLeft +
+            graph.container.clientWidth -
+            el.clientWidth,
+          x,
+        ),
       );
 
       const cy = Math.max(
         graph.container.scrollTop - 22,
         Math.min(
-          graph.container.scrollTop + graph.container.clientHeight - el.clientHeight,
-          y
-        )
+          graph.container.scrollTop +
+            graph.container.clientHeight -
+            el.clientHeight,
+          y,
+        ),
       );
       el.style.left = cx + "px";
       el.style.top = cy + "px";
       el.style.display = "";
-    }
+    },
   );
 }

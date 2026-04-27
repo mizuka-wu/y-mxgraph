@@ -227,15 +227,68 @@ awareness.on('update', ({ updated }) => {
 
 ### 光标同步
 
-- **节流**: `mouseMoveThrottle` 默认 100ms
-- **坐标**: 相对于 draw.io 画布的 x/y 坐标
-- **页面**: 包含 `pageId` 区分多页文档
+**状态转换**:
+
+```
+鼠标移动 ───────────────────────────────►
+    │                                      │
+    ▼                                      ▼
+mouseMoveThrottle (100ms)      mouseleave
+    │                                      │
+    ▼                                      ▼
+cursor: { x, y, pageId }      cursor: { x, y, pageId, hide: true }
+    │                                      │
+    └──────────────┬───────────────────────┘
+                   ▼
+          awareness.setLocalStateField()
+                   │
+                   ▼
+            远端用户接收
+                   │
+        ┌──────────┴──────────┐
+        ▼                       ▼
+    hide: false            hide: true
+    创建/更新光标            移除光标 DOM
+```
+
+**关键设计**:
+
+- **节流**: `mouseMoveThrottle` 默认 100ms，避免频繁更新
+- **坐标转换**: 屏幕坐标 → 画布坐标（考虑 scale/translate）
+- **页面隔离**: 包含 `pageId`，非当前页的光标不显示
+- **显隐状态**: `hide` 字段控制光标显隐，鼠标离开画布时自动隐藏
 
 ### 选区同步
 
-- **added**: 新选中的 cell id 列表
-- **removed**: 取消选中的 cell id 列表
-- **高亮**: 使用 `renderRemoteSelections()` 渲染
+```text
+本地选区变更
+    │
+    ▼
+selectionModel.addListener("change")
+    │
+    ▼
+awareness.setLocalStateField("selection", {
+  added: [...],    // 新增选中的 cell ids
+  removed: [...],  // 取消选中的 cell ids
+  pageId,          // 当前页 id
+})
+    │
+    ▼
+远端用户接收
+    │
+    ▼
+renderRemoteSelections()
+    │
+    ├─► added: graph.highlightCell(cell, userColor)
+    │
+    └─► removed: highlightCell.destroy()
+```
+
+**关键设计**:
+
+- **增量更新**: 只同步变更的选区（added/removed），而非全量
+- **页面隔离**: 只渲染当前页的远端选区
+- **自动清理**: 用户离开或切换页面时自动销毁高亮
 
 ## XML 转换
 
