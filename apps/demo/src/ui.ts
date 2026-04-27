@@ -86,7 +86,8 @@ export function updatePeerCount(elements: UIElements, count: number): void {
  */
 export function showLoading(elements: UIElements, message: string): void {
   elements.loadingOverlay.style.display = "flex";
-  elements.drawioContainer.style.display = "none";
+  elements.loadingOverlay.style.zIndex = "10";
+  elements.drawioContainer.style.removeProperty("display");
   elements.loadingText.textContent = message;
 }
 
@@ -95,7 +96,7 @@ export function showLoading(elements: UIElements, message: string): void {
  */
 export function showReady(elements: UIElements): void {
   elements.loadingOverlay.style.display = "none";
-  elements.drawioContainer.style.display = "block";
+  elements.drawioContainer.style.removeProperty("display");
 }
 
 /**

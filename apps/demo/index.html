@@ -6,30 +6,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>y-mxgraph Demo</title>
   <style>
-    /* 强制布局 - 优先于 grapheditor.css */
+    /* ── 页面骨架 ── */
     html,
     body {
-      height: 100% !important;
-      width: 100% !important;
-      overflow: hidden !important;
-      margin-top: 0;
-      position: relative;
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
     }
 
     body {
-      display: flex !important;
-      flex-direction: column !important;
+      display: flex;
+      flex-direction: column;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #ffffff;
       color: #333333;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    /* ── 顶部工具栏（仅作用于 #toolbar 内部） ── */
     #toolbar {
       display: flex;
       align-items: center;
@@ -39,6 +34,7 @@
       border-bottom: 1px solid #dee2e6;
       flex-shrink: 0;
       flex-wrap: wrap;
+      box-sizing: border-box;
     }
 
     #toolbar h1 {
@@ -46,6 +42,7 @@
       font-weight: 600;
       color: #2563eb;
       white-space: nowrap;
+      margin: 0;
     }
 
     .toolbar-group {
@@ -54,14 +51,14 @@
       gap: 8px;
     }
 
-    label {
+    #toolbar label {
       font-size: 12px;
       color: #6c757d;
       white-space: nowrap;
     }
 
-    select,
-    input[type="text"] {
+    #toolbar select,
+    #toolbar input[type="text"] {
       background: #ffffff;
       border: 1px solid #ced4da;
       color: #333333;
@@ -69,34 +66,30 @@
       padding: 4px 8px;
       font-size: 12px;
       outline: none;
+      box-sizing: border-box;
     }
 
-    select:focus,
-    input[type="text"]:focus {
+    #toolbar select:focus,
+    #toolbar input[type="text"]:focus {
       border-color: #2563eb;
     }
 
-    button {
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 5px 12px;
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background 0.2s;
+    #room-input {
+      width: 120px;
     }
 
-    button:hover {
-      background: #1d4ed8;
+    #custom-url-input {
+      width: 220px;
     }
 
-    button:disabled {
-      background: #adb5bd;
-      cursor: not-allowed;
+    .separator {
+      width: 1px;
+      height: 20px;
+      background: #dee2e6;
+      flex-shrink: 0;
     }
 
+    /* ── 状态栏 ── */
     #status-bar {
       display: flex;
       align-items: center;
@@ -107,6 +100,7 @@
       font-size: 11px;
       color: #6c757d;
       flex-shrink: 0;
+      box-sizing: border-box;
     }
 
     .status-dot {
@@ -116,6 +110,7 @@
       background: #adb5bd;
       display: inline-block;
       margin-right: 4px;
+      flex-shrink: 0;
     }
 
     .status-dot.connected {
@@ -139,24 +134,21 @@
       }
     }
 
-    #toolbar,
-    #status-bar {
-      flex-shrink: 0 !important;
-    }
-
+    /* ── draw.io 宿主区域 ── */
     #drawio-wrapper {
-      flex: 1 !important;
+      flex: 1;
       position: relative;
       overflow: hidden;
+      min-height: 0;
     }
 
+    /* draw.io 把自身 (geEditor) 挂在此容器内，作为 grid 容器 */
     #drawio-container {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      position: relative;
+      position: absolute;
+      inset: 0;
     }
 
+    /* ── 加载遮罩 ── */
     #loading-overlay {
       position: absolute;
       inset: 0;
@@ -166,7 +158,7 @@
       justify-content: center;
       background: #ffffff;
       gap: 16px;
-      z-index: 10;
+      z-index: 100;
     }
 
     .spinner {
@@ -187,338 +179,7 @@
     #loading-overlay p {
       font-size: 13px;
       color: #6c757d;
-    }
-
-    #room-input {
-      width: 120px;
-    }
-
-    #custom-url-input {
-      width: 220px;
-    }
-
-    .separator {
-      width: 1px;
-      height: 20px;
-      background: #dee2e6;
-    }
-  </style>
-  <style>
-    div.mxRubberband {
-      position: absolute;
-      overflow: hidden;
-      border-style: solid;
-      border-width: 1px;
-      border-color: #0000FF;
-      background: #0077FF;
-    }
-
-    .mxCellEditor {
-      background: url(data:image/gif;base64,R0lGODlhMAAwAIAAAP///wAAACH5BAEAAAAALAAAAAAwADAAAAIxhI+py+0Po5y02ouz3rz7D4biSJbmiabqyrbuC8fyTNf2jef6zvf+DwwKh8Si8egpAAA7);
-      border-color: transparent;
-      border-style: solid;
-      width: fit-content;
-      position: relative;
-      overflow: visible;
-      word-wrap: normal;
-      border-width: 0;
-      min-width: 1px;
-      display: block;
-      outline: none;
-      resize: none;
-      padding: 0px;
-      margin: 0px;
-    }
-
-    .mxPlainTextEditor * {
-      padding: 0px;
-      margin: 0px;
-    }
-
-    div.mxWindow {
-      -webkit-box-shadow: 3px 3px 12px #C0C0C0;
-      -moz-box-shadow: 3px 3px 12px #C0C0C0;
-      box-shadow: 3px 3px 12px #C0C0C0;
-      background: url(data:image/gif;base64,R0lGODlhGgAUAIAAAOzs7PDw8CH5BAAAAAAALAAAAAAaABQAAAIijI+py70Ao5y02lud3lzhD4ZUR5aPiKajyZbqq7YyB9dhAQA7);
-      border: 1px solid #c3c3c3;
-      position: absolute;
-      overflow: hidden;
-      z-index: 1;
-    }
-
-    table.mxWindow {
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-family: Arial;
-      font-size: 8pt;
-    }
-
-    td.mxWindowTitle {
-      background: url(data:image/gif;base64,R0lGODlhFwAXAMQAANfX18rKyuHh4c7OzsDAwMHBwc/Pz+Li4uTk5NHR0dvb2+jo6O/v79/f3/n5+dnZ2dbW1uPj44yMjNPT0+Dg4N3d3ebm5szMzAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAAAAAAALAAAAAAXABcAAAWQICESxWiW5Ck6bOu+MMvMdG3f86LvfO/rlqBwSCwaj8ikUohoOp/QaDNCrVqvWKpgezhsv+AwmEIum89ocmPNbrvf64p8Tq/b5Yq8fs/v5x+AgYKDhIAAh4iJiouHEI6PkJGSjhOVlpeYmZUJnJ2en6CcBqMDpaanqKgXq6ytrq+rAbKztLW2shK5uru8vbkhADs=) repeat-x;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-align: center;
-      font-weight: bold;
-      overflow: hidden;
-      height: 13px;
-      padding: 2px;
-      padding-top: 4px;
-      padding-bottom: 6px;
-      color: black;
-    }
-
-    td.mxWindowPane {
-      vertical-align: top;
-      padding: 0px;
-    }
-
-    div.mxWindowPane {
-      overflow: hidden;
-      position: relative;
-    }
-
-    img.mxToolbarItem {
-      margin-right: 6px;
-      margin-bottom: 6px;
-      border-width: 1px;
-    }
-
-    select.mxToolbarCombo {
-      vertical-align: top;
-      border-style: inset;
-      border-width: 2px;
-    }
-
-    div.mxToolbarComboContainer {
-      padding: 2px;
-    }
-
-    img.mxToolbarMode {
-      margin: 2px;
-      margin-right: 4px;
-      margin-bottom: 4px;
-      border-width: 0px;
-    }
-
-    img.mxToolbarModeSelected {
-      margin: 0px;
-      margin-right: 2px;
-      margin-bottom: 2px;
-      border-width: 2px;
-      border-style: inset;
-    }
-
-    div.mxTooltip {
-      -webkit-box-shadow: 3px 3px 12px #C0C0C0;
-      -moz-box-shadow: 3px 3px 12px #C0C0C0;
-      box-shadow: 3px 3px 12px #C0C0C0;
-      background: #FFFFCC;
-      border-style: solid;
-      border-width: 1px;
-      border-color: black;
-      font-family: Arial;
-      font-size: 8pt;
-      position: absolute;
-      cursor: default;
-      padding: 4px;
-      color: black;
-    }
-
-    div.mxPopupMenu {
-      -webkit-box-shadow: 3px 3px 12px #C0C0C0;
-      -moz-box-shadow: 3px 3px 12px #C0C0C0;
-      box-shadow: 3px 3px 12px #C0C0C0;
-      background: url(data:image/gif;base64,R0lGODlhGgAUAIAAAOzs7PDw8CH5BAAAAAAALAAAAAAaABQAAAIijI+py70Ao5y02lud3lzhD4ZUR5aPiKajyZbqq7YyB9dhAQA7);
-      position: absolute;
-      border-style: solid;
-      border-width: 1px;
-      border-color: black;
-    }
-
-    table.mxPopupMenu {
-      border-collapse: collapse;
-      margin-top: 1px;
-      margin-bottom: 1px;
-    }
-
-    tr.mxPopupMenuItem {
-      color: black;
-      cursor: pointer;
-    }
-
-    tr.mxPopupMenuItemHover {
-      background-color: #000066;
-      color: #FFFFFF;
-      cursor: pointer;
-    }
-
-    td.mxPopupMenuItem {
-      padding: 2px 30px 2px 10px;
-      white-space: nowrap;
-      font-family: Arial;
-      font-size: 8pt;
-    }
-
-    td.mxPopupMenuIcon {
-      background-color: #D0D0D0;
-      padding: 2px 4px 2px 4px;
-    }
-
-    .mxDisabled {
-      opacity: 0.3 !important;
-      cursor: default !important;
-    }
-  </style>
-  <style>
-    .geBlock {
-      z-index: -3;
-      margin: 100px;
-      margin-top: 40px;
-      margin-bottom: 30px;
-      padding: 20px;
-      text-align: center;
-      min-width: 50%;
-    }
-
-    .geBlock h1,
-    .geBlock h2 {
-      margin-top: 0px;
-      padding-top: 0px;
-    }
-  </style>
-  <style>
-    :root {
-      --ge-panel-color: #ffffff;
-      --border-color: #000000;
-      --text-color: #000000;
-      --toolbar-color: #ffffff;
-      --primary-color: #ffffff;
-      --dark-text-color: #ffffff;
-      --ge-dark-panel-color: #121212;
-      --dark-toolbar-color: #121212;
-    }
-
-    .geSidebar *:not(svg *, .mxDisabled, [disabled]),
-    .geToolbar *:not(svg *, .mxDisabled, [disabled]) {
-      opacity: 1 !important;
-    }
-
-    *:not(svg *, .mxDisabled, [disabled], .spinner *, .geBackground, .geDragPreview, .geButton) {
-      border-color: light-dark(#000000, #FFFFFF) !important;
-    }
-
-    button,
-    .geBtn,
-    *::-webkit-scrollbar-thumb {
-      border-color: light-dark(#000000, #FFFFFF) !important;
-      color: light-dark(#000000, #FFFFFF) !important;
-    }
-
-    button,
-    .geBtn {
-      border-style: solid !important;
-      border-width: 1px !important;
-    }
-
-    .geSimple .geDiagramContainer {
-      border-top-style: none !important;
-      border-bottom-style: none !important;
-    }
-
-    button:not(:hover),
-    .geBtn:not(:hover) {
-      background-color: transparent !important;
-    }
-
-    .gePrimaryBtn {
-      border-width: 3px !important;
-    }
-
-    .geActivePage,
-    .geActiveFormatTitle {
-      text-decoration: underline;
-    }
-
-    .geActivePage {
-      background-color: light-dark(#ffffff, #000000) !important;
-      color: inherit !important;
-      filter: invert(1);
-    }
-
-    .geBigButton>img:not(.geDarkMode *) {
-      filter: invert(1);
-    }
-
-    .geEditor,
-    .geTitle,
-    .geFormatTitle {
-      font-size: 15px;
-    }
-
-    .geTab,
-    .geFormatContainer,
-    .geSearchSidebar input,
-    .geSpinnerStatus {
-      font-size: 14px !important;
-      line-height: 14px !important;
-    }
-
-    .geEditor div.mxTooltip {
-      font-size: 12px;
-    }
-
-    .geHint {
-      font-size: 11pt;
-    }
-
-    /* Dialogs: restore solid backgrounds and visible borders */
-    .geDialog {
-      background-color: light-dark(#ffffff, var(--ge-dark-panel-color)) !important;
-      border: 1px solid light-dark(#000000, #FFFFFF) !important;
-      box-shadow: none !important;
-    }
-
-    html body.geDarkMode .geDialog,
-    html body.geDarkMode div.mxWindow,
-    html body div.mxWindow.geDarkMode {
-      background-color: var(--ge-dark-panel-color) !important;
-      border-color: #FFFFFF !important;
-      box-shadow: none !important;
-    }
-
-    .geDialog,
-    html div.mxWindow {
-      box-shadow: none !important;
-    }
-
-    /* Dialog overlay: solid opaque background */
-    .geBackground {
-      background-color: light-dark(#ffffff, #000000) !important;
-      opacity: 0.9 !important;
-      backdrop-filter: none !important;
-    }
-
-    /* Dialog close button: full opacity for visibility */
-    .geDialog>.geButton {
-      opacity: 1 !important;
-    }
-
-    /* Dialog title and footer: solid visible borders */
-    .geDialogTitle {
-      border-bottom: 1px solid light-dark(#000000, #FFFFFF) !important;
-    }
-
-    .geDialogFooter {
-      border-top: 1px solid light-dark(#000000, #FFFFFF) !important;
-    }
-
-    /* Input fields: solid visible borders */
-    .geDialog input[type="text"],
-    .geDialog input[type="number"],
-    .geDialog textarea,
-    .geDialog select {
-      border: 1px solid light-dark(#000000, #FFFFFF) !important;
-      background-color: light-dark(#ffffff, #000000) !important;
+      margin: 0;
     }
   </style>
 </head>

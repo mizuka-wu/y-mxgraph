@@ -84,24 +84,12 @@ export function bindDrawioFile(
     // 使用 App.main 双回调模式
     App.main(
       (ui: any) => {
-        if (!ui.diagramContainer) {
-          ui.createUi();
-        }
+        // 强制重新布局（容器尺寸可能在构建时不正确）
+        ui.refresh();
+        window.dispatchEvent(new Event("resize"));
+
         const app = ui;
         const file = app.currentFile;
-
-        // 手动初始化画布（如果需要）
-        if (!ui.editor.graph.container) {
-          ui.editor.graph.init(ui.diagramContainer);
-        }
-
-        // 确保画布正确初始化
-        if (!ui.editor.graph.container) {
-          ui.editor.graph.init(ui.diagramContainer);
-        }
-
-        // 强制尺寸更新
-        ui.editor.graph.sizeDidChange();
 
         if (file) {
           doBind(app, file);
@@ -116,7 +104,7 @@ export function bindDrawioFile(
         const Editor = (window as any).Editor;
         const container = document.getElementById("drawio-container")!;
 
-        // 手动添加必需的 CSS 类
+        // draw.io EditorUi 需要容器带 geEditor class 才能触发绝对定位布局
         if (!container.classList.contains("geEditor")) {
           container.classList.add("geEditor");
         }
