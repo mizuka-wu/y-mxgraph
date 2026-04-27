@@ -21,6 +21,7 @@ export default defineConfig({
               text: "指南",
               items: [
                 { text: "快速开始", link: "/guide/getting-started" },
+                { text: "使用 Provider", link: "/guide/providers" },
                 { text: "实现原理", link: "/guide/architecture" },
                 { text: "与原版差异", link: "/guide/implementation-diff" },
               ],
@@ -58,6 +59,7 @@ export default defineConfig({
               text: "Guide",
               items: [
                 { text: "Getting Started", link: "/en/guide/getting-started" },
+                { text: "Using Providers", link: "/en/guide/providers" },
                 { text: "Architecture", link: "/en/guide/architecture" },
                 {
                   text: "Migration Guide",

@@ -24,32 +24,12 @@ App.main((app) => {
 });
 ```
 
-## With y-webrtc for Multi-user Collaboration
+## Multi-user Collaboration
 
-```ts
-import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
-import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
+`y-mxgraph` does not handle network transport itself — real-time collaboration requires pairing it with a **Yjs Provider**.  
+Yjs offers a variety of providers (WebSocket, WebRTC, IndexedDB, etc.) that you can choose based on your needs.
 
-const doc = new Y.Doc();
-const provider = new WebrtcProvider('my-room', doc, {
-  signaling: ['wss://signaling.yjs.dev'],
-});
-
-App.main((app) => {
-  const file = app.currentFile;
-
-  const undoManager = new Y.UndoManager(doc, {
-    trackedOrigins: new Set([LOCAL_ORIGIN]),
-  });
-
-  const binding = new Binding(file, {
-    doc,
-    awareness: provider.awareness,
-    undoManager,
-  });
-});
-```
+➡️ See [Using Yjs Providers](./providers) for an overview of common providers and a complete y-websocket example.
 
 ## Destroying the Binding
 

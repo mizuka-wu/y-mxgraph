@@ -24,32 +24,12 @@ App.main((app) => {
 });
 ```
 
-## 配合 y-webrtc 实现多端协作
+## 多端协作
 
-```ts
-import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
-import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
+`y-mxgraph` 本身不处理网络传输，需要搭配 **Yjs Provider** 实现多端实时协作。  
+Yjs 提供了多种 Provider（WebSocket、WebRTC、IndexedDB 等），你可以根据场景自由选择。
 
-const doc = new Y.Doc();
-const provider = new WebrtcProvider('my-room', doc, {
-  signaling: ['wss://signaling.yjs.dev'],
-});
-
-App.main((app) => {
-  const file = app.currentFile;
-
-  const undoManager = new Y.UndoManager(doc, {
-    trackedOrigins: new Set([LOCAL_ORIGIN]),
-  });
-
-  const binding = new Binding(file, {
-    doc,
-    awareness: provider.awareness,
-    undoManager,
-  });
-});
-```
+➡️ 查看 [使用 Yjs Provider](./providers) 了解常用 Provider 介绍及 y-websocket 完整示例。
 
 ## 销毁绑定
 
