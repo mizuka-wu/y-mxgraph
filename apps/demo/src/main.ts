@@ -1,9 +1,8 @@
 import { DRAWIO_VERSIONS, DEFAULT_ROOM } from "./config.js";
-import { loadDrawioScript, isDrawioLoaded } from "./drawio-loader.js";
+import { loadDrawioScript } from "./drawio-loader.js";
 import {
   createCollaboration,
   bindDrawioFile,
-  disconnectCollaboration,
   type CollabState,
 } from "./collaboration.js";
 import {
@@ -13,15 +12,12 @@ import {
   updatePeerCount,
   showLoading,
   showReady,
-  showConnecting,
-  showDisconnected,
   toggleCustomUrl,
   restoreRoomFromURL,
 } from "./ui.js";
 
 // === 状态 ===
 let collabState: CollabState = { provider: null, doc: null, binding: null };
-let drawioLoaded = false;
 
 // === UI 元素 ===
 const ui = getUIElements();
@@ -45,43 +41,6 @@ ui.versionSelect.addEventListener("change", () => {
   }
 });
 
-ui.connectBtn.addEventListener("click", async () => {
-  if (!drawioLoaded || !isDrawioLoaded()) {
-    alert("请等待 draw.io 加载完成");
-    return;
-  }
-
-  const roomName = ui.roomInput.value.trim() || DEFAULT_ROOM;
-
-  updateCollabStatus(ui, "loading", "连接中...");
-  showConnecting(ui);
-
-  // 创建协作连接
-  collabState = createCollaboration(roomName, {
-    onPeerCountChange: (count) => updatePeerCount(ui, count),
-    onStatusChange: (status, text) => updateCollabStatus(ui, status, text),
-  });
-
-  // 绑定 draw.io
-  const cancelBind = bindDrawioFile(
-    collabState.doc!,
-    collabState.provider!,
-    (binding) => {
-      collabState.binding = binding;
-    },
-  );
-
-  // 保存取消绑定函数用于清理
-  (collabState as any).cancelBind = cancelBind;
-});
-
-ui.disconnectBtn.addEventListener("click", () => {
-  disconnectCollaboration(collabState);
-  collabState = { provider: null, doc: null, binding: null };
-  showDisconnected(ui);
-  updateCollabStatus(ui, "disconnected", "未连接");
-});
-
 // === 初始化 ===
 async function init() {
   // 从 URL 恢复房间
@@ -101,9 +60,10 @@ async function init() {
     await loadDrawioScript(version, {
       onLoading: () => updateDrawioStatus(ui, "loading", "加载中..."),
       onReady: (v) => {
-        drawioLoaded = true;
         showReady(ui);
         updateDrawioStatus(ui, "ready", `已加载 (${v})`);
+        // 加载完成后自动连接
+        connectCollaboration();
       },
       onError: (msg) => {
         updateDrawioStatus(ui, "error", "加载失败");
@@ -113,6 +73,26 @@ async function init() {
   } catch (e) {
     console.error("[drawio] 加载失败:", e);
   }
+}
+
+/**
+ * 连接协作
+ */
+function connectCollaboration() {
+  const roomName = ui.roomInput.value.trim() || DEFAULT_ROOM;
+
+  updateCollabStatus(ui, "loading", "连接中...");
+
+  // 创建协作连接
+  collabState = createCollaboration(roomName, {
+    onPeerCountChange: (count) => updatePeerCount(ui, count),
+    onStatusChange: (status, text) => updateCollabStatus(ui, status, text),
+  });
+
+  // 绑定 draw.io
+  bindDrawioFile(collabState.doc!, collabState.provider!, (binding) => {
+    collabState.binding = binding;
+  });
 }
 
 window.addEventListener("DOMContentLoaded", init);
