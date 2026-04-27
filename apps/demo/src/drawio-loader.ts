@@ -21,17 +21,6 @@ function getCdnBaseUrl(version: string): string {
 }
 
 /**
- * 获取 math 路径（29+ 用 math4，旧版本用 math）
- */
-function getMathPath(version: string): string {
-  if (version === "latest") {
-    return "math4/es5";
-  }
-  const major = parseInt(version.split(".")[0], 10);
-  return major >= 29 ? "math4/es5" : "math/es5";
-}
-
-/**
  * 加载 draw.io 脚本
  */
 export function loadDrawioScript(
@@ -60,7 +49,6 @@ export function loadDrawioScript(
     const cdnBase = getCdnBaseUrl(version);
     (window as any).mxLoadStylesheets = false;
     (window as any).DRAWIO_BASE_URL = cdnBase;
-    (window as any).DRAW_MATH_URL = getMathPath(version);
     (window as any).drawDevUrl = cdnBase;
     (window as any).mxDevUrl = cdnBase;
     (window as any).STENCIL_PATH =
@@ -69,11 +57,12 @@ export function loadDrawioScript(
       `https://cdn.jsdelivr.net/gh/jgraph/drawio/src/main/webapp/shapes`;
     (window as any).mxBasePath = `${cdnBase}mxgraph`;
     (window as any).PLUGINS_BASE_PATH = cdnBase;
-    (window as any).DRAW_MATH_URL = `${cdnBase}${getMathPath(version)}`;
+    (window as any).DRAW_MATH_URL = null;
 
     // 开发模式
     (window as any).urlParams = (window as any).urlParams || {};
     (window as any).urlParams["dev"] = "1";
+    (window as any).urlParams["math"] = "0";
 
     // 设置 demo 文件 hash（让 draw.io 自动加载）
     window.location.hash = "#R" + encodeURIComponent(DEMO_FILE);

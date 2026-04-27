@@ -61,24 +61,13 @@ export function bindDrawioFile(
 
   const tryBind = () => {
     const App = (window as any).App;
-    const Editor = (window as any).Editor;
-    if (!App || !Editor) {
+    if (!App) {
       setTimeout(tryBind, 500);
       return;
     }
 
-    // 手动创建 Editor 和 App
-    const container = document.getElementById("drawio-container");
-    if (!container) {
-      setTimeout(tryBind, 500);
-      return;
-    }
-
-    const editor = new Editor(false, null, null, null, true);
-    const app = new App(editor, container);
-
-    const doBind = (f: any) => {
-      const binding = new Binding(f, {
+    const doBind = (app: any, file: any) => {
+      const binding = new Binding(file, {
         doc,
         awareness: provider.awareness,
         undoManager,
@@ -92,14 +81,27 @@ export function bindDrawioFile(
       onBind(binding);
     };
 
-    const file = app.currentFile;
-    if (file) {
-      doBind(file);
-    } else {
-      editor.addListener("fileLoaded", () => {
-        doBind(app.currentFile);
-      });
-    }
+    // 使用 App.main 双回调模式
+    App.main(
+      (ui: any) => {
+        const app = ui;
+        const file = app.currentFile;
+        if (file) {
+          doBind(app, file);
+        } else {
+          app.editor.addListener("fileLoaded", () => {
+            doBind(app, app.currentFile);
+          });
+        }
+      },
+      () => {
+        // 自定义 UI 创建函数
+        const Editor = (window as any).Editor;
+        const container = document.getElementById("drawio-container");
+        const editor = new Editor(false, null, null, null, true);
+        return new App(editor, container);
+      },
+    );
   };
 
   // 延迟执行以确保 App 完全初始化
