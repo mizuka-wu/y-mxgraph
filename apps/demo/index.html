@@ -6,20 +6,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>y-mxgraph Demo</title>
   <style>
+    /* 强制布局 - 优先于 grapheditor.css */
+    html,
+    body {
+      height: 100% !important;
+      width: 100% !important;
+      overflow: hidden !important;
+    }
+
+    body {
+      display: flex !important;
+      flex-direction: column !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #ffffff;
+      color: #333333;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #ffffff;
-      color: #333333;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
     }
 
     #toolbar {
@@ -131,8 +137,13 @@
       }
     }
 
+    #toolbar,
+    #status-bar {
+      flex-shrink: 0 !important;
+    }
+
     #drawio-wrapper {
-      flex: 1;
+      flex: 1 !important;
       position: relative;
       overflow: hidden;
     }
@@ -191,7 +202,7 @@
   </style>
 </head>
 
-<body>
+<body class="geEditor geClassic">
   <div id="toolbar">
     <h1>y-mxgraph Demo</h1>
     <div class="separator"></div>
@@ -236,7 +247,23 @@
       <div class="spinner"></div>
       <p>正在加载 draw.io...</p>
     </div>
-    <div id="drawio-container"></div>
+    <div id="drawio-container">
+      <div id="geInfo">
+        <div class="geBlock">
+          <h1>Flowchart Maker and Online Diagram Software</h1>
+          <p>
+            draw.io is free online diagram software. You can use it as a flowchart maker, network diagram software, to
+            create UML online, as an ER diagram tool,
+            to design database schema, to build BPMN online, as a circuit diagram maker, and more. draw.io can import
+            .vsdx, Gliffy&trade; and Lucidchart&trade; files .
+          </p>
+          <h2 id="geStatus">Loading... <img src="images/spin.gif" /></h2>
+          <p>
+            Please ensure JavaScript is enabled.
+          </p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.ts"></script>
