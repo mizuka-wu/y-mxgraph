@@ -56,9 +56,30 @@ async function init() {
   // 加载 draw.io
   showLoading(ui, "正在加载 draw.io...");
 
+  const setStep = (step: "preconfig" | "app" | "init") => {
+    const order = ["preconfig", "app", "init"] as const;
+    const idx = order.indexOf(step);
+    order.forEach((s, i) => {
+      const el = document.getElementById(`step-${s}`);
+      if (!el) return;
+      const icon = el.querySelector(".step-icon")!;
+      el.classList.remove("active", "done");
+      if (i < idx) {
+        el.classList.add("done");
+        icon.textContent = "✓";
+      } else if (i === idx) {
+        el.classList.add("active");
+        icon.textContent = "◉";
+      } else {
+        icon.textContent = "○";
+      }
+    });
+  };
+
   try {
     await loadDrawioScript(version, {
       onLoading: () => updateDrawioStatus(ui, "loading", "加载中..."),
+      onProgress: setStep,
       onReady: (v) => {
         showReady(ui);
         updateDrawioStatus(ui, "ready", `已加载 (${v})`);

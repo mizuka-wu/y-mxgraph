@@ -27,6 +27,7 @@ export function loadDrawioScript(
   version: string,
   callbacks: {
     onLoading: () => void;
+    onProgress: (step: "preconfig" | "app" | "init") => void;
     onReady: (version: string) => void;
     onError: (message: string) => void;
   },
@@ -120,11 +121,15 @@ export function loadDrawioScript(
     const preConfig = document.createElement("script");
     preConfig.src = preConfigUrl;
 
+    callbacks.onProgress("preconfig");
+
     preConfig.onload = () => {
+      callbacks.onProgress("app");
       const script = document.createElement("script");
       script.src = url;
 
       script.onload = () => {
+        callbacks.onProgress("init");
         setTimeout(() => {
           callbacks.onReady(version);
           resolve();
@@ -140,11 +145,12 @@ export function loadDrawioScript(
     };
 
     preConfig.onerror = () => {
-      callbacks.onError("PreConfig 加载失败，尝试直接加载 app.min.js");
+      callbacks.onProgress("app");
       const script = document.createElement("script");
       script.src = url;
 
       script.onload = () => {
+        callbacks.onProgress("init");
         setTimeout(() => {
           callbacks.onReady(version);
           resolve();
