@@ -28,6 +28,8 @@ jobs:
       - run: pnpm --filter y-mxgraph build
 
       - name: Publish to npm
-        run: pnpm --filter y-mxgraph publish --no-git-checks --access public
+        run: |
+          cd packages/y-mxgraph/dist
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
