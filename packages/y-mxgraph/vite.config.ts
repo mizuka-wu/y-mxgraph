@@ -7,9 +7,14 @@ import type { Plugin } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// 读取根目录 package.json 的版本号
+const rootPkg = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
+);
+
 const pkg = {
   name: "y-mxgraph",
-  version: "0.1.0",
+  version: rootPkg.version,
   description: "Yjs binding for draw.io (mxGraph) documents",
   type: "module",
   main: "./y-mxgraph.cjs.js",
