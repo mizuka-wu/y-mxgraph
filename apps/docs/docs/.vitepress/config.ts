@@ -12,7 +12,7 @@ export default defineConfig({
         nav: [
           { text: "指南", link: "/guide/getting-started" },
           { text: "API", link: "/api/" },
-          { text: "Demo", link: "/y-mxgraph/demo/", target: "_blank" },
+          { text: "Demo", link: "/demo/", target: "_blank" },
           { text: "GitHub", link: "https://github.com/mizuka-wu/y-mxgraph" },
         ],
         sidebar: {
