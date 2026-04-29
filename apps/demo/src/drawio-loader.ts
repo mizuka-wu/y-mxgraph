@@ -73,6 +73,13 @@ export function loadDrawioScript(
     // 设置 demo 文件 hash（让 draw.io 自动加载）
     window.location.hash = "#R" + encodeURIComponent(DEMO_FILE);
 
+    // mxLoadStylesheets=false 时 mxClient 不会自动加载 common.css，需手动引入
+    const commonCss = document.createElement("link");
+    commonCss.rel = "stylesheet";
+    commonCss.type = "text/css";
+    commonCss.href = `${cdnBase}mxgraph/css/common.css`;
+    document.head.appendChild(commonCss);
+
     // 加载 grapheditor.css
     const cssLink = document.createElement("link");
     cssLink.rel = "stylesheet";
