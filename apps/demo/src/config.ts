@@ -28,8 +28,8 @@ export const DEFAULT_ROOM = "y-mxgraph-demo";
  * 默认示例文件内容
  */
 export const DEMO_FILE = `<mxfile pages="1">
-  <diagram name="Page-1" id="DEMOabHTdChjKBf1yHdD">
-    <mxGraphModel dx="506" dy="689" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+  <diagram id="demo">
+    <mxGraphModel>
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
