@@ -42,7 +42,7 @@ src/
 - `DRAWIO_VERSIONS` — 版本名 → `app.min.js` CDN URL 的映射表
 - `SIGNALING_SERVERS` — WebRTC 信令服务器列表（空数组时使用 y-webrtc 默认服务器）
 - `DEFAULT_ROOM` — 默认协作房间名
-- `DEMO_FILE` — 初始示例图形的 XML 内容
+- `Binding.generateFileTemplate()` — 通过 `y-mxgraph` 生成标准化初始模板（取代硬编码 XML）
 
 ### `drawio-loader.ts`
 

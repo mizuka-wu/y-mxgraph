@@ -37,6 +37,36 @@ interface BindDrawioFileOptions {
 
 The bound Y.Doc instance. Read-only.
 
+## Static Methods
+
+### `Binding.generateFileTemplate(diagramId?: string): string`
+
+Generates a standardized mxfile XML template to ensure consistent collaboration starting data across all clients.
+
+**Parameters**:
+
+- `diagramId` — fixed diagram id, defaults to `"diagram-0"`
+
+**Returns**: A minimal mxfile XML string
+
+**Why this is needed**:
+
+When draw.io creates a new diagram, it generates a random id (e.g., `DEMOabHTdChjKBf1yHdD`). If each client initializes with a different diagram id, the Y.Doc data cannot align with the local `file.data`, causing late-joining clients to see "orphan pages" and patch diffs to fail matching diagram/cell ids, breaking collaboration.
+
+The consumer should use this method to generate a unified starting XML before initializing the draw.io file, then inject it into `currentFile.data` (see "Integration Notes" for details).
+
+**Example**:
+
+```ts
+import { Binding } from 'y-mxgraph';
+
+// Use default id "diagram-0"
+const template = Binding.generateFileTemplate();
+
+// Or specify a fixed id (e.g., bound to room/project)
+const template = Binding.generateFileTemplate("room-123-main");
+```
+
 ## Instance Methods
 
 ### `destroy(deep?: boolean): void`

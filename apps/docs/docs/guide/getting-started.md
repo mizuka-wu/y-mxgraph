@@ -60,6 +60,8 @@ onUnmounted(() => {
 
 **y-mxgraph 目前不会自动清除孤立 page**，这是一个已知风险点。请务必确保初始化 XML 使用固定、稳定的 diagram id。
 
+`Binding.generateFileTemplate(diagramId)` 提供了标准化的最小化模板，所有客户端使用相同的 diagram id，即可避免此问题。
+
 #### ❌ 错误示例
 
 ```ts
@@ -74,13 +76,61 @@ const xml = `<mxfile>
 #### ✅ 正确示例
 
 ```ts
-// 使用固定 id，与房间/项目绑定，保证所有客户端一致
-const xml = `<mxfile>
-  <diagram name="Page-1" id="page-main">
-    ...
-  </diagram>
-</mxfile>`;
+import { Binding } from 'y-mxgraph';
+
+// 使用 generateFileTemplate 生成统一起点的 XML
+const xml = Binding.generateFileTemplate("room-123-main");
 ```
+
+### 如何在 draw.io 中设置默认文件
+
+协同开始前，需要确保 **所有客户端的 `currentFile.data` 是同一套 XML**。根据 draw.io 的 API 和初始化时机，常见做法有两种：
+
+#### 方式一：通过 `#R` hash 参数（推荐，最简单）
+
+draw.io 支持通过 URL hash 的 `#R` 前缀直接加载 raw XML。在 draw.io 脚本加载前设置：
+
+```ts
+const xml = Binding.generateFileTemplate("my-diagram");
+window.location.hash = "#R" + encodeURIComponent(xml);
+```
+
+draw.io 初始化时会自动解析 hash，创建 `currentFile` 并填充 `file.data`。后续 `App.main` 回调中拿到的 `app.currentFile` 已经带有统一的数据起点。
+
+**注意**：如果 URL 已有其他 hash 参数（如 OAuth callback），需避免冲突，建议在用 `#R` 之前清理 hash。
+
+#### 方式二：在 `App.main` 回调中手动替换 `file.data`
+
+如果 draw.io 已经通过其他方式完成初始化（例如用户手动打开了默认文件），可在 `App.main` 回调中覆盖 `file.data`：
+
+```ts
+const xml = Binding.generateFileTemplate("my-diagram");
+
+App.main(
+  (ui) => {
+    const file = ui.currentFile;
+
+    if (file && file.data !== xml) {
+      // 替换 file.data 为统一起点
+      file.data = xml;
+      // 触发重新加载页面以应用新 XML
+      file.ui.editor.setModified(true);
+      file.ui.editor.fileLoaded(file);
+    }
+
+    const binding = new Binding(file, { doc });
+  },
+  // UI 工厂函数（如有需要）
+);
+```
+
+**关键点**：
+
+- `file.data` 必须在 `new Binding()` 之前完成替换
+- 替换后需要通知 draw.io 重新解析页面（通过 `fileLoaded` 事件或刷新编辑器）
+- 如果 `currentFile` 尚未创建，可通过监听 `editor` 的 `fileLoaded` 事件等待时机
+
+两种方式的核心目标一致：**确保所有客户端首次 `new Binding(file, { doc })` 时，`file.data` 的 diagram id 完全相同**。
 
 ---
 

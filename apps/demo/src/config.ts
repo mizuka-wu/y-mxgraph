@@ -23,17 +23,3 @@ export const SIGNALING_SERVERS = [];
  * 默认房间名称
  */
 export const DEFAULT_ROOM = "y-mxgraph-demo";
-
-/**
- * 默认示例文件内容
- */
-export const DEMO_FILE = `<mxfile pages="1">
-  <diagram id="demo">
-    <mxGraphModel>
-      <root>
-        <mxCell id="0" />
-        <mxCell id="1" parent="0" />
-      </root>
-    </mxGraphModel>
-  </diagram>
-</mxfile>`;

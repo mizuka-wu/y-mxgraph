@@ -141,6 +141,34 @@ export class Binding {
   }
 
   /**
+   * 生成标准化的 mxfile XML 模板，用于确保多端协同的数据起点一致。
+   *
+   * draw.io 每次新建 diagram 时默认生成随机 id（如 `DEMOabHTdChjKBf1yHdD`）。
+   * 如果各客户端初始化时的 diagram id 不同，Y.Doc 中的数据与本地 file.data 无法对齐，
+   * 会导致：
+   * - 后进房间的客户端出现「孤立 page」（来自本地 XML，未写入 Y.Doc）
+   * - patch 的 diff 无法正确匹配 diagram/cell id，协同失效
+   *
+   * 因此业务方应在初始化 draw.io 文件时，先用此方法生成统一起点的 XML，
+   * 再注入到 draw.io 的 currentFile 中（详见文档「接入注意事项」）。
+   *
+   * @param diagramId - diagram 的固定 id，默认 `diagram-0`
+   * @returns 最小化的 mxfile XML 字符串
+   */
+  static generateFileTemplate(diagramId = "diagram-0"): string {
+    return `<mxfile pages="1">
+  <diagram id="${diagramId}">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>`;
+  }
+
+  /**
    * 静态工厂方法，创建 Binding 实例
    * 与 `new Binding()` 等价
    */

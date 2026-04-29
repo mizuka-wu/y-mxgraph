@@ -37,6 +37,36 @@ interface BindDrawioFileOptions {
 
 绑定的 Y.Doc 实例，只读。
 
+## 静态方法
+
+### `Binding.generateFileTemplate(diagramId?: string): string`
+
+生成标准化的 mxfile XML 模板，用于确保多端协同的数据起点一致。
+
+**参数**:
+
+- `diagramId` — diagram 的固定 id，默认 `"diagram-0"`
+
+**返回值**: 最小化的 mxfile XML 字符串
+
+**为什么需要这个方法**:
+
+draw.io 新建 diagram 时默认生成随机 id（如 `DEMOabHTdChjKBf1yHdD`）。如果各客户端初始化时的 diagram id 不同，Y.Doc 中的数据与本地 `file.data` 无法对齐，会导致后进房间的客户端出现「孤立 page」，patch diff 也无法正确匹配 diagram/cell id，协同失效。
+
+业务方应在初始化 draw.io 文件时，先用此方法生成统一起点的 XML，再注入到 draw.io 的 `currentFile.data` 中（详见「接入注意事项」）。
+
+**示例**:
+
+```ts
+import { Binding } from 'y-mxgraph';
+
+// 使用默认 id "diagram-0"
+const template = Binding.generateFileTemplate();
+
+// 或指定固定 id（如与房间/项目绑定）
+const template = Binding.generateFileTemplate("room-123-main");
+```
+
 ## 实例方法
 
 ### `destroy(deep?: boolean): void`
