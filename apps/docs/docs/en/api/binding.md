@@ -90,7 +90,7 @@ Destroys the binding and removes all listeners.
 
 ```ts
 import * as Y from 'yjs';
-import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
+import { Binding } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 

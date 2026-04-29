@@ -90,13 +90,13 @@ const template = Binding.generateFileTemplate("room-123-main");
 
 ```ts
 import * as Y from 'yjs';
-import { bindDrawioFile, LOCAL_ORIGIN } from 'y-mxgraph';
+import { Binding } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 
 App.main((app) => {
-  const binding = bindDrawioFile(app.currentFile, { doc });
-  
+  const binding = new Binding(app.currentFile, { doc });
+
   // 卸载时清理
   window.addEventListener('beforeunload', () => {
     binding.destroy();

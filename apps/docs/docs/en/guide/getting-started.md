@@ -113,9 +113,9 @@ App.main(
     if (file && file.data !== xml) {
       // Replace file.data with the unified starting XML
       file.data = xml;
-      // Trigger a page reload so draw.io parses the new XML
-      file.ui.editor.setModified(true);
-      file.ui.editor.fileLoaded(file);
+      // Notify draw.io to re-parse the pages (exact API depends on your draw.io version)
+      // e.g. file.ui.setCurrentFile(file) or file.ui.editor.setModified(true)
+      file.ui.setCurrentFile(file);
     }
 
     const binding = new Binding(file, { doc });
@@ -127,7 +127,7 @@ App.main(
 **Key points**:
 
 - `file.data` must be replaced **before** `new Binding(file, { doc })`
-- After replacement, notify draw.io to re-parse the pages (via `fileLoaded` event or editor refresh)
+- After replacement, notify draw.io to re-parse the pages (exact method depends on your draw.io version API)
 - If `currentFile` does not exist yet, wait for the `editor`'s `fileLoaded` event
 
 Both approaches share the same goal: **ensure that when each client calls `new Binding(file, { doc })` for the first time, `file.data` contains the exact same diagram `id`**.

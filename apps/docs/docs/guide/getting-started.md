@@ -113,9 +113,9 @@ App.main(
     if (file && file.data !== xml) {
       // 替换 file.data 为统一起点
       file.data = xml;
-      // 触发重新加载页面以应用新 XML
-      file.ui.editor.setModified(true);
-      file.ui.editor.fileLoaded(file);
+      // 通知 draw.io 重新解析页面（具体 API 以您使用的 draw.io 版本为准）
+      // e.g. file.ui.setCurrentFile(file) 或 file.ui.editor.setModified(true)
+      file.ui.setCurrentFile(file);
     }
 
     const binding = new Binding(file, { doc });
@@ -127,7 +127,7 @@ App.main(
 **关键点**：
 
 - `file.data` 必须在 `new Binding()` 之前完成替换
-- 替换后需要通知 draw.io 重新解析页面（通过 `fileLoaded` 事件或刷新编辑器）
+- 替换后需要通知 draw.io 重新解析页面（具体方法以你使用的 draw.io 版本 API 为准）
 - 如果 `currentFile` 尚未创建，可通过监听 `editor` 的 `fileLoaded` 事件等待时机
 
 两种方式的核心目标一致：**确保所有客户端首次 `new Binding(file, { doc })` 时，`file.data` 的 diagram id 完全相同**。
