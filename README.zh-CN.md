@@ -29,6 +29,12 @@ import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
 const doc = new Y.Doc();
 
 App.main((app) => {
+  // 必须保证多端初始文件一致；draw.io 默认新建 diagram 时 id 是随机的，
+  // 若各客户端起点不同会导致协同异常。可用 generateFileTemplate 生成统一模板。
+  if (!app.currentFile.data) {
+    app.currentFile.data = Binding.generateFileTemplate('diagram-0');
+  }
+
   const binding = new Binding(app.currentFile, { doc });
 
   window.addEventListener('beforeunload', () => binding.destroy());
