@@ -29,8 +29,8 @@ import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
 const doc = new Y.Doc();
 
 App.main((app) => {
-  // 确保多端初始文件一致；draw.io 默认创建时 diagram id 是随机的，
-  // 若各客户端起点不同会导致协同异常。可用 generateFileTemplate 生成统一模板。
+  // Ensure consistent initial files across clients. draw.io generates random diagram ids by default,
+  // which can cause sync issues if clients start from different states. Use generateFileTemplate to create a unified template.
   if (!app.currentFile.data) {
     app.currentFile.data = Binding.generateFileTemplate('diagram-0');
   }
@@ -62,21 +62,22 @@ pnpm --filter y-mxgraph build
 
 # Test
 pnpm --filter y-mxgraph test
-
-# Demo
-
-```bash
-# 单页模式（draw.io 直接加载在当前页面）
-pnpm --filter @y-mxgraph/demo dev
-
-# iframe 模式（父页运行 WebRTC Provider，两个 iframe 各跑一套 draw.io + y-mxgraph，通过 postMessage 同步）
-# 访问 http://localhost:5173/iframe-mode.html
 ```
 
-# Docs
+## Demo
 
+```bash
+# Single-page mode (draw.io loaded directly in the current page)
+pnpm --filter @y-mxgraph/demo dev
+
+# iframe mode (parent page runs WebRTC Provider, two iframes each run draw.io + y-mxgraph, synced via postMessage)
+# Visit http://localhost:5173/iframe-mode.html
+```
+
+## Docs
+
+```bash
 pnpm --filter @y-mxgraph/docs dev
-
 ```
 
 ## License

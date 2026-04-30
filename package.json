@@ -1,5 +1,27 @@
 {
   "private": true,
+  "name": "y-mxgraph-monorepo",
+  "description": "Yjs binding for mxGraph, enabling real-time collaborative diagram editing",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "y-mxgraph contributors",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:mizuka-wu/y-mxgraph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mizuka-wu/y-mxgraph/issues"
+  },
+  "homepage": "https://github.com/mizuka-wu/y-mxgraph#readme",
+  "keywords": [
+    "yjs",
+    "mxgraph",
+    "drawio",
+    "diagram",
+    "collaboration",
+    "crdt",
+    "real-time"
+  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -13,6 +35,5 @@
     "prettier": "^3.2.5",
     "turbo": "^2.9.6"
   },
-  "packageManager": "pnpm@8.15.6",
-  "name": "y-mxgraph-monorepo"
+  "packageManager": "pnpm@8.15.6"
 }
