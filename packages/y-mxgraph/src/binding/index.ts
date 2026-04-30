@@ -23,6 +23,11 @@ export interface BindDrawioFileOptions {
 
 /**
  * Y-MXGraph 绑定类，管理 draw.io 文件与 Y.Doc 的双向同步
+ *
+ * 初始化流程对齐 y-prosemirror 等数据源：
+ * - 绑定时不向 Y.Doc 写入初始数据
+ * - 在第一次本地编辑时才初始化 Y.Doc
+ * - 新客户端加入时，同步已有的远端数据到本地
  */
 export class Binding {
   /** Y.Doc 实例，用于协同数据存储 */
@@ -31,6 +36,8 @@ export class Binding {
   private mxGraphModel: MxGraphModel;
   /** 本地变更抑制标志，防止循环同步 */
   private suppressLocalApply = false;
+  /** 初始化标志，标记 Y.Doc 是否已初始化 */
+  private docInitialized = false;
   /** mxGraph change 事件监听器 */
   private mxListener: () => void;
   /** Yjs 文档深度变更监听器 */
@@ -54,16 +61,38 @@ export class Binding {
     const graph = ui.editor.graph;
     this.mxGraphModel = graph.model;
 
+    // 检查 Y.Doc 是否已有数据
     const docHasData = doc.share.has(mxfileKey);
-    if (!docHasData) {
-      xml2doc(file.data, doc);
-    }
+    this.docInitialized = docHasData;
 
-    initDocSnapshot(doc, docHasData);
+    // 若 Y.Doc 已有数据（新客户端加入场景），立即同步到本地
+    if (docHasData) {
+      initDocSnapshot(doc, false);
+      const fullPatch = generatePatch([], doc);
+      if (Object.keys(fullPatch).length > 0) {
+        this.suppressLocalApply = true;
+        try {
+          file.patch([fullPatch]);
+          file.setShadowPages(file.ui.clonePages(file.ui.pages));
+        } finally {
+          this.suppressLocalApply = false;
+        }
+      }
+    }
 
     // 本地变更监听
     this.mxListener = () => {
       if (this.suppressLocalApply) return;
+
+      // 第一次编辑时初始化 Y.Doc
+      if (!this.docInitialized) {
+        doc.transact(() => {
+          xml2doc(file.data, doc);
+          initDocSnapshot(doc, false);
+        });
+        this.docInitialized = true;
+      }
+
       const patch = file.ui.diffPages(
         file.shadowPages,
         file.ui.pages,
@@ -94,22 +123,6 @@ export class Binding {
       }
     };
     doc.getMap(mxfileKey).observeDeep(this.docObserver);
-
-    // doc 已有远端数据时（新客户端加入），立即把 doc 当前状态同步到 draw.io
-    if (docHasData) {
-      // 直接调用 generatePatch 传入空 events + 当前 doc
-      // resetSnapshot=true 使 snapshot.prevDiagramOrder=[], 所有 diagram/cells 被识别为 insert
-      const fullPatch = generatePatch([], doc);
-      if (Object.keys(fullPatch).length > 0) {
-        this.suppressLocalApply = true;
-        try {
-          file.patch([fullPatch]);
-          file.setShadowPages(file.ui.clonePages(file.ui.pages));
-        } finally {
-          this.suppressLocalApply = false;
-        }
-      }
-    }
 
     // 协作功能
     if (awareness) {
