@@ -138,6 +138,14 @@ export function getUIElements() {
     collabDot: document.getElementById("collab-dot") as HTMLSpanElement,
     peerCountEl: document.getElementById("peer-count") as HTMLSpanElement,
     peerNumEl: document.getElementById("peer-num") as HTMLSpanElement,
+
+    // 调试面板
+    debugLog: document.getElementById(
+      "y-mxgraph-debug-log",
+    ) as HTMLDivElement,
+    debugClearBtn: document.getElementById(
+      "debug-panel-clear",
+    ) as HTMLButtonElement,
   };
 }
 
@@ -219,4 +227,17 @@ export function restoreRoomFromURL(elements: UIElements): string {
     elements.roomInput.value = room;
   }
   return room;
+}
+
+/**
+ * 初始化调试面板事件监听
+ */
+export function initDebugPanel(elements: UIElements): void {
+  if (elements.debugClearBtn) {
+    elements.debugClearBtn.addEventListener("click", () => {
+      if (elements.debugLog) {
+        elements.debugLog.innerHTML = "";
+      }
+    });
+  }
 }
