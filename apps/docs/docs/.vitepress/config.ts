@@ -22,6 +22,7 @@ export default defineConfig({
               items: [
                 { text: "快速开始", link: "/guide/getting-started" },
                 { text: "使用 Provider", link: "/guide/providers" },
+                { text: "集成 draw.io", link: "/guide/drawio-integration" },
                 { text: "实现原理", link: "/guide/architecture" },
                 { text: "与原版差异", link: "/guide/implementation-diff" },
               ],
@@ -60,6 +61,10 @@ export default defineConfig({
               items: [
                 { text: "Getting Started", link: "/en/guide/getting-started" },
                 { text: "Using Providers", link: "/en/guide/providers" },
+                {
+                  text: "Integrating draw.io",
+                  link: "/en/guide/drawio-integration",
+                },
                 { text: "Architecture", link: "/en/guide/architecture" },
                 {
                   text: "Migration Guide",
