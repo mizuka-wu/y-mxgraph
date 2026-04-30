@@ -134,18 +134,84 @@
       }
     }
 
+    /* ── 主容器 ── */
+    #main-container {
+      display: flex;
+      flex: 1;
+      gap: 0;
+      min-height: 0;
+    }
+
     /* ── draw.io 宿主区域 ── */
     #drawio-wrapper {
       flex: 1;
       position: relative;
       overflow: hidden;
       min-height: 0;
+      border-right: 1px solid #dee2e6;
     }
 
     /* draw.io 把自身 (geEditor) 挂在此容器内，作为 grid 容器 */
     #drawio-container {
       position: absolute;
       inset: 0;
+    }
+
+    /* ── 调试面板 ── */
+    #debug-panel {
+      display: flex;
+      flex-direction: column;
+      width: 280px;
+      flex-shrink: 0;
+      background: #fafafa;
+      border-left: 1px solid #dee2e6;
+      overflow: hidden;
+    }
+
+    #debug-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 12px;
+      font-weight: 600;
+      color: #495057;
+    }
+
+    #debug-panel-clear {
+      background: #e7f5ff;
+      color: #1971c2;
+      border: none;
+      border-radius: 3px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #debug-panel-clear:hover {
+      background: #d0ebff;
+    }
+
+    #y-mxgraph-debug-log {
+      flex: 1;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 11px;
+      background: #ffffff;
+      color: #495057;
+      padding: 0;
+      margin: 0;
+    }
+
+    #y-mxgraph-debug-log div {
+      background: #ffffff;
+    }
+
+    #y-mxgraph-debug-log div:nth-child(even) {
+      background: #f9f9f9;
     }
 
     /* ── 加载遮罩 ── */
@@ -253,26 +319,36 @@
         id="peer-num">1</strong></span>
   </div>
 
-  <div id="drawio-wrapper">
-    <div id="loading-overlay">
-      <div class="spinner"></div>
-      <p id="loading-text">Loading draw.io...</p>
-      <div id="loading-steps">
-        <div class="loading-step" id="step-preconfig">
-          <span class="step-icon">○</span>
-          <span>Loading PreConfig.js</span>
-        </div>
-        <div class="loading-step" id="step-app">
-          <span class="step-icon">○</span>
-          <span>Loading editor (app.min.js)</span>
-        </div>
-        <div class="loading-step" id="step-init">
-          <span class="step-icon">○</span>
-          <span>Initializing editor</span>
+  <div id="main-container">
+    <div id="drawio-wrapper">
+      <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading draw.io...</p>
+        <div id="loading-steps">
+          <div class="loading-step" id="step-preconfig">
+            <span class="step-icon">○</span>
+            <span>Loading PreConfig.js</span>
+          </div>
+          <div class="loading-step" id="step-app">
+            <span class="step-icon">○</span>
+            <span>Loading editor (app.min.js)</span>
+          </div>
+          <div class="loading-step" id="step-init">
+            <span class="step-icon">○</span>
+            <span>Initializing editor</span>
+          </div>
         </div>
       </div>
+      <div id="drawio-container">
+      </div>
     </div>
-    <div id="drawio-container">
+
+    <div id="debug-panel">
+      <div id="debug-panel-header">
+        <span>Y.Doc Updates</span>
+        <button id="debug-panel-clear">Clear</button>
+      </div>
+      <div id="y-mxgraph-debug-log"></div>
     </div>
   </div>
 
