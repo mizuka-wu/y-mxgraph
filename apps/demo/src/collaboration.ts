@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
+import { type Awareness } from "y-protocols/awareness";
 import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
 import { SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
@@ -60,7 +61,7 @@ export function createCollaboration(
  */
 export function bindDrawioFile(
   doc: Y.Doc,
-  provider: WebrtcProvider,
+  awareness: Awareness,
   onBind: (binding: Binding) => void,
 ): () => void {
   const undoManager = new Y.UndoManager(doc, {
@@ -77,13 +78,12 @@ export function bindDrawioFile(
     const doBind = (app: any, file: any) => {
       const binding = new Binding(file, {
         doc,
-        awareness: provider.awareness,
+        awareness,
         undoManager,
       });
 
       // 暴露到 window 便于调试
       Reflect.set(window, "__doc__", doc);
-      Reflect.set(window, "__provider__", provider);
       Reflect.set(window, "__binding__", binding);
 
       onBind(binding);

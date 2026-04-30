@@ -129,9 +129,14 @@ function connectCollaboration() {
   });
 
   // 绑定 draw.io
-  bindDrawioFile(collabState.doc!, collabState.provider!, (binding) => {
-    collabState.binding = binding;
-  });
+  bindDrawioFile(
+    collabState.doc!,
+    collabState.provider!.awareness,
+    (binding) => {
+      collabState.binding = binding;
+      Reflect.set(window, "__provider__", collabState.provider);
+    },
+  );
 }
 
 window.addEventListener("DOMContentLoaded", init);

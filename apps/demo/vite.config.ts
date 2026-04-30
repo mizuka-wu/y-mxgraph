@@ -6,6 +6,13 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        iframe: "iframe.html",
+        "iframe-mode": "iframe-mode.html",
+      },
+    },
     // Production base path when served under the docs site
     // Override with VITE_BASE env var for standalone deploys
   },

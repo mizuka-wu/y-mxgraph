@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>y-mxgraph Demo (iframe mode)</title>
+  <style>
+    html,
+    body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #333333;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── 顶部工具栏 ── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      box-sizing: border-box;
+    }
+
+    #toolbar h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #2563eb;
+      white-space: nowrap;
+      margin: 0;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #toolbar label {
+      font-size: 12px;
+      color: #6c757d;
+      white-space: nowrap;
+    }
+
+    #toolbar select,
+    #toolbar input[type="text"] {
+      background: #ffffff;
+      border: 1px solid #ced4da;
+      color: #333333;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    #room-input {
+      width: 120px;
+    }
+
+    #custom-url-input {
+      width: 220px;
+    }
+
+    .separator {
+      width: 1px;
+      height: 20px;
+      background: #dee2e6;
+      flex-shrink: 0;
+    }
+
+    /* ── 状态栏 ── */
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 4px 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 11px;
+      color: #6c757d;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #adb5bd;
+      display: inline-block;
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+
+    .status-dot.connected {
+      background: #22c55e;
+    }
+
+    .status-dot.loading {
+      background: #f59e0b;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
+    }
+
+    /* ── iframe 容器 ── */
+    #iframe-container {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    .iframe-wrapper {
+      flex: 1;
+      position: relative;
+      border-right: 1px solid #dee2e6;
+      overflow: hidden;
+    }
+
+    .iframe-wrapper:last-child {
+      border-right: none;
+    }
+
+    iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .iframe-label {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #6c757d;
+      z-index: 10;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="toolbar">
+    <h1>y-mxgraph Demo (iframe)</h1>
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <label id="label-version">draw.io version:</label>
+      <select id="version-select">
+        <option value="latest">latest</option>
+        <option value="29.7.9">v29.7.9</option>
+        <option value="28.2.9">v28.2.9</option>
+        <option value="27.1.6">v27.1.6</option>
+        <option value="26.2.15">v26.2.15</option>
+        <option value="custom">Custom URL...</option>
+      </select>
+    </div>
+
+    <div class="toolbar-group" id="custom-url-group" style="display:none">
+      <input type="text" id="custom-url-input" placeholder="https://..." />
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <label id="label-room">Room:</label>
+      <input type="text" id="room-input" value="y-mxgraph-demo" />
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <span><span class="status-dot" id="drawio-dot-a"></span><span>draw.io A: </span><span
+        id="drawio-status-a">Not loaded</span></span>
+    <span><span class="status-dot" id="drawio-dot-b"></span><span>draw.io B: </span><span
+        id="drawio-status-b">Not loaded</span></span>
+    <span><span class="status-dot" id="collab-dot"></span><span id="collab-status">Disconnected</span></span>
+    <span id="peer-count" style="display:none"><span id="label-online">Online: </span><strong
+        id="peer-num">1</strong></span>
+  </div>
+
+  <div id="iframe-container">
+    <div class="iframe-wrapper">
+      <div class="iframe-label">iframe A</div>
+      <iframe id="iframe-a" src="./iframe.html?iframeId=1"></iframe>
+    </div>
+    <div class="iframe-wrapper">
+      <div class="iframe-label">iframe B</div>
+      <iframe id="iframe-b" src="./iframe.html?iframeId=2"></iframe>
+    </div>
+  </div>
+
+  <script type="module" src="/src/iframe-parent.ts"></script>
+</body>
+
+</html>
