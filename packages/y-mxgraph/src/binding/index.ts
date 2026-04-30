@@ -47,6 +47,8 @@ export class Binding {
     >[],
     transaction: Y.Transaction,
   ) => void;
+  /** Y.Doc update 事件监听器 */
+  private docUpdateListener: (update: Uint8Array, origin: unknown) => void;
   /** 协作功能清理函数（awareness 光标/选区） */
   private cleanupCollaborator?: () => void;
   /** UndoManager 绑定清理函数 */
@@ -109,6 +111,11 @@ export class Binding {
       >[],
       transaction: Y.Transaction,
     ) => {
+      // 标记已初始化（即使是远端数据到达）
+      if (!this.docInitialized) {
+        this.docInitialized = true;
+      }
+
       if (transaction.local && transaction.origin === LOCAL_ORIGIN) {
         generatePatch(events);
         return;
@@ -123,6 +130,34 @@ export class Binding {
       }
     };
     doc.getMap(mxfileKey).observeDeep(this.docObserver);
+
+    // Y.Doc update 事件监听器 - 用于调试
+    this.docUpdateListener = (update: Uint8Array, origin: unknown) => {
+      const isLocal = origin === LOCAL_ORIGIN;
+      const message = `[y-mxgraph] Y.Doc update (${update.length} bytes, origin: ${isLocal ? "local" : "remote"})`;
+      console.log(message, {
+        update,
+        origin,
+        docState: Array.from(Y.encodeStateAsUpdate(doc)),
+      });
+      // 同时输出到页面
+      if (typeof window !== "undefined") {
+        const logEl = document.getElementById("y-mxgraph-debug-log");
+        if (logEl) {
+          const timestamp = new Date().toLocaleTimeString();
+          const line = document.createElement("div");
+          line.style.cssText =
+            "font-family: monospace; font-size: 12px; padding: 4px 8px; border-bottom: 1px solid #eee; word-break: break-all;";
+          line.textContent = `${timestamp} ${message} (${update.length} bytes)`;
+          logEl.appendChild(line);
+          // 保持最近 100 条日志
+          while (logEl.children.length > 100) {
+            logEl.removeChild(logEl.firstChild!);
+          }
+        }
+      }
+    };
+    doc.on("update", this.docUpdateListener);
 
     // 协作功能
     if (awareness) {
@@ -147,6 +182,7 @@ export class Binding {
   destroy(deep = false): void {
     this.mxGraphModel.removeListener("change", this.mxListener);
     this.doc.getMap(mxfileKey).unobserveDeep(this.docObserver);
+    this.doc.off("update", this.docUpdateListener);
     if (deep) {
       this.cleanupCollaborator?.();
       this.cleanupUndoManager?.();
