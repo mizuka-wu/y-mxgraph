@@ -7,8 +7,14 @@
     "yjs",
     "mxgraph",
     "drawio",
+    "draw.io",
     "crdt",
-    "collaboration"
+    "collaboration",
+    "real-time",
+    "operational-transformation",
+    "diagram",
+    "graph",
+    "sync"
   ],
   "license": "MIT",
   "main": "./src/index.ts",
