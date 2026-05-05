@@ -125,6 +125,15 @@ export function applyFilePatch(
         diagramOrderKey,
       ) as unknown as Y.Array<string>;
       ensureUniqueOrder(orderArr);
+      
+      // 确保 diagramOrder 包含所有 diagram map 中的 IDs
+      const currentOrder = orderArr.toArray();
+      if (currentOrder.length === 0 && diagramsMap && diagramsMap.size > 0) {
+        const allIds = Array.from(diagramsMap.keys());
+        orderArr.push(allIds);
+      }
+      ensureUniqueOrder(orderArr);
+      
       const existingIds = orderArr.toArray();
       const existingIndex = new Map<string, number>();
       existingIds.forEach((id, idx) => existingIndex.set(id, idx));
