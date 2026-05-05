@@ -26,7 +26,6 @@ export function parse(object: MxCellModel): Y.XmlElement {
     const geometryString = js2xml(geometry, {
       compact: true,
     });
-    console.log("[mxCell] geometryString:", geometryString);
     xmlElement.setAttribute(mxGeometryAttributeKey, geometryString);
     delete object[mxGeometryKey];
   }

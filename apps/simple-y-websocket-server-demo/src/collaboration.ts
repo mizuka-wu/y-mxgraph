@@ -85,30 +85,22 @@ export function bindDrawioFile(
     const diagramMap = mxfileMap.get("diagram") as any;
     const diagramOrder = mxfileMap.get("diagramOrder") as any;
 
-    console.log("[collaboration] mxfileMap.size:", mxfileMap.size, "keys:", Array.from(mxfileMap.keys()));
-    console.log("[collaboration] diagram:", diagramMap ? Array.from(diagramMap.keys()) : "null");
-    console.log("[collaboration] diagramOrder:", diagramOrder?.toArray?.() || "null");
-
     // 检查是否真的有 diagram 数据
     const docHasData = diagramMap && diagramMap.size > 0;
-    console.log("[collaboration] docHasData:", docHasData);
 
     // 先用服务器数据替换本地文件内容,确保页面 ID 一致
     if (docHasData) {
       const xml = doc2xml(doc);
-      console.log("[collaboration] doc2xml output:", xml);
       if (xml && xml.includes("<diagram")) {
         file.ui.setFileData(xml);
         file.setData(xml);
       } else {
-        console.log("[collaboration] xml is empty or has no diagram, using template");
         const template = Binding.generateFileTemplate();
         file.ui.setFileData(template);
         file.setData(template);
       }
     } else {
       const template = Binding.generateFileTemplate();
-      console.log("[collaboration] no diagram data, using template:", template);
       file.ui.setFileData(template);
       file.setData(template);
     }
