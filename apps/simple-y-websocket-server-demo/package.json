@@ -1,0 +1,27 @@
+{
+  "name": "@y-mxgraph/ws-demo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "tsx server.ts",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "y-mxgraph": "workspace:*",
+    "y-protocols": "^1.0.6",
+    "y-websocket": "^2.1.0",
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/ws": "^8.5.0",
+    "@y-mxgraph/typescript-config": "workspace:*",
+    "tsx": "^4.19.0",
+    "typescript": "~5.5.4",
+    "vite": "^5.1.4",
+    "ws": "^8.18.0"
+  }
+}
