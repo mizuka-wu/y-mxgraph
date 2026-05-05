@@ -11,3 +11,4 @@ server/dist
 public/dist
 
 apps/docs/docs/.vitepress/cache
+.playwright-mcp/

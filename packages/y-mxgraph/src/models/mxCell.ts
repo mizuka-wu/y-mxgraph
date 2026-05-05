@@ -26,6 +26,7 @@ export function parse(object: MxCellModel): Y.XmlElement {
     const geometryString = js2xml(geometry, {
       compact: true,
     });
+    console.log("[mxCell] geometryString:", geometryString);
     xmlElement.setAttribute(mxGeometryAttributeKey, geometryString);
     delete object[mxGeometryKey];
   }
@@ -34,16 +35,38 @@ export function parse(object: MxCellModel): Y.XmlElement {
 }
 
 export function serialize(xmlElement: Y.XmlElement) {
-  const attributes = {
+  const rawAttributes = {
     ...xmlElement.getAttributes(),
   };
 
+  // 提取 mxGeometry(不需要转义,它本身就是 XML 字符串)
   let mxGeometry: ElementCompact | null = null;
+  let mxGeometryString: string | undefined;
 
-  if (mxGeometryAttributeKey in attributes) {
-    const mxGeometryString = attributes[mxGeometryAttributeKey];
+  if (mxGeometryAttributeKey in rawAttributes) {
+    mxGeometryString = rawAttributes[mxGeometryAttributeKey];
+    delete rawAttributes[mxGeometryAttributeKey];
+  }
+
+  // 转义其他属性值中的特殊字符
+  const attributes: Record<string, string> = {};
+  for (const [key, value] of Object.entries(rawAttributes)) {
+    if (typeof value === 'string') {
+      attributes[key] = value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    } else if (value != null) {
+      attributes[key] = String(value);
+    }
+  }
+
+  // 解析 mxGeometry
+  if (mxGeometryString) {
     try {
-      const parsed = xml2js(mxGeometryString!, { compact: true }) as Record<string, ElementCompact>;
+      const parsed = xml2js(mxGeometryString, { compact: true }) as Record<string, ElementCompact>;
       mxGeometry = parsed[mxGeometryKey] ?? null;
       if (mxGeometry && mxGeometry._attributes) {
         mxGeometry._attributes["as"] = "geometry";
@@ -51,7 +74,6 @@ export function serialize(xmlElement: Y.XmlElement) {
     } catch (e) {
       console.warn("[y-mxgraph] Failed to parse mxGeometry:", e);
     }
-    delete attributes[mxGeometryAttributeKey];
   }
 
   const obj: Record<string, unknown> = {

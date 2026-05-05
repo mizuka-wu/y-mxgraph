@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { type Awareness } from "y-protocols/awareness";
-import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
+import { Binding, LOCAL_ORIGIN, doc2xml } from "y-mxgraph";
 import { WS_URL, DEFAULT_ROOM } from "./config.js";
 
 export interface CollabState {
@@ -60,9 +60,11 @@ export function createCollaboration(
  *
  * 流程：
  * 1. 等待 draw.io App 就绪 + file 已加载
- * 2. 创建 Binding（由 Binding 内部处理数据同步）
+ * 2. 等待 WebsocketProvider 初始同步完成（synced）
+ * 3. 两者都就绪后创建 Binding（由 Binding 内部处理数据同步）
  */
 export function bindDrawioFile(
+  provider: WebsocketProvider,
   doc: Y.Doc,
   awareness: Awareness,
   onBind: (binding: Binding) => void,
@@ -71,6 +73,73 @@ export function bindDrawioFile(
     trackedOrigins: new Set([LOCAL_ORIGIN]),
   });
 
+  // 两个就绪条件
+  let appFile: { app: any; file: any } | null = null;
+  let synced = provider.synced;
+
+  const tryFinalize = () => {
+    if (!appFile || !synced) return;
+
+    const { app, file } = appFile;
+    const mxfileMap = doc.getMap("mxfile");
+    const diagramMap = mxfileMap.get("diagram") as any;
+    const diagramOrder = mxfileMap.get("diagramOrder") as any;
+
+    console.log("[collaboration] mxfileMap.size:", mxfileMap.size, "keys:", Array.from(mxfileMap.keys()));
+    console.log("[collaboration] diagram:", diagramMap ? Array.from(diagramMap.keys()) : "null");
+    console.log("[collaboration] diagramOrder:", diagramOrder?.toArray?.() || "null");
+
+    // 检查是否真的有 diagram 数据
+    const docHasData = diagramMap && diagramMap.size > 0;
+    console.log("[collaboration] docHasData:", docHasData);
+
+    // 先用服务器数据替换本地文件内容,确保页面 ID 一致
+    if (docHasData) {
+      const xml = doc2xml(doc);
+      console.log("[collaboration] doc2xml output:", xml);
+      if (xml && xml.includes("<diagram")) {
+        file.ui.setFileData(xml);
+        file.setData(xml);
+      } else {
+        console.log("[collaboration] xml is empty or has no diagram, using template");
+        const template = Binding.generateFileTemplate();
+        file.ui.setFileData(template);
+        file.setData(template);
+      }
+    } else {
+      const template = Binding.generateFileTemplate();
+      console.log("[collaboration] no diagram data, using template:", template);
+      file.ui.setFileData(template);
+      file.setData(template);
+    }
+
+    // 再创建 Binding
+    const binding = new Binding(file, {
+      doc,
+      awareness,
+      undoManager,
+    });
+
+    // 暴露到 window 便于调试
+    Reflect.set(window, "__doc__", doc);
+    Reflect.set(window, "__binding__", binding);
+
+    onBind(binding);
+  };
+
+  // ── 条件 1：等待 provider sync ──
+  if (!synced) {
+    const onSync = (isSynced: boolean) => {
+      if (isSynced) {
+        synced = true;
+        provider.off("sync", onSync);
+        tryFinalize();
+      }
+    };
+    provider.on("sync", onSync);
+  }
+
+  // ── 条件 2：等待 draw.io App + file ──
   const tryBind = () => {
     const App = (window as any).App;
     if (!App) {
@@ -78,55 +147,39 @@ export function bindDrawioFile(
       return;
     }
 
-    const doBind = (app: any, file: any) => {
-      const binding = new Binding(file, {
-        doc,
-        awareness,
-        undoManager,
-      });
-
-      // 暴露到 window 便于调试
-      Reflect.set(window, "__doc__", doc);
-      Reflect.set(window, "__binding__", binding);
-
-      onBind(binding);
-    };
-
-    // 使用 App.main 双回调模式
     App.main(
       (ui: any) => {
-        // 强制重新布局（容器尺寸可能在构建时不正确）
         ui.refresh();
         window.dispatchEvent(new Event("resize"));
 
         const app = ui;
         const file = app.currentFile;
 
+        const onFileReady = (f: any) => {
+          appFile = { app, file: f };
+          tryFinalize();
+        };
+
         if (file) {
-          doBind(app, file);
+          onFileReady(file);
         } else {
           app.editor.addListener("fileLoaded", () => {
-            doBind(app, app.currentFile);
+            onFileReady(app.currentFile);
           });
         }
       },
       () => {
-        // 自定义 UI 创建函数
         const Editor = (window as any).Editor;
         const container = document.getElementById("drawio-container")!;
-
-        // draw.io EditorUi 需要容器带 geEditor class 才能触发绝对定位布局
         if (!container.classList.contains("geEditor")) {
           container.classList.add("geEditor");
         }
-
         const editor = new Editor(false, null, null, null, true);
         return new App(editor, container);
       },
     );
   };
 
-  // 延迟执行以确保 App 完全初始化
   const timeoutId = setTimeout(tryBind, 800);
 
   return () => clearTimeout(timeoutId);

@@ -379,13 +379,16 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
     const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
+    
+    // 如果 diagramOrder 为空但 diagram map 不为空,使用 diagram map 中的所有 ID
+    const orderIds = orderArr ? orderArr.toArray() : [];
+    const allDiagramIds = orderIds.length > 0 
+      ? orderIds 
+      : (diagramsMap ? Array.from(diagramsMap.keys()) : []);
+    
     // resetSnapshot=true 时把 diagramOrder 设为空数组，
     // 使第一次 generatePatch 把所有现有 diagram/cells 都识别为 insert
-    const diagramOrder = resetSnapshot
-      ? []
-      : orderArr
-        ? orderArr.toArray().slice()
-        : [];
+    const diagramOrder = resetSnapshot ? [] : allDiagramIds.slice();
 
     const snap: DocSnapshot = {
       diagramOrder,
@@ -472,7 +475,11 @@ export function generatePatch(
     return u.cells!;
   };
 
-  const currDiagramOrder = orderArr.toArray();
+  // 如果 diagramOrder 为空但 diagram map 不为空,使用 diagram map 中的所有 ID
+  const orderIds = orderArr.toArray();
+  const currDiagramOrder = orderIds.length > 0 
+    ? orderIds 
+    : (diagramsMap ? Array.from(diagramsMap.keys()) : []);
   const diagramsList = currDiagramOrder
     .map((id) => diagramsMap.get(id) as YDiagram | undefined)
     .filter((d): d is YDiagram => !!d);
