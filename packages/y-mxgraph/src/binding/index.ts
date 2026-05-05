@@ -47,8 +47,6 @@ export class Binding {
     >[],
     transaction: Y.Transaction,
   ) => void;
-  /** Y.Doc update 事件监听器 */
-  private docUpdateListener: (update: Uint8Array, origin: unknown) => void;
   /** 协作功能清理函数（awareness 光标/选区） */
   private cleanupCollaborator?: () => void;
   /** UndoManager 绑定清理函数 */
@@ -64,10 +62,17 @@ export class Binding {
     this.mxGraphModel = graph.model;
 
     // 检查 Y.Doc 是否已有数据
-    const docHasData = doc.share.has(mxfileKey);
+    // 注意：doc.share.has() 可能因 doc.getMap() 调用而为 true 但 map 为空
+    // 因此需要同时检查 map 中是否有实际内容
+    const mxfileMap = doc.getMap(mxfileKey);
+    const docHasData = mxfileMap.size > 0;
     this.docInitialized = docHasData;
 
-    // 若 Y.Doc 已有数据（新客户端加入场景），立即同步到本地
+    // 初始化 shadowPages = 当前 pages 的克隆
+    // 这样后续 change 事件如果未真正改变 pages 内容，diffPages 会返回空 patch
+    file.setShadowPages(file.ui.clonePages(file.ui.pages));
+
+    // 若 Y.Doc 已有数据（新客户端加入场景），用 ydoc 内容初始化 file
     if (docHasData) {
       initDocSnapshot(doc, false);
       const fullPatch = generatePatch([], doc);
@@ -75,18 +80,28 @@ export class Binding {
         this.suppressLocalApply = true;
         try {
           file.patch([fullPatch]);
-          file.setShadowPages(file.ui.clonePages(file.ui.pages));
         } finally {
           this.suppressLocalApply = false;
         }
       }
+      // 同步后重新对齐 shadowPages
+      file.setShadowPages(file.ui.clonePages(file.ui.pages));
     }
 
     // 本地变更监听
     this.mxListener = () => {
       if (this.suppressLocalApply) return;
 
-      // 第一次编辑时初始化 Y.Doc
+      const patch = file.ui.diffPages(
+        file.shadowPages,
+        file.ui.pages,
+      ) as import("./patch").FilePatch;
+      const patchKeys = Object.keys(patch);
+
+      // 没有实际本地变更时直接跳过
+      if (patchKeys.length === 0) return;
+
+      // 第一次有实际本地编辑时才初始化 Y.Doc
       if (!this.docInitialized) {
         doc.transact(() => {
           xml2doc(file.data, doc);
@@ -95,10 +110,6 @@ export class Binding {
         this.docInitialized = true;
       }
 
-      const patch = file.ui.diffPages(
-        file.shadowPages,
-        file.ui.pages,
-      ) as import("./patch").FilePatch;
       file.setShadowPages(file.ui.clonePages(file.ui.pages));
       applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
     };
@@ -120,7 +131,9 @@ export class Binding {
         generatePatch(events);
         return;
       }
+
       const patch = generatePatch(events);
+      if (Object.keys(patch).length === 0) return;
       this.suppressLocalApply = true;
       try {
         file.patch([patch]);
@@ -129,35 +142,7 @@ export class Binding {
         this.suppressLocalApply = false;
       }
     };
-    doc.getMap(mxfileKey).observeDeep(this.docObserver);
-
-    // Y.Doc update 事件监听器 - 用于调试
-    this.docUpdateListener = (update: Uint8Array, origin: unknown) => {
-      const isLocal = origin === LOCAL_ORIGIN;
-      const message = `[y-mxgraph] Y.Doc update (${update.length} bytes, origin: ${isLocal ? "local" : "remote"})`;
-      console.log(message, {
-        update,
-        origin,
-        docState: Array.from(Y.encodeStateAsUpdate(doc)),
-      });
-      // 同时输出到页面
-      if (typeof window !== "undefined") {
-        const logEl = document.getElementById("y-mxgraph-debug-log");
-        if (logEl) {
-          const timestamp = new Date().toLocaleTimeString();
-          const line = document.createElement("div");
-          line.style.cssText =
-            "font-family: monospace; font-size: 12px; padding: 4px 8px; border-bottom: 1px solid #eee; word-break: break-all;";
-          line.textContent = `${timestamp} ${message} (${update.length} bytes)`;
-          logEl.appendChild(line);
-          // 保持最近 100 条日志
-          while (logEl.children.length > 100) {
-            logEl.removeChild(logEl.firstChild!);
-          }
-        }
-      }
-    };
-    doc.on("update", this.docUpdateListener);
+    mxfileMap.observeDeep(this.docObserver);
 
     // 协作功能
     if (awareness) {
@@ -182,7 +167,6 @@ export class Binding {
   destroy(deep = false): void {
     this.mxGraphModel.removeListener("change", this.mxListener);
     this.doc.getMap(mxfileKey).unobserveDeep(this.docObserver);
-    this.doc.off("update", this.docUpdateListener);
     if (deep) {
       this.cleanupCollaborator?.();
       this.cleanupUndoManager?.();
