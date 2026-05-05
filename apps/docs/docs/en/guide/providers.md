@@ -76,3 +76,81 @@ Remember to destroy both the binding and the provider when unmounting:
 binding.destroy(true);
 provider.destroy();
 ```
+
+## Full Example: WebSocket Server with File Persistence
+
+We provide a complete WebSocket server example (`@y-mxgraph/ws-demo`) that includes:
+- Custom Node.js server with file system persistence
+- Automatic client synchronization with server data
+- Real-time multi-client collaboration
+
+### Quick Start
+
+```bash
+# 1. Start the WebSocket server (default port 1234)
+pnpm --filter @y-mxgraph/ws-demo server
+
+# 2. In another terminal, start the client (default port 5174)
+pnpm --filter @y-mxgraph/ws-demo dev
+
+# 3. Open http://localhost:5174 in your browser
+```
+
+### How It Works
+
+```text
+┌──────────┐     WebSocket     ┌───────────────────┐
+│ Client A ├───────────────────┤                   │
+└──────────┘                   │  y-websocket      │
+                               │  server (:1234)   │──── yjs-docs/
+┌──────────┐     WebSocket     │                   │     (file persistence)
+│ Client B ├───────────────────┤                   │
+└──────────┘                   └───────────────────┘
+```
+
+### Comparison with WebRTC
+
+| Feature | WebRTC (demo) | WebSocket (ws-demo) |
+| --- | --- | --- |
+| Connection | P2P | Centralized server |
+| Data persistence | None | File system |
+| Server required | Signaling only | WebSocket server |
+| Use case | Public demo | Enterprise deployment |
+
+### Key Implementation
+
+The server uses `setupWSConnection` and `setPersistence` from `y-websocket/bin/utils`:
+
+```ts
+import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
+
+setPersistence({
+  bindState: async (docName, ydoc) => {
+    // Load document state from file
+    const data = await fs.readFile(`yjs-docs/${docName}.yjs`);
+    Y.applyUpdate(ydoc, new Uint8Array(data));
+  },
+  writeState: async (docName, ydoc) => {
+    // Save document state to file
+    const state = Y.encodeStateAsUpdate(ydoc);
+    await fs.writeFile(`yjs-docs/${docName}.yjs`, state);
+  },
+});
+```
+
+The client uses `doc2xml` to load server data into draw.io after `provider.synced`:
+
+```ts
+provider.on('sync', (isSynced) => {
+  if (isSynced) {
+    const xml = doc2xml(doc);
+    if (xml) {
+      file.ui.setFileData(xml);
+      file.setData(xml);
+    }
+    const binding = new Binding(file, { doc, awareness, undoManager });
+  }
+});
+```
+
+For the full implementation, see the `apps/simple-y-websocket-server-demo` directory.

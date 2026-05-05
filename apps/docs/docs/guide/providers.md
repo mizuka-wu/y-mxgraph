@@ -76,3 +76,81 @@ HOST=localhost PORT=1234 npx y-websocket
 binding.destroy(true);
 provider.destroy();
 ```
+
+## 完整示例：WebSocket 服务器 + 文件持久化
+
+我们提供了一个完整的 WebSocket 服务器示例 (`@y-mxgraph/ws-demo`)，包含：
+- 自定义 Node.js 服务器，支持文件系统持久化
+- 客户端自动同步服务器数据
+- 支持多客户端实时协作
+
+### 快速启动
+
+```bash
+# 1. 启动 WebSocket 服务器（默认端口 1234）
+pnpm --filter @y-mxgraph/ws-demo server
+
+# 2. 另一个终端启动客户端（默认端口 5174）
+pnpm --filter @y-mxgraph/ws-demo dev
+
+# 3. 浏览器访问 http://localhost:5174
+```
+
+### 工作原理
+
+```text
+┌──────────┐     WebSocket     ┌───────────────────┐
+│ Client A ├───────────────────┤                   │
+└──────────┘                   │  y-websocket      │
+                               │  server (:1234)   │──── yjs-docs/
+┌──────────┐     WebSocket     │                   │     (文件系统持久化)
+│ Client B ├───────────────────┤                   │
+└──────────┘                   └───────────────────┘
+```
+
+### 与 WebRTC 的区别
+
+| 特性 | WebRTC (demo) | WebSocket (ws-demo) |
+| --- | --- | --- |
+| 连接方式 | P2P | 中心化服务器 |
+| 数据持久化 | 无 | 文件系统 |
+| 需要服务器 | 仅信令服务器 | WebSocket 服务器 |
+| 适用场景 | 公网演示 | 企业内部部署 |
+
+### 关键实现
+
+服务端使用 `y-websocket/bin/utils` 提供的 `setupWSConnection` 和 `setPersistence`：
+
+```ts
+import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
+
+setPersistence({
+  bindState: async (docName, ydoc) => {
+    // 从文件加载文档状态
+    const data = await fs.readFile(`yjs-docs/${docName}.yjs`);
+    Y.applyUpdate(ydoc, new Uint8Array(data));
+  },
+  writeState: async (docName, ydoc) => {
+    // 保存文档状态到文件
+    const state = Y.encodeStateAsUpdate(ydoc);
+    await fs.writeFile(`yjs-docs/${docName}.yjs`, state);
+  },
+});
+```
+
+客户端在 `provider.synced` 后使用 `doc2xml` 将服务器数据加载到 draw.io：
+
+```ts
+provider.on('sync', (isSynced) => {
+  if (isSynced) {
+    const xml = doc2xml(doc);
+    if (xml) {
+      file.ui.setFileData(xml);
+      file.setData(xml);
+    }
+    const binding = new Binding(file, { doc, awareness, undoManager });
+  }
+});
+```
+
+详细代码请查看 `apps/simple-y-websocket-server-demo` 目录。

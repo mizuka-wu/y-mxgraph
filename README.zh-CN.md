@@ -63,8 +63,12 @@ pnpm --filter y-mxgraph build
 # 测试
 pnpm --filter y-mxgraph test
 
-# 启动 Demo
+# 启动 Demo (WebRTC 模式)
 pnpm --filter @y-mxgraph/demo dev
+
+# 启动 WebSocket 服务器 Demo (支持文件持久化)
+pnpm --filter @y-mxgraph/ws-demo server  # 启动服务器 (端口 1234)
+pnpm --filter @y-mxgraph/ws-demo dev     # 启动客户端 (端口 5174)
 
 # 启动文档
 pnpm --filter @y-mxgraph/docs dev

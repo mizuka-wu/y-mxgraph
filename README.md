@@ -72,6 +72,10 @@ pnpm --filter @y-mxgraph/demo dev
 
 # iframe mode (parent page runs WebRTC Provider, two iframes each run draw.io + y-mxgraph, synced via postMessage)
 # Visit http://localhost:5173/iframe-mode.html
+
+# WebSocket server mode (centralized server with file persistence)
+pnpm --filter @y-mxgraph/ws-demo server  # Start server on port 1234
+pnpm --filter @y-mxgraph/ws-demo dev     # Start client on port 5174
 ```
 
 ## Docs
