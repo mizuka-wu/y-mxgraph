@@ -129,9 +129,8 @@ function connectCollaboration() {
     reconnectingText: t.collabReconnecting,
   });
 
-  // 绑定 draw.io（等待 provider sync + App 就绪后才真正绑定）
+  // 绑定 draw.io（由 Binding 内部处理数据同步）
   bindDrawioFile(
-    collabState.provider!,
     collabState.doc!,
     collabState.provider!.awareness,
     (binding: Binding) => {
