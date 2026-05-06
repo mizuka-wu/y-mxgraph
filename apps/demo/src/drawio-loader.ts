@@ -71,10 +71,6 @@ export function loadDrawioScript(
     // 屏蔽 draw.io 内置的 window.onerror 弹窗（跨域脚本错误会触发 "Script error."）
     window.onerror = () => true;
 
-    // 设置 draw.io 默认文件为标准化模板（确保所有客户端协同起点一致）
-    window.location.hash =
-      "#R" + encodeURIComponent(Binding.generateFileTemplate("demo"));
-
     // mxLoadStylesheets=false 时 mxClient 不会自动加载 common.css，需手动引入
     const commonCss = document.createElement("link");
     commonCss.rel = "stylesheet";

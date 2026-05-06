@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { type Awareness } from "y-protocols/awareness";
-import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
+import { Binding, LOCAL_ORIGIN, doc2xml } from "y-mxgraph";
 import { SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 export interface CollabState {
@@ -20,9 +20,6 @@ export interface CollabCallbacks {
   reconnectingText?: string;
 }
 
-/**
- * 创建协作连接
- */
 export function createCollaboration(
   roomName: string = DEFAULT_ROOM,
   callbacks: CollabCallbacks,
@@ -32,13 +29,11 @@ export function createCollaboration(
     signaling: SIGNALING_SERVERS,
   });
 
-  // 监听 peer 数量变化
   provider.awareness.on("update", () => {
     const count = provider.awareness.getStates().size;
     callbacks.onPeerCountChange(count);
   });
 
-  // 监听连接状态
   provider.on("status", (event: { connected: boolean }) => {
     if (event.connected) {
       const text = callbacks.connectedText
@@ -56,43 +51,71 @@ export function createCollaboration(
   return { provider, doc, binding: null };
 }
 
-/**
- * 绑定 draw.io 文件到 Yjs
- */
 export function bindDrawioFile(
   doc: Y.Doc,
   awareness: Awareness,
+  provider: WebrtcProvider | null,
   onBind: (binding: Binding) => void,
 ): () => void {
   const undoManager = new Y.UndoManager(doc, {
     trackedOrigins: new Set([LOCAL_ORIGIN]),
   });
 
+  let bindingCreated = false;
+  let isMounted = true;
+
+  const doBind = (app: any, file: any) => {
+    if (bindingCreated) return;
+    bindingCreated = true;
+
+    const mxfileMap = doc.getMap("mxfile");
+    const diagramMap = mxfileMap.get("diagram") as any;
+    const docHasData = diagramMap && diagramMap.size > 0;
+
+    if (docHasData) {
+      const xml = doc2xml(doc);
+      if (xml && xml.includes("<diagram")) {
+        file.ui.setFileData(xml);
+        file.setData(xml);
+      } else {
+        const template = Binding.generateFileTemplate("diagram-0");
+        file.ui.setFileData(template);
+        file.setData(template);
+      }
+    } else {
+      if (!file.data) {
+        const template = Binding.generateFileTemplate("diagram-0");
+        file.ui.setFileData(template);
+        file.setData(template);
+      }
+    }
+
+    const binding = new Binding(file, {
+      doc,
+      awareness,
+      undoManager,
+    });
+
+    app.refresh();
+    window.dispatchEvent(new Event("resize"));
+
+    Reflect.set(window, "__doc__", doc);
+    Reflect.set(window, "__binding__", binding);
+
+    onBind(binding);
+  };
+
   const tryBind = () => {
+    if (!isMounted || bindingCreated) return;
+
     const App = (window as any).App;
     if (!App) {
       setTimeout(tryBind, 500);
       return;
     }
 
-    const doBind = (app: any, file: any) => {
-      const binding = new Binding(file, {
-        doc,
-        awareness,
-        undoManager,
-      });
-
-      // 暴露到 window 便于调试
-      Reflect.set(window, "__doc__", doc);
-      Reflect.set(window, "__binding__", binding);
-
-      onBind(binding);
-    };
-
-    // 使用 App.main 双回调模式
     App.main(
       (ui: any) => {
-        // 强制重新布局（容器尺寸可能在构建时不正确）
         ui.refresh();
         window.dispatchEvent(new Event("resize"));
 
@@ -108,11 +131,9 @@ export function bindDrawioFile(
         }
       },
       () => {
-        // 自定义 UI 创建函数
         const Editor = (window as any).Editor;
         const container = document.getElementById("drawio-container")!;
 
-        // draw.io EditorUi 需要容器带 geEditor class 才能触发绝对定位布局
         if (!container.classList.contains("geEditor")) {
           container.classList.add("geEditor");
         }
@@ -123,15 +144,42 @@ export function bindDrawioFile(
     );
   };
 
-  // 延迟执行以确保 App 完全初始化
-  const timeoutId = setTimeout(tryBind, 800);
+  if (!provider) {
+    setTimeout(tryBind, 800);
+    return () => { isMounted = false; };
+  }
 
-  return () => clearTimeout(timeoutId);
+  const mxfileKey = "mxfile";
+  const mxfileMap = doc.getMap(mxfileKey);
+  const diagramMap = mxfileMap.get("diagram") as any;
+  const hasData = diagramMap && diagramMap.size > 0;
+
+  if (hasData) {
+    setTimeout(tryBind, 800);
+  } else {
+    let bound = false;
+    const onDocUpdate = () => {
+      const dm = mxfileMap.get("diagram") as any;
+      const size = dm ? dm.size : 0;
+      if (!bound && size > 0) {
+        bound = true;
+        doc.off("update", onDocUpdate);
+        setTimeout(tryBind, 500);
+      }
+    };
+    doc.on("update", onDocUpdate);
+    setTimeout(() => {
+      if (!bound) {
+        bound = true;
+        doc.off("update", onDocUpdate);
+        tryBind();
+      }
+    }, 1500);
+  }
+
+  return () => { isMounted = false; };
 }
 
-/**
- * 断开协作连接
- */
 export function disconnectCollaboration(state: CollabState): void {
   if (state.binding) {
     state.binding.destroy(true);
@@ -147,7 +195,6 @@ export function disconnectCollaboration(state: CollabState): void {
     state.doc = null;
   }
 
-  // 清理 window 上的调试对象
   delete (window as any).__doc__;
   delete (window as any).__provider__;
   delete (window as any).__binding__;

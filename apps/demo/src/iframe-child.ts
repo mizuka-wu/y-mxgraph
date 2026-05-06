@@ -47,7 +47,7 @@ async function init() {
   let applyingParentUpdate = false;
 
   // 绑定 draw.io
-  const unbind = bindDrawioFile(ydoc, awareness, () => {
+  const unbind = bindDrawioFile(ydoc, awareness, null as any, () => {
     console.log(`[iframe ${iframeId}] draw.io bound`);
     // 向父页请求初始同步
     window.parent.postMessage({ type: "init", iframeId }, "*");
