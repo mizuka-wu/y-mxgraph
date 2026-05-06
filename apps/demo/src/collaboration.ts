@@ -64,6 +64,13 @@ export function bindDrawioFile(
   let bindingCreated = false;
   let isMounted = true;
 
+  /**
+   * draw.io 的 file.patch() 只更新内部数据结构，不触发 UI 重新渲染。
+   * 因此需要在创建 Binding 前，手动把 Y.Doc 数据转成 XML 并设置到 file，
+   * 确保 draw.io 用正确的数据初始化。
+   *
+   * 这是当前 draw.io API 的限制，ws-demo 也采用相同方案。
+   */
   const doBind = (app: any, file: any) => {
     if (bindingCreated) return;
     bindingCreated = true;
@@ -72,6 +79,7 @@ export function bindDrawioFile(
     const diagramMap = mxfileMap.get("diagram") as any;
     const docHasData = diagramMap && diagramMap.size > 0;
 
+    // 优先使用 Y.Doc 中的远端数据，确保多端数据一致
     if (docHasData) {
       const xml = doc2xml(doc);
       if (xml && xml.includes("<diagram")) {
@@ -154,20 +162,23 @@ export function bindDrawioFile(
   const diagramMap = mxfileMap.get("diagram") as any;
   const hasData = diagramMap && diagramMap.size > 0;
 
+  // 策略：优先使用 Y.Doc 中的远端数据，确保多端数据一致
   if (hasData) {
-    setTimeout(tryBind, 800);
+    setTimeout(tryBind, 300);
   } else {
     const peerCount = provider.awareness.getStates().size;
     if (peerCount <= 1) {
-      setTimeout(tryBind, 800);
+      // 单人模式，直接绑定，不需要等待同步
+      setTimeout(tryBind, 300);
     } else {
+      // 有其他 peer，等待远端数据同步
       let bound = false;
       const onDocUpdate = () => {
         const dm = mxfileMap.get("diagram") as any;
         if (!bound && dm && dm.size > 0) {
           bound = true;
           doc.off("update", onDocUpdate);
-          setTimeout(tryBind, 300);
+          tryBind();
         }
       };
       doc.on("update", onDocUpdate);
@@ -177,7 +188,7 @@ export function bindDrawioFile(
           doc.off("update", onDocUpdate);
           tryBind();
         }
-      }, 800);
+      }, 500);
     }
   }
 
