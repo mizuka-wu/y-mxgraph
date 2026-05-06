@@ -128,11 +128,10 @@ function connectCollaboration() {
     reconnectingText: t.collabReconnecting,
   });
 
-  // 绑定 draw.io（等待 Provider 初始同步）
+  // 绑定 draw.io
   bindDrawioFile(
     collabState.doc!,
     collabState.provider!.awareness,
-    collabState.provider!,
     (binding) => {
       collabState.binding = binding;
       Reflect.set(window, "__provider__", collabState.provider);
