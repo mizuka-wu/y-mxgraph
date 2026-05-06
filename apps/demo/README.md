@@ -79,20 +79,71 @@ loadDrawioScript(version, {
 
 ### `collaboration.ts`
 
-封装 Yjs + y-webrtc 协作逻辑。
+封装 Yjs + y-webrtc 协作逻辑，是整个 demo 的核心。
 
-**`createCollaboration(roomName, callbacks)`**  
+#### `createCollaboration(roomName, callbacks)`
+
 创建 `Y.Doc` 和 `WebrtcProvider`，监听连接状态和 peer 数量变化，返回 `CollabState`。
 
-**`bindDrawioFile(doc, awareness, onBind)`**  
-等待 `window.App` 就绪后，调用 `App.main` 双回调模式：
+#### `bindDrawioFile(doc, awareness, onBind)`
 
-- 第二个回调（UI 工厂）：创建 `Editor` 和 `App` 实例，挂载到 `#drawio-container`，并为容器添加 `geEditor` class 以触发 draw.io 的 CSS Grid 布局
-- 第一个回调（就绪回调）：调用 `ui.refresh()` + 触发 `resize` 事件强制重新计算布局，再创建 `Binding` 实例完成 Yjs 绑定
+将 draw.io 文件绑定到 Y.Doc，实现双向同步。
+
+**同步策略（为什么需要等待）：**
+
+当新客户端加入房间时，Y.Doc 是空的。如果立即创建 Binding，会导致：
+1. Binding 用本地空模板初始化 Y.Doc
+2. 远端数据到达后，与本地数据冲突
+3. 两端数据不一致
+
+因此需要等待 Y.Doc 收到远端数据后再创建 Binding。
+
+```typescript
+// 检查 Y.Doc 是否已有数据
+const diagramMap = mxfileMap.get("diagram");
+const hasData = diagramMap && diagramMap.size > 0;
+
+if (hasData) {
+  // 有数据，直接绑定
+  setTimeout(tryBind, 300);
+} else {
+  const peerCount = provider.awareness.getStates().size;
+  if (peerCount <= 1) {
+    // 单人模式，直接绑定
+    setTimeout(tryBind, 300);
+  } else {
+    // 有其他 peer，等待远端数据同步
+    doc.on("update", onDocUpdate);
+    setTimeout(tryBind, 500); // 超时兜底
+  }
+}
+```
+
+**为什么需要手动同步 doc 到 file：**
+
+draw.io 的 `file.patch()` 只更新内部数据结构，不触发 UI 重新渲染。因此在创建 Binding 前，需要手动把 Y.Doc 数据转成 XML 并设置到 file：
+
+```typescript
+if (docHasData) {
+  const xml = doc2xml(doc);
+  file.ui.setFileData(xml);
+  file.setData(xml);
+}
+```
+
+这是 draw.io API 的限制，[ws-demo](../simple-y-websocket-server-demo) 也采用相同方案。
+
+**绑定流程：**
+
+1. 等待 `window.App` 就绪
+2. 调用 `App.main` 双回调模式：
+   - 第二个回调（UI 工厂）：创建 `Editor` 和 `App` 实例，挂载到 `#drawio-container`
+   - 第一个回调（就绪回调）：检查 Y.Doc 数据，手动同步到 file，创建 Binding
+3. 调用 `app.refresh()` 刷新 UI
 
 调试时可通过 `window.__doc__`、`window.__binding__` 访问运行时对象。
 
-**`disconnectCollaboration(state)`**
+#### `disconnectCollaboration(state)`
 
 销毁 Binding、Provider、Doc，清理调试引用。
 

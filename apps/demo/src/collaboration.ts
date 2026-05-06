@@ -79,7 +79,6 @@ export function bindDrawioFile(
     const diagramMap = mxfileMap.get("diagram") as any;
     const docHasData = diagramMap && diagramMap.size > 0;
 
-    // 优先使用 Y.Doc 中的远端数据，确保多端数据一致
     if (docHasData) {
       const xml = doc2xml(doc);
       if (xml && xml.includes("<diagram")) {
