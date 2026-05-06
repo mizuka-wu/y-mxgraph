@@ -23,6 +23,7 @@ export default defineConfig({
                 { text: "快速开始", link: "/guide/getting-started" },
                 { text: "使用 Provider", link: "/guide/providers" },
                 { text: "集成 draw.io", link: "/guide/drawio-integration" },
+                { text: "同步策略", link: "/guide/sync-strategy" },
                 { text: "实现原理", link: "/guide/architecture" },
                 { text: "与原版差异", link: "/guide/implementation-diff" },
               ],
@@ -65,6 +66,7 @@ export default defineConfig({
                   text: "Integrating draw.io",
                   link: "/en/guide/drawio-integration",
                 },
+                { text: "Sync Strategy", link: "/en/guide/sync-strategy" },
                 { text: "Architecture", link: "/en/guide/architecture" },
                 {
                   text: "Migration Guide",

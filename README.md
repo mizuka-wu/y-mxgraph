@@ -29,13 +29,20 @@ import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
 const doc = new Y.Doc();
 
 App.main((app) => {
-  // Ensure consistent initial files across clients. draw.io generates random diagram ids by default,
-  // which can cause sync issues if clients start from different states. Use generateFileTemplate to create a unified template.
-  if (!app.currentFile.data) {
-    app.currentFile.data = Binding.generateFileTemplate('diagram-0');
+  const file = app.currentFile;
+
+  // If Y.Doc already has data (from other clients), use it
+  const mxfileMap = doc.getMap('mxfile');
+  const diagramMap = mxfileMap.get('diagram');
+  if (diagramMap && diagramMap.size > 0) {
+    const { doc2xml } = await import('y-mxgraph');
+    file.ui.setFileData(doc2xml(doc));
+    file.setData(doc2xml(doc));
+  } else if (!file.data) {
+    file.data = Binding.generateFileTemplate('diagram-0');
   }
 
-  const binding = new Binding(app.currentFile, { doc });
+  const binding = new Binding(file, { doc });
 
   window.addEventListener('beforeunload', () => binding.destroy());
 });
