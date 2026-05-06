@@ -58,17 +58,27 @@ export function createCollaboration(
 
 /**
  * 绑定 draw.io 文件到 Yjs
+ * @param doc Y.Doc 实例
+ * @param awareness Awareness 实例
+ * @param provider WebrtcProvider 实例（用于等待初始同步）
+ * @param onBind Binding 创建完成后的回调
  */
 export function bindDrawioFile(
   doc: Y.Doc,
   awareness: Awareness,
+  provider: WebrtcProvider,
   onBind: (binding: Binding) => void,
 ): () => void {
   const undoManager = new Y.UndoManager(doc, {
     trackedOrigins: new Set([LOCAL_ORIGIN]),
   });
 
+  let bindingCreated = false;
+  let isMounted = true;
+
   const tryBind = () => {
+    if (!isMounted || bindingCreated) return;
+
     const App = (window as any).App;
     if (!App) {
       setTimeout(tryBind, 500);
@@ -76,6 +86,9 @@ export function bindDrawioFile(
     }
 
     const doBind = (app: any, file: any) => {
+      if (bindingCreated) return;
+      bindingCreated = true;
+
       const binding = new Binding(file, {
         doc,
         awareness,
@@ -123,10 +136,25 @@ export function bindDrawioFile(
     );
   };
 
-  // 延迟执行以确保 App 完全初始化
-  const timeoutId = setTimeout(tryBind, 800);
+  // 等待 Provider 完成初始同步后再绑定
+  const handleSynced = () => {
+    if (isMounted) {
+      // 延迟执行以确保 App 完全初始化
+      setTimeout(tryBind, 800);
+    }
+  };
 
-  return () => clearTimeout(timeoutId);
+  if (provider.synced) {
+    // Provider 已经同步完成，直接绑定
+    setTimeout(tryBind, 800);
+  } else {
+    // 等待 synced 事件
+    provider.once("synced", handleSynced);
+  }
+
+  return () => {
+    isMounted = false;
+  };
 }
 
 /**
