@@ -157,24 +157,28 @@ export function bindDrawioFile(
   if (hasData) {
     setTimeout(tryBind, 800);
   } else {
-    let bound = false;
-    const onDocUpdate = () => {
-      const dm = mxfileMap.get("diagram") as any;
-      const size = dm ? dm.size : 0;
-      if (!bound && size > 0) {
-        bound = true;
-        doc.off("update", onDocUpdate);
-        setTimeout(tryBind, 500);
-      }
-    };
-    doc.on("update", onDocUpdate);
-    setTimeout(() => {
-      if (!bound) {
-        bound = true;
-        doc.off("update", onDocUpdate);
-        tryBind();
-      }
-    }, 1500);
+    const peerCount = provider.awareness.getStates().size;
+    if (peerCount <= 1) {
+      setTimeout(tryBind, 800);
+    } else {
+      let bound = false;
+      const onDocUpdate = () => {
+        const dm = mxfileMap.get("diagram") as any;
+        if (!bound && dm && dm.size > 0) {
+          bound = true;
+          doc.off("update", onDocUpdate);
+          setTimeout(tryBind, 300);
+        }
+      };
+      doc.on("update", onDocUpdate);
+      setTimeout(() => {
+        if (!bound) {
+          bound = true;
+          doc.off("update", onDocUpdate);
+          tryBind();
+        }
+      }, 800);
+    }
   }
 
   return () => { isMounted = false; };
