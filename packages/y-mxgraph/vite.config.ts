@@ -30,6 +30,11 @@ const pkg = {
       types: "./index.d.ts",
     },
   },
+  "dependencies": {
+    "colord": "^2.9.3",
+    "lodash-es": "^4.17.21",
+    "xml-js": "^1.6.11"
+  },
   peerDependencies: {
     "y-protocols": "^1.0.0",
     yjs: "^13.6.0",
