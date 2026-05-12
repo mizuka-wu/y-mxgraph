@@ -64,6 +64,8 @@ export interface DrawioUi {
   pages: unknown[];
   diffPages(oldPages: unknown[], newPages: unknown[]): unknown;
   clonePages(pages: unknown[]): unknown[];
+  /** 解析 XML 并重建 pages / mxGraphModel，触发 UI 重绘 */
+  setFileData(data: string): void;
 }
 
 /** mxGraph 事件对象 */
@@ -81,6 +83,8 @@ export interface DrawioFile {
   getUi(): DrawioUi;
   setShadowPages(pages: unknown[]): void;
   patch(patches: unknown[]): void;
+  /** 仅赋值 this.data = xml，不触发 UI 重绘 */
+  setData(data: string): void;
 }
 
 /** draw.io App（demo 中通过 iframe 访问） */

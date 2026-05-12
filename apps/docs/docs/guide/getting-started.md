@@ -12,7 +12,7 @@ pnpm add y-mxgraph yjs y-protocols
 
 ```ts
 import * as Y from 'yjs';
-import { Binding, doc2xml } from 'y-mxgraph';
+import { Binding } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 
@@ -20,21 +20,12 @@ const doc = new Y.Doc();
 App.main((app) => {
   const file = app.currentFile;
 
-  // 检查 Y.Doc 是否已有数据（其他客户端同步过来的）
-  const mxfileMap = doc.getMap('mxfile');
-  const diagramMap = mxfileMap.get('diagram');
-  const docHasData = diagramMap && diagramMap.size > 0;
-
-  if (docHasData) {
-    // 优先使用远端数据，确保多端一致
-    file.ui.setFileData(doc2xml(doc));
-    file.setData(doc2xml(doc));
-  } else if (!file.data) {
-    // 本地初始化
-    file.data = Binding.generateFileTemplate('diagram-0');
-  }
-
-  const binding = new Binding(file, { doc });
+  // Binding 会按 `initialContent` 策略（默认 `replace`）自动对齐 file 与 Y.Doc：
+  //   - 'replace'      ：doc 非空时用 doc 内容覆盖 file UI（推荐）
+  //   - 'merge-remote' ：按 diagram id 合并，冲突 id 以 doc 为准
+  //   - 'merge-client' ：按 diagram id 合并，冲突 id 以 file 为准
+  // 内部会调用 `file.ui.setFileData(xml)` + `file.setData(xml)` 触发 UI 重绘。
+  const binding = new Binding(file, { doc /*, initialContent: 'merge-remote' */ });
 });
 ```
 
