@@ -7,7 +7,7 @@
  *   数据初始化再被远端数据覆盖。
  */
 import type { Awareness } from "y-protocols/awareness";
-import { YMxGraphBridgeClient } from "@y-mxgraph/iframe-bridge";
+import { YMxGraphBridgeClient } from "y-mxgraph/iframe-bridge/client";
 import { loadDrawioScript } from "./drawio-loader.js";
 import { bindDrawioFile } from "./collaboration.js";
 

@@ -9,7 +9,7 @@
  */
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
-import { YMxGraphBridgeProvider } from "@y-mxgraph/iframe-bridge";
+import { YMxGraphBridgeProvider } from "y-mxgraph/iframe-bridge/provider";
 import { DRAWIO_VERSIONS, SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 // === UI 元素 ===
@@ -98,7 +98,11 @@ function getIframeSrc(iframeId: string, version: string, customUrl?: string) {
 }
 
 // === Slot 生命周期 ===
-function createSlot(id: "1" | "2", iframe: HTMLIFrameElement, roomName: string): Slot {
+function createSlot(
+  id: "1" | "2",
+  iframe: HTMLIFrameElement,
+  roomName: string,
+): Slot {
   const doc = new Y.Doc();
   const rtc = new WebrtcProvider(roomName, doc, {
     signaling: SIGNALING_SERVERS,
@@ -133,9 +137,9 @@ function createSlot(id: "1" | "2", iframe: HTMLIFrameElement, roomName: string):
 
   // 子页绑定完成后会 setLocalStateField('drawioReady', true)，借此判定 UI ready
   rtc.awareness.on("update", () => {
-    const myState = rtc.awareness.getLocalState() as
-      | { drawioReady?: boolean }
-      | null;
+    const myState = rtc.awareness.getLocalState() as {
+      drawioReady?: boolean;
+    } | null;
     updateDrawioStatus(id, !!myState?.drawioReady);
     recomputePeerCount();
   });
