@@ -1,9 +1,13 @@
-import * as Y from "yjs";
-import {
-  Awareness,
-  applyAwarenessUpdate,
-  encodeAwarenessUpdate,
-} from "y-protocols/awareness";
+/**
+ * iframe 模式子页（v1.3 bridge）。
+ *
+ * - YMxGraphBridgeClient 持有本地 Y.Doc 与 AwarenessStub，
+ *   通过 postMessage 和父页双向同步。
+ * - drawio 加载完成 + 首个 SYNC_UPDATE 到达后再绑定，避免 drawio 用空
+ *   数据初始化再被远端数据覆盖。
+ */
+import type { Awareness } from "y-protocols/awareness";
+import { YMxGraphBridgeClient } from "@y-mxgraph/iframe-bridge";
 import { loadDrawioScript } from "./drawio-loader.js";
 import { bindDrawioFile } from "./collaboration.js";
 
@@ -17,6 +21,7 @@ async function init() {
   const overlay = document.getElementById("loading-overlay")!;
   const container = document.getElementById("drawio-container")!;
 
+  // 1) 加载 draw.io
   try {
     await loadDrawioScript(
       version,
@@ -39,71 +44,37 @@ async function init() {
     return;
   }
 
-  // 创建本地 ydoc 和 awareness（不连接 provider）
-  const ydoc = new Y.Doc();
-  const awareness = new Awareness(ydoc);
-
-  // 标记是否正在应用父页发来的 update，避免回发导致循环
-  let applyingParentUpdate = false;
-
-  // 绑定 draw.io
-  const unbind = bindDrawioFile(ydoc, awareness, null as any, () => {
-    console.log(`[iframe ${iframeId}] draw.io bound`);
-    // 向父页请求初始同步
-    window.parent.postMessage({ type: "init", iframeId }, "*");
-  });
-
-  // 监听本地 ydoc update -> 发给父页
-  ydoc.on("update", (update: Uint8Array) => {
-    if (applyingParentUpdate) return;
-    window.parent.postMessage(
-      { type: "ydoc-update", iframeId, payload: Array.from(update) },
-      "*",
-    );
-  });
-
-  // 监听本地 awareness update -> 发给父页
-  awareness.on(
-    "update",
-    ({
-      added,
-      updated,
-      removed,
-    }: {
-      added: number[];
-      updated: number[];
-      removed: number[];
-    }) => {
-      if (applyingParentUpdate) return;
-      const changes = [...added, ...updated, ...removed];
-      if (changes.length === 0) return;
-      const update = encodeAwarenessUpdate(awareness, changes);
-      window.parent.postMessage(
-        { type: "awareness-update", iframeId, payload: Array.from(update) },
-        "*",
-      );
+  // 2) 建立 bridge 客户端
+  const bridge = new YMxGraphBridgeClient({
+    onDisconnect: () => {
+      console.warn(`[iframe ${iframeId}] parent unreachable`);
     },
-  );
-
-  // 监听父页消息
-  window.addEventListener("message", (event) => {
-    if (event.source !== window.parent) return;
-    const { type, payload } = event.data;
-
-    if (type === "ydoc-sync" || type === "ydoc-update") {
-      applyingParentUpdate = true;
-      Y.applyUpdate(ydoc, new Uint8Array(payload));
-      applyingParentUpdate = false;
-    } else if (type === "awareness-sync" || type === "awareness-update") {
-      applyingParentUpdate = true;
-      applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
-      applyingParentUpdate = false;
-    }
   });
 
-  // 暴露调试对象
-  (window as any).__iframeYdoc__ = ydoc;
-  (window as any).__iframeAwareness__ = awareness;
+  // 3) 第一轮 SYNC_UPDATE 到达后再绑定 drawio，这样 doc2xml 能直接
+  //    拿到远端当前的完整内容。
+  const runBind = () => {
+    bindDrawioFile(
+      bridge.doc,
+      bridge.awareness as unknown as Awareness,
+      null,
+      () => {
+        console.log(`[iframe ${iframeId}] draw.io bound`);
+        // 通知父页子页已 ready（父页用该字段判断 drawio 加载完成）
+        bridge.awareness.setLocalStateField("drawioReady", true);
+        bridge.awareness.setLocalStateField("iframeId", iframeId);
+      },
+    );
+  };
+  if (bridge.isSynced()) runBind();
+  else bridge.once("synced", runBind);
+
+  // 调试
+  Reflect.set(window, "__iframeYdoc__", bridge.doc);
+  Reflect.set(window, "__iframeAwareness__", bridge.awareness);
+  Reflect.set(window, "__bridge__", bridge);
+
+  window.addEventListener("beforeunload", () => bridge.destroy());
 }
 
 window.addEventListener("DOMContentLoaded", init);
