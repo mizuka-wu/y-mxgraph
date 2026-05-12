@@ -80,6 +80,7 @@ provider.destroy();
 ## 完整示例：WebSocket 服务器 + 文件持久化
 
 我们提供了一个完整的 WebSocket 服务器示例 (`@y-mxgraph/ws-demo`)，包含：
+
 - 自定义 Node.js 服务器，支持文件系统持久化
 - 客户端自动同步服务器数据
 - 支持多客户端实时协作
@@ -138,16 +139,11 @@ setPersistence({
 });
 ```
 
-客户端在 `provider.synced` 后使用 `doc2xml` 将服务器数据加载到 draw.io：
+客户端在 `provider.synced` 后直接创建 Binding，由 Binding 内部按 `initialContent` 策略（默认 `replace`）调用 `file.ui.setFileData(xml)` + `file.setData(xml)` 完成初始化：
 
 ```ts
 provider.on('sync', (isSynced) => {
   if (isSynced) {
-    const xml = doc2xml(doc);
-    if (xml) {
-      file.ui.setFileData(xml);
-      file.setData(xml);
-    }
     const binding = new Binding(file, { doc, awareness, undoManager });
   }
 });

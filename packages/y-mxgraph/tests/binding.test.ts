@@ -33,7 +33,12 @@ function createMockFile(doc: Y.Doc): DrawioFile {
   };
 
   const mockContainer = {
-    getBoundingClientRect: vi.fn(() => ({ x: 0, y: 0, width: 800, height: 600 })),
+    getBoundingClientRect: vi.fn(() => ({
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 600,
+    })),
     scrollLeft: 0,
     scrollTop: 0,
     clientWidth: 800,
@@ -68,12 +73,16 @@ function createMockFile(doc: Y.Doc): DrawioFile {
       pages,
       diffPages: vi.fn(() => ({})),
       clonePages: vi.fn((p: unknown[]) => [...p]),
+      setFileData: vi.fn(),
     },
     getUi: vi.fn(function (this: typeof file) {
       return this.ui;
     }),
     setShadowPages: vi.fn(function (this: typeof file, p: unknown[]) {
       this.shadowPages = p;
+    }),
+    setData: vi.fn(function (this: typeof file, data: string) {
+      this.data = data;
     }),
     patch: vi.fn(),
     _listeners: listeners,

@@ -51,34 +51,41 @@ if (hasData) {
 }
 ```
 
-## 为什么需要手动同步 doc 到 file
+## Binding 如何同步 doc 与 file
 
-draw.io 的 `file.patch()` 方法只更新内部数据结构，**不触发 UI 重新渲染**。
+draw.io 的 `file.patch()` 只更新内部数据结构，**不触发 UI 重新渲染**；UI 重绘需要 `file.ui.setFileData(xml)`，而 `file.data` 则需要 `file.setData(xml)` 才会同步。
 
-这意味着：
-- 数据已正确同步到 Y.Doc
-- 但 draw.io 的 UI 显示的还是旧数据
-
-因此在创建 Binding 前，需要手动把 Y.Doc 数据转成 XML 并设置到 file：
+以前版本需要业务在创建 Binding 前手动同步，现在 **Binding 会自动处理**。通过 `initialContent` 选项控制初始化策略，默认 `replace`：
 
 ```typescript
-import { doc2xml } from 'y-mxgraph';
+// 默认 'replace'：doc 非空时用 doc XML 覆盖 file UI
+new Binding(file, { doc });
 
-if (docHasData) {
-  const xml = doc2xml(doc);
-  file.ui.setFileData(xml);  // 更新 UI 显示
-  file.setData(xml);         // 更新数据
-}
+// 'merge-remote'：按 diagram id 取并集，冲突以 doc 为准
+new Binding(file, { doc, initialContent: 'merge-remote' });
+
+// 'merge-client'：按 diagram id 取并集，冲突以 file 为准
+new Binding(file, { doc, initialContent: 'merge-client' });
 ```
 
-这是 draw.io API 的限制，[ws-demo](https://github.com/mizuka-wu/y-mxgraph/tree/main/apps/simple-y-websocket-server-demo) 也采用相同方案。
+若定制 file 子类（如 CollabFile / DriveFile）在 `setData` 上重写了自动保存逻辑，可以提供 `applyFileData` 钩子接管：
+
+```typescript
+new Binding(file, {
+  doc,
+  applyFileData: (f, xml) => {
+    // 只走 UI 刷新，跳过可能触发保存的 setData
+    f.ui.setFileData(xml);
+  },
+});
+```
 
 ## 完整流程
 
 ```typescript
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { Binding, doc2xml } from 'y-mxgraph';
+import { Binding } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider('my-room', doc);
@@ -93,23 +100,10 @@ function bindDrawio() {
   App.main((ui: any) => {
     const file = ui.currentFile;
 
-    // 1. 检查 Y.Doc 是否有数据
-    const mxfileMap = doc.getMap('mxfile');
-    const diagramMap = mxfileMap.get('diagram');
-    const docHasData = diagramMap && diagramMap.size > 0;
-
-    // 2. 手动同步数据到 file
-    if (docHasData) {
-      file.ui.setFileData(doc2xml(doc));
-      file.setData(doc2xml(doc));
-    } else if (!file.data) {
-      file.data = Binding.generateFileTemplate('diagram-0');
-    }
-
-    // 3. 创建 Binding
+    // Binding 内部会按 initialContent 策略（默认 'replace'）调用
+    // file.ui.setFileData(xml) + file.setData(xml)，业务不需手动处理。
     const binding = new Binding(file, { doc });
 
-    // 4. 刷新 UI
     ui.refresh();
     window.dispatchEvent(new Event('resize'));
   }, () => {
@@ -136,29 +130,13 @@ if (diagramMap && diagramMap.size > 0) {
 }
 ```
 
-## 与 ws-demo 的对比
-
-| 特性 | demo (WebRTC) | ws-demo (WebSocket) |
-|------|---------------|---------------------|
-| 同步策略 | 等待 Y.Doc update 事件 | 等待 provider synced 事件 |
-| 数据同步 | 手动 doc2xml + setFileData | 手动 doc2xml + setFileData |
-| 超时兜底 | 500ms | 无（WebSocket 可靠） |
-
-两者都采用手动同步方案，因为这是 draw.io API 的限制。
-
-## 常见问题
-
-### 新窗口不显示旧窗口的数据
-
-**原因**：Binding 在 Y.Doc 收到远端数据前就创建了。
-
 **解决**：等待 Y.Doc 有数据后再创建 Binding（参考上面的代码）。
 
 ### 数据同步了但 UI 没更新
 
-**原因**：`file.patch()` 不触发 UI 重新渲染。
+**原因**：`file.patch()` / `file.setData()` 都不触发 UI 重绘，只有 `file.ui.setFileData(xml)` 才能重建 pages 与 mxGraphModel。
 
-**解决**：在创建 Binding 前手动调用 `file.ui.setFileData(xml)` 和 `file.setData(xml)`。
+**解决**：使用 v0.2 之后的 Binding，它会自动在初始化阶段同时调用 `setFileData` 与 `setData`；若只需刷 UI 不动 `file.data`，可用 `applyFileData` 钩子覆写默认逻辑。
 
 ### 出现孤立 page
 

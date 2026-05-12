@@ -51,34 +51,41 @@ if (hasData) {
 }
 ```
 
-## Why Manually Sync doc to file
+## How Binding Reconciles doc and file
 
-draw.io's `file.patch()` method only updates internal data structure, **does not trigger UI re-rendering**.
+draw.io's `file.patch()` only updates internal data structure and **does not trigger UI re-rendering**. To repaint the canvas you must call `file.ui.setFileData(xml)`; to keep `file.data` in sync you also need `file.setData(xml)`.
 
-This means:
-- Data is correctly synced to Y.Doc
-- But draw.io UI still shows old data
-
-Therefore, before creating Binding, we need to manually convert Y.Doc data to XML and set it to file:
+Previous versions required callers to do this manually before constructing `Binding`. The current `Binding` handles it automatically via the `initialContent` option (default `replace`):
 
 ```typescript
-import { doc2xml } from 'y-mxgraph';
+// default 'replace': overwrite file UI with doc XML if doc is non-empty
+new Binding(file, { doc });
 
-if (docHasData) {
-  const xml = doc2xml(doc);
-  file.ui.setFileData(xml);  // Update UI display
-  file.setData(xml);         // Update data
-}
+// 'merge-remote': union by diagram id; doc wins on conflicts
+new Binding(file, { doc, initialContent: 'merge-remote' });
+
+// 'merge-client': union by diagram id; file wins on conflicts
+new Binding(file, { doc, initialContent: 'merge-client' });
 ```
 
-This is a limitation of draw.io API. [ws-demo](https://github.com/mizuka-wu/y-mxgraph/tree/main/apps/simple-y-websocket-server-demo) uses the same approach.
+For custom `DrawioFile` subclasses (e.g. `CollabFile` / `DriveFile`) whose `setData` triggers an auto-save, supply the `applyFileData` hook to override the default behaviour:
+
+```typescript
+new Binding(file, {
+  doc,
+  applyFileData: (f, xml) => {
+    // refresh UI only, skip setData to avoid triggering auto-save
+    f.ui.setFileData(xml);
+  },
+});
+```
 
 ## Complete Flow
 
 ```typescript
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { Binding, doc2xml } from 'y-mxgraph';
+import { Binding } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider('my-room', doc);
@@ -93,23 +100,10 @@ function bindDrawio() {
   App.main((ui: any) => {
     const file = ui.currentFile;
 
-    // 1. Check if Y.Doc has data
-    const mxfileMap = doc.getMap('mxfile');
-    const diagramMap = mxfileMap.get('diagram');
-    const docHasData = diagramMap && diagramMap.size > 0;
-
-    // 2. Manually sync data to file
-    if (docHasData) {
-      file.ui.setFileData(doc2xml(doc));
-      file.setData(doc2xml(doc));
-    } else if (!file.data) {
-      file.data = Binding.generateFileTemplate('diagram-0');
-    }
-
-    // 3. Create Binding
+    // Binding internally calls file.ui.setFileData(xml) + file.setData(xml)
+    // according to the initialContent strategy (default 'replace').
     const binding = new Binding(file, { doc });
 
-    // 4. Refresh UI
     ui.refresh();
     window.dispatchEvent(new Event('resize'));
   }, () => {
@@ -141,10 +135,8 @@ if (diagramMap && diagramMap.size > 0) {
 | Feature | demo (WebRTC) | ws-demo (WebSocket) |
 |---------|---------------|---------------------|
 | Sync strategy | Wait for Y.Doc update event | Wait for provider synced event |
-| Data sync | Manual doc2xml + setFileData | Manual doc2xml + setFileData |
+| Data sync | Binding handles automatically (replace) | Binding handles automatically (replace) |
 | Timeout fallback | 500ms | None (WebSocket reliable) |
-
-Both use manual sync approach due to draw.io API limitations.
 
 ## Common Issues
 
@@ -156,9 +148,9 @@ Both use manual sync approach due to draw.io API limitations.
 
 ### Data synced but UI not updated
 
-**Cause**: `file.patch()` doesn't trigger UI re-rendering.
+**Cause**: Neither `file.patch()` nor `file.setData()` repaints the canvas; only `file.ui.setFileData(xml)` rebuilds pages and mxGraphModel.
 
-**Solution**: Manually call `file.ui.setFileData(xml)` and `file.setData(xml)` before creating Binding.
+**Solution**: Use Binding v0.2+ which calls both `setFileData` and `setData` automatically during initialization. If you only need to refresh UI without touching `file.data`, override via the `applyFileData` hook.
 
 ### Orphaned pages appear
 

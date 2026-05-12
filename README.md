@@ -24,25 +24,24 @@ pnpm add y-mxgraph yjs y-protocols
 
 ```ts
 import * as Y from 'yjs';
-import { Binding, LOCAL_ORIGIN } from 'y-mxgraph';
+import { Binding } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 
 App.main((app) => {
   const file = app.currentFile;
 
-  // If Y.Doc already has data (from other clients), use it
-  const mxfileMap = doc.getMap('mxfile');
-  const diagramMap = mxfileMap.get('diagram');
-  if (diagramMap && diagramMap.size > 0) {
-    const { doc2xml } = await import('y-mxgraph');
-    file.ui.setFileData(doc2xml(doc));
-    file.setData(doc2xml(doc));
-  } else if (!file.data) {
-    file.data = Binding.generateFileTemplate('diagram-0');
-  }
-
-  const binding = new Binding(file, { doc });
+  // Binding automatically reconciles file and Y.Doc based on
+  // `initialContent` strategy (default: 'replace').
+  //   - 'replace'      : Y.Doc wins; file UI is replaced with doc XML
+  //   - 'merge-remote' : union by diagram id; doc wins on conflicts
+  //   - 'merge-client' : union by diagram id; file wins on conflicts
+  //
+  // By default only `file.ui.setFileData(xml)` is called (rebuilds UI).
+  // `file.setData(xml)` is intentionally NOT called so draw.io does not
+  // mark the file as modified and pop up the "Save diagrams to:" dialog.
+  // Override via `applyFileData` if you need to sync `file.data` too.
+  const binding = new Binding(file, { doc /*, initialContent: 'merge-remote' */ });
 
   window.addEventListener('beforeunload', () => binding.destroy());
 });

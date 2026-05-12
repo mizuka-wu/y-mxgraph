@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { type Awareness } from "y-protocols/awareness";
-import { Binding, LOCAL_ORIGIN, doc2xml } from "y-mxgraph";
+import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
 import { WS_URL, DEFAULT_ROOM } from "./config.js";
 
 export interface CollabState {
@@ -80,32 +80,11 @@ export function bindDrawioFile(
   const tryFinalize = () => {
     if (!appFile || !synced) return;
 
-    const { app, file } = appFile;
-    const mxfileMap = doc.getMap("mxfile");
-    const diagramMap = mxfileMap.get("diagram") as any;
-    const diagramOrder = mxfileMap.get("diagramOrder") as any;
+    const { app: _app, file } = appFile;
+    void _app;
 
-    // 检查是否真的有 diagram 数据
-    const docHasData = diagramMap && diagramMap.size > 0;
-
-    // 先用服务器数据替换本地文件内容,确保页面 ID 一致
-    if (docHasData) {
-      const xml = doc2xml(doc);
-      if (xml && xml.includes("<diagram")) {
-        file.ui.setFileData(xml);
-        file.setData(xml);
-      } else {
-        const template = Binding.generateFileTemplate();
-        file.ui.setFileData(template);
-        file.setData(template);
-      }
-    } else {
-      const template = Binding.generateFileTemplate();
-      file.ui.setFileData(template);
-      file.setData(template);
-    }
-
-    // 再创建 Binding
+    // Binding 默认使用 'replace' 策略，内部会调用
+    // `file.ui.setFileData(doc2xml(doc))` + `file.setData(...)` 完成初始化。
     const binding = new Binding(file, {
       doc,
       awareness,

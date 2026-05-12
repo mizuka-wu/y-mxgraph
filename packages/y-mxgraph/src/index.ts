@@ -1,5 +1,5 @@
 export { Binding } from "./binding";
-export type { BindDrawioFileOptions } from "./binding";
+export type { BindDrawioFileOptions, InitialContentStrategy } from "./binding";
 export { xml2doc, doc2xml } from "./transformer";
 export { LOCAL_ORIGIN } from "./helper/origin";
 export {

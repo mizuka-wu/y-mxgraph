@@ -80,6 +80,7 @@ provider.destroy();
 ## Full Example: WebSocket Server with File Persistence
 
 We provide a complete WebSocket server example (`@y-mxgraph/ws-demo`) that includes:
+
 - Custom Node.js server with file system persistence
 - Automatic client synchronization with server data
 - Real-time multi-client collaboration
@@ -143,11 +144,8 @@ The client uses `doc2xml` to load server data into draw.io after `provider.synce
 ```ts
 provider.on('sync', (isSynced) => {
   if (isSynced) {
-    const xml = doc2xml(doc);
-    if (xml) {
-      file.ui.setFileData(xml);
-      file.setData(xml);
-    }
+    // Binding handles file.ui.setFileData(xml) + file.setData(xml) internally
+    // according to the initialContent strategy (default 'replace').
     const binding = new Binding(file, { doc, awareness, undoManager });
   }
 });

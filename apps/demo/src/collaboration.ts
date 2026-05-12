@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { type Awareness } from "y-protocols/awareness";
-import { Binding, LOCAL_ORIGIN, doc2xml } from "y-mxgraph";
+import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
 import { SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 export interface CollabState {
@@ -65,37 +65,13 @@ export function bindDrawioFile(
   let isMounted = true;
 
   /**
-   * draw.io 的 file.patch() 只更新内部数据结构，不触发 UI 重新渲染。
-   * 因此需要在创建 Binding 前，手动把 Y.Doc 数据转成 XML 并设置到 file，
-   * 确保 draw.io 用正确的数据初始化。
-   *
-   * 这是当前 draw.io API 的限制，ws-demo 也采用相同方案。
+   * Binding 自身会按 `initialContent` 策略（默认 `replace`）调用
+   * `file.ui.setFileData` + `file.setData` 完成 UI 与数据对齐，
+   * 业务方无需再手动同步。
    */
   const doBind = (app: any, file: any) => {
     if (bindingCreated) return;
     bindingCreated = true;
-
-    const mxfileMap = doc.getMap("mxfile");
-    const diagramMap = mxfileMap.get("diagram") as any;
-    const docHasData = diagramMap && diagramMap.size > 0;
-
-    if (docHasData) {
-      const xml = doc2xml(doc);
-      if (xml && xml.includes("<diagram")) {
-        file.ui.setFileData(xml);
-        file.setData(xml);
-      } else {
-        const template = Binding.generateFileTemplate("diagram-0");
-        file.ui.setFileData(template);
-        file.setData(template);
-      }
-    } else {
-      if (!file.data) {
-        const template = Binding.generateFileTemplate("diagram-0");
-        file.ui.setFileData(template);
-        file.setData(template);
-      }
-    }
 
     const binding = new Binding(file, {
       doc,
@@ -153,7 +129,9 @@ export function bindDrawioFile(
 
   if (!provider) {
     setTimeout(tryBind, 800);
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }
 
   const mxfileKey = "mxfile";
@@ -191,7 +169,9 @@ export function bindDrawioFile(
     }
   }
 
-  return () => { isMounted = false; };
+  return () => {
+    isMounted = false;
+  };
 }
 
 export function disconnectCollaboration(state: CollabState): void {

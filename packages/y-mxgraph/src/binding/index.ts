@@ -1,12 +1,33 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
 import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
-import { xml2doc } from "../transformer";
+import { xml2doc, doc2xml } from "../transformer";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
 import { LOCAL_ORIGIN } from "../helper/origin";
-import { key as mxfileKey, type YMxFile } from "../models/mxfile";
+import {
+  key as mxfileKey,
+  diagramOrderKey,
+  type YMxFile,
+} from "../models/mxfile";
+import {
+  key as diagramKey,
+  parse as parseDiagram,
+  type YDiagram,
+} from "../models/diagram";
+import { parse as parseXml } from "../helper/xml";
 import type { DrawioFile, MxGraphModel } from "../types/drawio";
+
+/**
+ * 控制 Binding 构造时 file 与 Y.Doc 的初始内容对齐策略。
+ * - `replace`      : doc 非空则用 doc 覆盖 file；doc 为空则保留 file 现有数据（默认）。
+ * - `merge-remote` : 按 diagram id 取并集，同 id 冲突时以 doc 为准（远端权威）。
+ * - `merge-client` : 按 diagram id 取并集，同 id 冲突时以 file 为准（本地权威，覆盖到 doc）。
+ */
+export type InitialContentStrategy =
+  | "replace"
+  | "merge-remote"
+  | "merge-client";
 
 export interface BindDrawioFileOptions {
   doc: Y.Doc;
@@ -19,6 +40,188 @@ export interface BindDrawioFileOptions {
         userNameKey?: string;
         userColorKey?: string;
       };
+  /**
+   * 初始内容对齐策略，默认 `replace`。详见 {@link InitialContentStrategy}。
+   */
+  initialContent?: InitialContentStrategy;
+  /**
+   * 自定义把 XML 应用到 file 的方式。默认实现只调用
+   * `file.ui.setFileData(xml)`（刷新 UI / 重建 pages），
+   * **不会**调用 `file.setData(xml)`，以避免把 file 标记为「已修改」
+   * 触发 draw.io 的 "Save diagrams to:" 存储选择对话框。
+   *
+   * 若业务方确实需要同步 `file.data`（如自定义 CollabFile 或依赖
+   * `file.save()`），可提供自定义实现。
+   */
+  applyFileData?: (file: DrawioFile, xml: string) => void;
+}
+
+/**
+ * 默认只调用 `file.ui.setFileData(xml)` 重建 UI（pages / mxGraphModel），
+ * 有意跳过 `file.setData(xml)`：在 Yjs 驱动的协作场景下，`file.data`
+ * 不是真实状态来源；调用 `setData` 会把文件标记为「已修改」，
+ * draw.io 在没有配置存储后端时会弹出 "Save diagrams to:" 存储选择对话框。
+ *
+ * 若业务方确实需要同步 `file.data`（例如需要 `file.save()` 或依赖
+ * `file.data` 的快照逻辑），可通过 `applyFileData` 选项覆写：
+ *
+ * ```ts
+ * new Binding(file, {
+ *   doc,
+ *   applyFileData: (f, xml) => {
+ *     f.ui.setFileData(xml);
+ *     f.setData(xml);
+ *   },
+ * });
+ * ```
+ */
+const defaultApplyFileData = (file: DrawioFile, xml: string) => {
+  file.ui.setFileData(xml);
+};
+
+/**
+ * 把 file XML 中的 diagram 合并进 Y.Doc。仅在 merge 策略 + doc 已有数据时调用。
+ * @returns 是否成功合并；解析失败时返回 false 由调用方回退到 replace。
+ */
+function mergeFileIntoDoc(
+  doc: Y.Doc,
+  fileXml: string,
+  strategy: "merge-remote" | "merge-client",
+): boolean {
+  let parsed: unknown;
+  try {
+    parsed = parseXml(fileXml);
+  } catch (err) {
+    console.warn(
+      "[y-mxgraph] 合并失败，file XML 解析异常，回退到 replace：",
+      err,
+    );
+    return false;
+  }
+
+  const mxfileObj = (parsed as Record<string, unknown>)?.mxfile as
+    | { diagram?: Array<Record<string, unknown>> }
+    | undefined;
+  if (!mxfileObj || !Array.isArray(mxfileObj.diagram)) {
+    console.warn(
+      "[y-mxgraph] 合并失败，file XML 不是合法 mxfile，回退到 replace",
+    );
+    return false;
+  }
+
+  const mxfileMap = doc.getMap(mxfileKey);
+  const diagramMap = mxfileMap.get(diagramKey) as Y.Map<YDiagram> | undefined;
+  const diagramOrder = mxfileMap.get(diagramOrderKey) as
+    | Y.Array<string>
+    | undefined;
+  if (!diagramMap || !diagramOrder) {
+    console.warn("[y-mxgraph] 合并失败，doc 结构不完整，回退到 replace");
+    return false;
+  }
+
+  doc.transact(() => {
+    for (const diagram of mxfileObj.diagram!) {
+      const id =
+        ((diagram as { _attributes?: { id?: string } })._attributes
+          ?.id as string) || "";
+      if (!id) continue;
+
+      const docHas = diagramMap.has(id);
+      if (docHas && strategy === "merge-remote") {
+        // doc 优先，跳过
+        continue;
+      }
+
+      // 覆盖或新增
+      const yDiagram = parseDiagram(
+        diagram as unknown as import("../models/diagram").Diagram,
+      );
+      diagramMap.set(id, yDiagram);
+      if (!docHas) {
+        diagramOrder.push([id]);
+      }
+    }
+  });
+  return true;
+}
+
+function reconcileInitialContent(
+  doc: Y.Doc,
+  file: DrawioFile,
+  strategy: InitialContentStrategy,
+  applyFileData: (file: DrawioFile, xml: string) => void,
+): boolean {
+  const mxfileMap = doc.getMap(mxfileKey);
+  const docHasData = mxfileMap.size > 0;
+  // 与旧 demo 行为保持一致：file 是否「有任何数据」用 truthy 判断；
+  // 只有完全空时才注入模板，避免把 draw.io 默认文件覆盖成模板触发
+  // 「Save diagrams to:」存储选择对话框。
+  const fileHasAnyData = !!file.data;
+  // merge 策略需要进一步判断是否存在真实 diagram 内容
+  const fileHasDiagrams = fileHasAnyData && file.data.includes("<diagram");
+
+  if (strategy === "replace") {
+    if (docHasData) {
+      const xml = doc2xml(doc);
+      if (xml && xml.includes("<diagram")) {
+        applyFileData(file, xml);
+      } else if (!fileHasAnyData) {
+        applyFileData(file, Binding.generateFileTemplate("diagram-0"));
+      }
+    } else if (!fileHasAnyData) {
+      applyFileData(file, Binding.generateFileTemplate("diagram-0"));
+    }
+    // 其余情况保留 file，避免触发 draw.io 默认文件的存储对话框
+    return mxfileMap.size > 0;
+  }
+
+  // merge-remote / merge-client
+  if (!docHasData && !fileHasDiagrams) {
+    if (!fileHasAnyData) {
+      applyFileData(file, Binding.generateFileTemplate("diagram-0"));
+    }
+    return false;
+  }
+
+  if (!docHasData && fileHasDiagrams) {
+    // 仅 file 有 → 把 file 写入 doc，file 保持不变
+    try {
+      doc.transact(() => {
+        xml2doc(file.data, doc);
+      });
+      return true;
+    } catch (err) {
+      console.warn(
+        "[y-mxgraph] merge 模式下 xml2doc 失败，回退 replace：",
+        err,
+      );
+      applyFileData(file, Binding.generateFileTemplate("diagram-0"));
+      return false;
+    }
+  }
+
+  if (docHasData && !fileHasDiagrams) {
+    // 仅 doc 有可用 diagram → 用 doc 覆盖 file
+    const xml = doc2xml(doc);
+    if (xml && xml.includes("<diagram")) {
+      applyFileData(file, xml);
+    } else if (!fileHasAnyData) {
+      applyFileData(file, Binding.generateFileTemplate("diagram-0"));
+    }
+    return mxfileMap.size > 0;
+  }
+
+  // 双方都有可用 diagram → 按策略合并
+  const ok = mergeFileIntoDoc(doc, file.data, strategy);
+  if (!ok) {
+    // 解析失败回退到 replace（用 doc 覆盖 file）
+    const xml = doc2xml(doc);
+    if (xml && xml.includes("<diagram")) applyFileData(file, xml);
+    return mxfileMap.size > 0;
+  }
+  const xml = doc2xml(doc);
+  if (xml && xml.includes("<diagram")) applyFileData(file, xml);
+  return true;
 }
 
 /**
@@ -53,7 +256,15 @@ export class Binding {
   private cleanupUndoManager?: () => void;
 
   constructor(file: DrawioFile, options: BindDrawioFileOptions) {
-    const { doc, awareness, undoManager, mouseMoveThrottle, cursor } = options;
+    const {
+      doc,
+      awareness,
+      undoManager,
+      mouseMoveThrottle,
+      cursor,
+      initialContent = "replace",
+      applyFileData = defaultApplyFileData,
+    } = options;
 
     this.doc = doc;
 
@@ -61,32 +272,27 @@ export class Binding {
     const graph = ui.editor.graph;
     this.mxGraphModel = graph.model;
 
-    // 检查 Y.Doc 是否已有数据
-    // 注意：doc.share.has() 可能因 doc.getMap() 调用而为 true 但 map 为空
-    // 因此需要同时检查 map 中是否有实际内容
-    const mxfileMap = doc.getMap(mxfileKey);
-    const docHasData = mxfileMap.size > 0;
-    this.docInitialized = docHasData;
-
-    // 初始化 shadowPages = 当前 pages 的克隆
-    // 这样后续 change 事件如果未真正改变 pages 内容，diffPages 会返回空 patch
-    file.setShadowPages(file.ui.clonePages(file.ui.pages));
-
-    // 若 Y.Doc 已有数据（新客户端加入场景），用 ydoc 内容初始化 file
-    if (docHasData) {
-      initDocSnapshot(doc, false);
-      const fullPatch = generatePatch([], doc);
-      if (Object.keys(fullPatch).length > 0) {
-        this.suppressLocalApply = true;
-        try {
-          file.patch([fullPatch]);
-        } finally {
-          this.suppressLocalApply = false;
-        }
+    // 统一初始化：根据 initialContent 策略对齐 file 与 doc。
+    // 内部会调用 applyFileData 钩子（默认 ui.setFileData + file.setData），
+    // 业务方不再需要在外部手动同步。
+    this.suppressLocalApply = true;
+    try {
+      this.docInitialized = reconcileInitialContent(
+        doc,
+        file,
+        initialContent,
+        applyFileData,
+      );
+      // doc 在 reconcile 后才确定有内容，需建立 snapshot 基线
+      if (this.docInitialized) {
+        initDocSnapshot(doc, false);
       }
-      // 同步后重新对齐 shadowPages
-      file.setShadowPages(file.ui.clonePages(file.ui.pages));
+    } finally {
+      this.suppressLocalApply = false;
     }
+
+    // 对齐 shadowPages（reconcile 可能已经替换了 ui.pages）
+    file.setShadowPages(file.ui.clonePages(file.ui.pages));
 
     // 本地变更监听
     this.mxListener = () => {
@@ -142,7 +348,7 @@ export class Binding {
         this.suppressLocalApply = false;
       }
     };
-    mxfileMap.observeDeep(this.docObserver);
+    doc.getMap(mxfileKey).observeDeep(this.docObserver);
 
     // 协作功能
     if (awareness) {

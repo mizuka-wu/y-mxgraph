@@ -66,6 +66,7 @@ export function loadDrawioScript(
     (window as any).urlParams["math"] = "0";
     (window as any).urlParams["stealth"] = "1";
     (window as any).urlParams["chrome"] = "0";
+    (window as any).urlParams["demo"] = "1"; // 自动创建空白文件，跳过 "Save diagrams to:" 存储选择对话框
     if (lang) (window as any).urlParams["lang"] = lang;
 
     // 屏蔽 draw.io 内置的 window.onerror 弹窗（跨域脚本错误会触发 "Script error."）
@@ -137,6 +138,16 @@ export function loadDrawioScript(
 
       script.onload = () => {
         callbacks.onProgress("init");
+
+        // 覆写 draw.io 原型：禁用与 Yjs 实时持久化冲突的 native 对话框
+        const w = window as any;
+        if (w.App?.prototype) {
+          w.App.prototype.onBeforeUnload = function () {}; // 禁止 "All changes will be lost"
+        }
+        if (w.DrawioFile?.prototype) {
+          w.DrawioFile.prototype.addUnsavedStatus = function () {}; // 禁止 "Unsaved changes" 提示
+        }
+
         setTimeout(() => {
           callbacks.onReady(version);
           resolve();
@@ -158,6 +169,16 @@ export function loadDrawioScript(
 
       script.onload = () => {
         callbacks.onProgress("init");
+
+        // 覆写 draw.io 原型：禁用与 Yjs 实时持久化冲突的 native 对话框
+        const w = window as any;
+        if (w.App?.prototype) {
+          w.App.prototype.onBeforeUnload = function () {}; // 禁止 "All changes will be lost"
+        }
+        if (w.DrawioFile?.prototype) {
+          w.DrawioFile.prototype.addUnsavedStatus = function () {}; // 禁止 "Unsaved changes" 提示
+        }
+
         setTimeout(() => {
           callbacks.onReady(version);
           resolve();
