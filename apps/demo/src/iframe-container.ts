@@ -80,6 +80,13 @@ function initBridge(roomName: string) {
   });
 
   updateCollabStatus("loading", "Connecting...");
+
+  // 暴露调试对象到全局
+  const win = window as any;
+  win.__provider__ = provider;
+  win.__doc__ = doc;
+  win.__awareness__ = awareness;
+  win.__bridge__ = bridgeParent;
 }
 
 function init() {
@@ -143,15 +150,24 @@ function init() {
     }
   });
 
-  // 暴露调试对象
-  (window as any).__iframeContainer__ = {
-    get provider() {
-      return currentProvider;
-    },
-    get bridge() {
-      return currentBridge;
-    },
-  };
+  // 暴露调试对象（getter 形式，始终返回当前值）
+  const win = window as any;
+  if (!win.__iframeContainer__) {
+    win.__iframeContainer__ = {
+      get provider() {
+        return currentProvider;
+      },
+      get doc() {
+        return currentProvider ? (currentProvider as any).doc : null;
+      },
+      get awareness() {
+        return currentProvider ? currentProvider.awareness : null;
+      },
+      get bridge() {
+        return currentBridge;
+      },
+    };
+  }
 }
 
 window.addEventListener("DOMContentLoaded", init);
