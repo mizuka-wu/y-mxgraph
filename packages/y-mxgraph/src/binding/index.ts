@@ -342,7 +342,8 @@ export class Binding {
       }
 
       // replace 策略下，若构造时 doc 为空，现在 doc 有数据，强制替换本地 file
-      if (this.shouldReplaceWhenDocHasData) {
+      // 注意：只有非本地 transaction 时才执行强制替换，避免本地初始化时自我覆盖
+      if (this.shouldReplaceWhenDocHasData && !transaction.local) {
         const mxfileMap = doc.getMap(mxfileKey);
         const diagramMap = mxfileMap.get(diagramKey) as Y.Map<Y.XmlElement> | undefined;
         if (diagramMap && diagramMap.size > 0) {
