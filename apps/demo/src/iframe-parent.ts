@@ -1,15 +1,10 @@
-/**
- * iframe 模式父页（v1.3 bridge）。
- *
- * 设计：
- * - 页面挂 2 个 iframe (A/B)。v1.3 bridge 要求 Provider 与 iframe 1:1，
- *   因此每个 iframe 独立：一份 Y.Doc + WebrtcProvider + BridgeProvider。
- * - 两个 iframe 用同一个 room 通过 WebRTC 互相发现，彼此作为真正的
- *   协作 peer（而不是原来那种父端手动 fan-out 的方案）。
- */
 import * as Y from "yjs";
+import {
+  Awareness,
+  applyAwarenessUpdate,
+  encodeAwarenessUpdate,
+} from "y-protocols/awareness";
 import { WebrtcProvider } from "y-webrtc";
-import { YMxGraphBridgeProvider } from "y-mxgraph/iframe-bridge/provider";
 import { DRAWIO_VERSIONS, SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 // === UI 元素 ===
@@ -32,21 +27,20 @@ const ui = {
   iframeB: document.getElementById("iframe-b") as HTMLIFrameElement,
 };
 
-// === 状态 ===
-interface Slot {
-  id: "1" | "2";
-  iframe: HTMLIFrameElement;
-  doc: Y.Doc;
-  rtc: WebrtcProvider;
-  bridge: YMxGraphBridgeProvider;
-  rtcConnected: boolean;
-  synced: boolean;
-}
+const iframeReady = new Map<string, boolean>([
+  ["1", false],
+  ["2", false],
+]);
 
-const slots = new Map<"1" | "2", Slot>();
+// === 状态 ===
+let bridgeState: {
+  provider: WebrtcProvider | null;
+  doc: Y.Doc | null;
+  awareness: Awareness | null;
+} = { provider: null, doc: null, awareness: null };
 
 // === 工具函数 ===
-function updateDrawioStatus(id: "1" | "2", ready: boolean) {
+function updateDrawioStatus(id: string, ready: boolean) {
   const dot = id === "1" ? ui.drawioDotA : ui.drawioDotB;
   const status = id === "1" ? ui.drawioStatusA : ui.drawioStatusB;
   dot.className = "status-dot";
@@ -59,32 +53,16 @@ function updateDrawioStatus(id: "1" | "2", ready: boolean) {
 }
 
 function updateCollabStatus(
-  state: "connected" | "disconnected" | "loading",
+  status: "connected" | "disconnected" | "loading",
   text: string,
 ) {
   ui.collabStatus.textContent = text;
   ui.collabDot.className = "status-dot";
-  if (state === "connected") ui.collabDot.classList.add("connected");
-  else if (state === "loading") ui.collabDot.classList.add("loading");
+  if (status === "connected") ui.collabDot.classList.add("connected");
+  else if (status === "loading") ui.collabDot.classList.add("loading");
 }
 
-function recomputeCollabStatus(roomName: string) {
-  const connected = [...slots.values()].every((s) => s.rtcConnected);
-  if (connected && slots.size === 2) {
-    updateCollabStatus("connected", `Connected (${roomName})`);
-  } else {
-    updateCollabStatus("loading", "Connecting...");
-  }
-}
-
-function recomputePeerCount() {
-  // 两个 slot 共享同一个 room，取一个 slot 看到的 peer 数即可。
-  const first = slots.get("1") ?? slots.get("2");
-  if (!first) {
-    ui.peerCount.style.display = "none";
-    return;
-  }
-  const count = first.rtc.awareness.getStates().size;
+function updatePeerCount(count: number) {
   ui.peerNum.textContent = String(count);
   ui.peerCount.style.display = count > 0 ? "inline" : "none";
 }
@@ -97,82 +75,13 @@ function getIframeSrc(iframeId: string, version: string, customUrl?: string) {
   return `./iframe.html?${params.toString()}`;
 }
 
-// === Slot 生命周期 ===
-function createSlot(
-  id: "1" | "2",
-  iframe: HTMLIFrameElement,
-  roomName: string,
-): Slot {
-  const doc = new Y.Doc();
-  const rtc = new WebrtcProvider(roomName, doc, {
-    signaling: SIGNALING_SERVERS,
-  });
-  const bridge = new YMxGraphBridgeProvider(iframe, doc, {
-    awareness: rtc.awareness,
-    // 子页重载期间不要立刻判死亡
-    disconnectTimeout: 30_000,
-    onDisconnect: () => {
-      updateDrawioStatus(id, false);
-    },
-  });
-
-  const slot: Slot = {
-    id,
-    iframe,
-    doc,
-    rtc,
-    bridge,
-    rtcConnected: false,
-    synced: false,
-  };
-
-  bridge.on("connected", () => {
-    // 心跳接通意味着子页已经响应，但不代表 drawio 已经绑定，
-    // 真正的 "ready" 以子页 AWARENESS_SET 上报的 ready 字段为准（见下）。
-  });
-
-  bridge.on("disconnected", () => {
-    updateDrawioStatus(id, false);
-  });
-
-  // 子页绑定完成后会 setLocalStateField('drawioReady', true)，借此判定 UI ready
-  rtc.awareness.on("update", () => {
-    const myState = rtc.awareness.getLocalState() as {
-      drawioReady?: boolean;
-    } | null;
-    updateDrawioStatus(id, !!myState?.drawioReady);
-    recomputePeerCount();
-  });
-
-  rtc.on("status", (event: { connected: boolean }) => {
-    slot.rtcConnected = event.connected;
-    recomputeCollabStatus(roomName);
-  });
-
-  return slot;
-}
-
-function destroySlot(slot: Slot) {
-  slot.bridge.destroy();
-  slot.rtc.disconnect();
-  slot.rtc.destroy();
-  slot.doc.destroy();
-}
-
-function rebuildAll(roomName: string, version: string, customUrl?: string) {
-  // 先销毁老的
-  for (const slot of slots.values()) destroySlot(slot);
-  slots.clear();
-  updateDrawioStatus("1", false);
-  updateDrawioStatus("2", false);
-  updateCollabStatus("loading", "Connecting...");
-
-  // iframe.src 切版本
-  ui.iframeA.src = getIframeSrc("1", version, customUrl);
-  ui.iframeB.src = getIframeSrc("2", version, customUrl);
-
-  slots.set("1", createSlot("1", ui.iframeA, roomName));
-  slots.set("2", createSlot("2", ui.iframeB, roomName));
+function broadcastToIframes(type: string, payload: Uint8Array) {
+  if (ui.iframeA.contentWindow) {
+    ui.iframeA.contentWindow.postMessage({ type, payload }, "*");
+  }
+  if (ui.iframeB.contentWindow) {
+    ui.iframeB.contentWindow.postMessage({ type, payload }, "*");
+  }
 }
 
 // === 版本切换 ===
@@ -190,40 +99,118 @@ ui.versionSelect.addEventListener("change", () => {
     }
     history.replaceState(null, "", url.toString());
 
-    const roomName = ui.roomInput.value.trim() || DEFAULT_ROOM;
-    rebuildAll(roomName, version);
+    // 刷新两个 iframe
+    ui.iframeA.src = getIframeSrc("1", version);
+    ui.iframeB.src = getIframeSrc("2", version);
+    iframeReady.set("1", false);
+    iframeReady.set("2", false);
+    updateDrawioStatus("1", false);
+    updateDrawioStatus("2", false);
   }
-});
-
-ui.roomInput.addEventListener("change", () => {
-  const version = ui.versionSelect.value;
-  const roomName = ui.roomInput.value.trim() || DEFAULT_ROOM;
-  rebuildAll(roomName, version);
 });
 
 // === 初始化 ===
 function init() {
+  // 从 URL 获取版本
   const urlVersion = new URLSearchParams(location.search).get("version");
   const version =
     urlVersion && DRAWIO_VERSIONS[urlVersion] ? urlVersion : "latest";
   ui.versionSelect.value = version;
 
+  // 自定义 URL
   const isCustom = version === "custom";
   ui.customUrlGroup.style.display = isCustom ? "flex" : "none";
 
+  // 房间号
   const roomName = ui.roomInput.value.trim() || DEFAULT_ROOM;
 
-  // iframe.src 里附带当前版本
-  ui.iframeA.src = getIframeSrc("1", version);
-  ui.iframeB.src = getIframeSrc("2", version);
+  // 创建 bridge ydoc + WebRTC provider
+  const doc = new Y.Doc();
+  const provider = new WebrtcProvider(roomName, doc, {
+    signaling: SIGNALING_SERVERS,
+  });
+  const awareness = provider.awareness;
 
-  slots.set("1", createSlot("1", ui.iframeA, roomName));
-  slots.set("2", createSlot("2", ui.iframeB, roomName));
+  bridgeState = { provider, doc, awareness };
+
+  // 监听 provider 连接状态
+  provider.on("status", (event: { connected: boolean }) => {
+    if (event.connected) {
+      updateCollabStatus("connected", `Connected (${roomName})`);
+    } else {
+      updateCollabStatus("loading", "Reconnecting...");
+    }
+  });
+
+  // 监听 awareness 更新以刷新在线人数
+  awareness.on("update", () => {
+    const count = awareness.getStates().size;
+    updatePeerCount(count);
+  });
+
+  // 监听 bridge ydoc update -> 广播给所有 iframe
+  doc.on("update", (update: Uint8Array) => {
+    broadcastToIframes("ydoc-update", update);
+  });
+
+  // 监听 bridge awareness update -> 广播给所有 iframe
+  awareness.on(
+    "update",
+    ({
+      added,
+      updated,
+      removed,
+    }: {
+      added: number[];
+      updated: number[];
+      removed: number[];
+    }) => {
+      const changes = [...added, ...updated, ...removed];
+      if (changes.length === 0) return;
+      const update = encodeAwarenessUpdate(awareness, changes);
+      broadcastToIframes("awareness-update", update);
+    },
+  );
+
+  // 监听 iframe 消息
+  window.addEventListener("message", (event) => {
+    if (
+      event.source !== ui.iframeA.contentWindow &&
+      event.source !== ui.iframeB.contentWindow
+    )
+      return;
+    const { type, iframeId, payload } = event.data;
+    if (!iframeId || (iframeId !== "1" && iframeId !== "2")) return;
+
+    const sourceWindow = event.source as Window;
+
+    if (type === "init") {
+      // iframe 初始化完成，发送完整 ydoc 和 awareness 状态
+      if (!iframeReady.get(iframeId)) {
+        iframeReady.set(iframeId, true);
+        updateDrawioStatus(iframeId, true);
+      }
+      const docState = Y.encodeStateAsUpdate(doc);
+      const awarenessState = encodeAwarenessUpdate(
+        awareness,
+        Array.from(awareness.getStates().keys()),
+      );
+      sourceWindow.postMessage(
+        { type: "ydoc-sync", payload: Array.from(docState) },
+        "*",
+      );
+      sourceWindow.postMessage(
+        { type: "awareness-sync", payload: Array.from(awarenessState) },
+        "*",
+      );
+    } else if (type === "ydoc-update") {
+      Y.applyUpdate(doc, new Uint8Array(payload));
+    } else if (type === "awareness-update") {
+      applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
+    }
+  });
 
   updateCollabStatus("loading", "Connecting...");
 }
 
 window.addEventListener("DOMContentLoaded", init);
-window.addEventListener("beforeunload", () => {
-  for (const slot of slots.values()) destroySlot(slot);
-});
