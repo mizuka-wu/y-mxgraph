@@ -254,6 +254,13 @@ export class Binding {
   private cleanupCollaborator?: () => void;
   /** UndoManager 绑定清理函数 */
   private cleanupUndoManager?: () => void;
+  /** 初始内容策略 */
+  private initialContentStrategy: InitialContentStrategy;
+
+  /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
+  private get shouldReplaceWhenDocHasData(): boolean {
+    return this.initialContentStrategy === "replace" && !this.docInitialized;
+  }
 
   constructor(file: DrawioFile, options: BindDrawioFileOptions) {
     const {
@@ -267,6 +274,7 @@ export class Binding {
     } = options;
 
     this.doc = doc;
+    this.initialContentStrategy = initialContent;
 
     const ui = file.getUi();
     const graph = ui.editor.graph;
@@ -328,14 +336,42 @@ export class Binding {
       >[],
       transaction: Y.Transaction,
     ) => {
-      // 标记已初始化（即使是远端数据到达）
-      if (!this.docInitialized) {
-        this.docInitialized = true;
-      }
-
       if (transaction.local && transaction.origin === LOCAL_ORIGIN) {
         generatePatch(events);
         return;
+      }
+
+      // replace 策略下，若构造时 doc 为空，现在 doc 有数据，强制替换本地 file
+      if (this.shouldReplaceWhenDocHasData) {
+        const mxfileMap = doc.getMap(mxfileKey);
+        const diagramMap = mxfileMap.get(diagramKey) as Y.Map<Y.XmlElement> | undefined;
+        if (diagramMap && diagramMap.size > 0) {
+          // doc 已有数据，执行强制替换
+          const xml = doc2xml(doc);
+          if (xml && xml.includes("<diagram")) {
+            this.suppressLocalApply = true;
+            try {
+              applyFileData(file, xml);
+              file.setShadowPages(file.ui.clonePages(file.ui.pages));
+              initDocSnapshot(doc, false);
+              // 重置 editor 状态，避免显示 modified 标记
+              const ui = file.getUi();
+              const editor = ui.editor as unknown as { setStatus: (status: string) => void; setModified: (modified: boolean) => void };
+              editor.setStatus("");
+              editor.setModified(false);
+            } finally {
+              this.suppressLocalApply = false;
+            }
+            // 强制替换完成后再标记 docInitialized
+            this.docInitialized = true;
+            return;
+          }
+        }
+      }
+
+      // 标记已初始化（远端数据到达且不是首次强制替换）
+      if (!this.docInitialized) {
+        this.docInitialized = true;
       }
 
       const patch = generatePatch(events);
