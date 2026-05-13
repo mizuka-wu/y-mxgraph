@@ -48,6 +48,8 @@ export interface MxGraph {
 /** draw.io 编辑器 */
 export interface DrawioEditor {
   graph: MxGraph;
+  setStatus(status: string): void;
+  setModified(modified: boolean): void;
   undoManager?: {
     eventListeners?: unknown[];
     undoListener?: (...args: unknown[]) => void;

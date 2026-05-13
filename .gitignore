@@ -12,3 +12,4 @@ public/dist
 
 apps/docs/docs/.vitepress/cache
 .playwright-mcp/
+apps/demo/dev-dist

@@ -8,7 +8,11 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
+      devOptions: {
+        enabled: true,
+      },
       workbox: {
+        mode: 'production',
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
         runtimeCaching: [
           {

@@ -84,6 +84,7 @@ export function bindDrawioFile(
 
     Reflect.set(window, "__doc__", doc);
     Reflect.set(window, "__binding__", binding);
+    Reflect.set(window, "__app__", app);
 
     onBind(binding);
   };
