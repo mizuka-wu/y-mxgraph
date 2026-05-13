@@ -20,20 +20,28 @@ const pkg = {
   type: "module",
   main: "./y-mxgraph.cjs.js",
   module: "./y-mxgraph.es.js",
-  browser: "./y-mxgraph.umd.js",
   types: "./index.d.ts",
   exports: {
     ".": {
       import: "./y-mxgraph.es.js",
       require: "./y-mxgraph.cjs.js",
-      browser: "./y-mxgraph.umd.js",
       types: "./index.d.ts",
     },
+    "./iframe-bridge/server": {
+      import: "./iframe-bridge/server.es.js",
+      require: "./iframe-bridge/server.cjs.js",
+      types: "./iframe-bridge/server.d.ts",
+    },
+    "./iframe-bridge/provider": {
+      import: "./iframe-bridge/provider.es.js",
+      require: "./iframe-bridge/provider.cjs.js",
+      types: "./iframe-bridge/provider.d.ts",
+    },
   },
-  "dependencies": {
-    "colord": "^2.9.3",
+  dependencies: {
+    colord: "^2.9.3",
     "lodash-es": "^4.17.21",
-    "xml-js": "^1.6.11"
+    "xml-js": "^1.6.11",
   },
   peerDependencies: {
     "y-protocols": "^1.0.0",
@@ -81,9 +89,6 @@ const external = [
   "lodash-es",
   "xml-js",
   "colord",
-  "@y-mxgraph/iframe-bridge",
-  "@y-mxgraph/iframe-bridge/server",
-  "@y-mxgraph/iframe-bridge/provider",
 ];
 
 const globals: Record<string, string> = {
@@ -93,9 +98,6 @@ const globals: Record<string, string> = {
   "lodash-es": "_",
   "xml-js": "xmljs",
   colord: "colord",
-  "@y-mxgraph/iframe-bridge": "YMxGraphIframeBridge",
-  "@y-mxgraph/iframe-bridge/server": "YMxGraphIframeBridgeServer",
-  "@y-mxgraph/iframe-bridge/provider": "YMxGraphIframeBridgeProvider",
 };
 
 export default defineConfig({
@@ -103,17 +105,31 @@ export default defineConfig({
     dts({
       include: ["src"],
       outDir: "dist",
-      insertTypesEntry: true,
     }),
     emitDistPackageJson(),
     copyRootFiles("README.md", "README.zh-CN.md"),
   ],
   build: {
     lib: {
-      entry: path.resolve(__dirname, "src/index.ts"),
+      entry: {
+        index: path.resolve(__dirname, "src/index.ts"),
+        "iframe-bridge/server": path.resolve(
+          __dirname,
+          "src/iframe-bridge/server.ts",
+        ),
+        "iframe-bridge/provider": path.resolve(
+          __dirname,
+          "src/iframe-bridge/provider.ts",
+        ),
+      },
       name: "YMXGraph",
-      formats: ["es", "cjs", "umd", "iife"],
-      fileName: (format) => `y-mxgraph.${format}.js`,
+      formats: ["es", "cjs"],
+      fileName: (format, entryName) => {
+        if (entryName === "index") {
+          return `y-mxgraph.${format}.js`;
+        }
+        return `${entryName}.${format}.js`;
+      },
     },
     rollupOptions: {
       external,

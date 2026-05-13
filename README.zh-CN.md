@@ -82,7 +82,7 @@ App.main((app) => {
 
 ```ts
 // Server（父页面）
-import { createIframeBridgeServer } from '@y-mxgraph/iframe-bridge/server';
+import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider(roomName, doc, { signaling });
@@ -90,7 +90,7 @@ const bridge = createIframeBridgeServer(doc, provider.awareness);
 bridge.addIframe(iframeElement, 'child-1');
 
 // Provider（iframe 子页面）
-import { createIframeBridgeProvider } from '@y-mxgraph/iframe-bridge/provider';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
 const awareness = new Awareness(doc);

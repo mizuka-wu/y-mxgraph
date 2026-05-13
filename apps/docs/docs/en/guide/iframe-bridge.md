@@ -1,6 +1,6 @@
 # iframe Bridge
 
-`@y-mxgraph/iframe-bridge` enables collaborative editing in iframe-isolated environments. It is ideal for scenarios where the draw.io instance needs to be sandboxed from other page logic.
+`y-mxgraph/iframe-bridge` enables collaborative editing in iframe-isolated environments. It is ideal for scenarios where the draw.io instance needs to be sandboxed from other page logic.
 
 ## Architecture
 
@@ -41,7 +41,7 @@
 ## Installation
 
 ```bash
-pnpm add @y-mxgraph/iframe-bridge yjs y-protocols
+pnpm add y-mxgraph yjs y-protocols
 ```
 
 ## Basic Usage
@@ -51,7 +51,7 @@ pnpm add @y-mxgraph/iframe-bridge yjs y-protocols
 ```ts
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { createIframeBridgeServer } from '@y-mxgraph/iframe-bridge/server';
+import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider('my-room', doc, {
@@ -74,7 +74,7 @@ bridge.addIframe(iframe, 'editor-1');
 ```ts
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { createIframeBridgeProvider } from '@y-mxgraph/iframe-bridge/provider';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
 const awareness = new Awareness(doc);
@@ -133,7 +133,7 @@ Result: only peerB's cursor is rendered (correct)
 ```ts
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { createIframeBridgeServer } from '@y-mxgraph/iframe-bridge/server';
+import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider(roomName, doc, { signaling });
@@ -149,7 +149,7 @@ bridge.addIframe(document.getElementById('iframe-2')!, 'editor-2');
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { Binding } from 'y-mxgraph';
-import { createIframeBridgeProvider } from '@y-mxgraph/iframe-bridge/provider';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
 const awareness = new Awareness(doc);
@@ -187,12 +187,14 @@ window.addEventListener('message', (event) => {
 Creates the Server-side bridge.
 
 **Parameters**:
+
 - `doc: Y.Doc` — Server's Y.Doc instance
 - `awareness: Awareness` — Server's Awareness instance
 
 **Returns**: `IframeBridgeServer`
 
 **Methods**:
+
 - `addIframe(iframe: HTMLIFrameElement, iframeId: string)` — Register an iframe
 - `removeIframe(iframeId: string)` — Remove an iframe
 - `dispose()` — Clean up all listeners
@@ -202,15 +204,18 @@ Creates the Server-side bridge.
 Creates the Provider-side bridge.
 
 **Parameters**:
+
 - `doc: Y.Doc` — Local Y.Doc instance
 - `awareness: Awareness` — Local Awareness instance
 
 **Returns**: `IframeBridgeProvider`
 
 **Properties**:
+
 - `serverClientId: number | null` — Server's clientID, available after initial sync
 
 **Methods**:
+
 - `dispose()` — Clean up all listeners
 
 ## SharedWorker Mode

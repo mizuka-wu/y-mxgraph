@@ -1,6 +1,6 @@
 # iframe Bridge
 
-`@y-mxgraph/iframe-bridge` 提供了一种在 iframe 隔离环境中进行协同编辑的方案。适用于需要将 draw.io 实例与其他页面逻辑隔离的场景。
+`y-mxgraph/iframe-bridge` 提供了一种在 iframe 隔离环境中进行协同编辑的方案。适用于需要将 draw.io 实例与其他页面逻辑隔离的场景。
 
 ## 架构概览
 
@@ -41,7 +41,7 @@
 ## 安装
 
 ```bash
-pnpm add @y-mxgraph/iframe-bridge yjs y-protocols
+pnpm add y-mxgraph yjs y-protocols
 ```
 
 ## 基本用法
@@ -51,7 +51,7 @@ pnpm add @y-mxgraph/iframe-bridge yjs y-protocols
 ```ts
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { createIframeBridgeServer } from '@y-mxgraph/iframe-bridge/server';
+import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider('my-room', doc, {
@@ -74,7 +74,7 @@ bridge.addIframe(iframe, 'editor-1');
 ```ts
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { createIframeBridgeProvider } from '@y-mxgraph/iframe-bridge/provider';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
 const awareness = new Awareness(doc);
@@ -133,7 +133,7 @@ Provider awareness: { localClientId: cursorA, peerB: cursorB }
 ```ts
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { createIframeBridgeServer } from '@y-mxgraph/iframe-bridge/server';
+import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider(roomName, doc, { signaling });
@@ -149,7 +149,7 @@ bridge.addIframe(document.getElementById('iframe-2')!, 'editor-2');
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { Binding } from 'y-mxgraph';
-import { createIframeBridgeProvider } from '@y-mxgraph/iframe-bridge/provider';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
 const awareness = new Awareness(doc);
@@ -187,12 +187,14 @@ window.addEventListener('message', (event) => {
 创建 Server 端 bridge。
 
 **参数**：
+
 - `doc: Y.Doc` — Server 的 Y.Doc 实例
 - `awareness: Awareness` — Server 的 Awareness 实例
 
 **返回**：`IframeBridgeServer`
 
 **方法**：
+
 - `addIframe(iframe: HTMLIFrameElement, iframeId: string)` — 注册 iframe
 - `removeIframe(iframeId: string)` — 移除 iframe
 - `dispose()` — 清理所有监听器
@@ -202,15 +204,18 @@ window.addEventListener('message', (event) => {
 创建 Provider 端 bridge。
 
 **参数**：
+
 - `doc: Y.Doc` — 本地 Y.Doc 实例
 - `awareness: Awareness` — 本地 Awareness 实例
 
 **返回**：`IframeBridgeProvider`
 
 **属性**：
+
 - `serverClientId: number | null` — Server 的 clientID，初始化同步后可用
 
 **方法**：
+
 - `dispose()` — 清理所有监听器
 
 ## SharedWorker 模式
