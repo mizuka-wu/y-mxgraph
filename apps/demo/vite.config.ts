@@ -10,7 +10,6 @@ export default defineConfig({
       input: {
         main: "index.html",
         iframe: "iframe.html",
-        "iframe-mode": "iframe-mode.html",
       },
     },
     // Production base path when served under the docs site

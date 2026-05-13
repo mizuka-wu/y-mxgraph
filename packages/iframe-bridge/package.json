@@ -1,0 +1,36 @@
+{
+  "name": "@y-mxgraph/iframe-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Iframe bridge for y-mxgraph cross-tab collaboration",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "require": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./child": {
+      "import": "./src/child.ts",
+      "require": "./src/child.ts",
+      "types": "./src/child.ts"
+    },
+    "./parent": {
+      "import": "./src/parent.ts",
+      "require": "./src/parent.ts",
+      "types": "./src/parent.ts"
+    }
+  },
+  "peerDependencies": {
+    "y-protocols": "^1.0.0",
+    "yjs": "^13.6.0"
+  },
+  "devDependencies": {
+    "@y-mxgraph/eslint-config": "workspace:*",
+    "@y-mxgraph/typescript-config": "workspace:*",
+    "typescript": "~5.5.4"
+  }
+}

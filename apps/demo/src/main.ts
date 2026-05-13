@@ -5,6 +5,7 @@ import {
   bindDrawioFile,
   type CollabState,
 } from "./collaboration.js";
+import { createIframeBridgeChild } from "y-mxgraph/iframe-bridge/child";
 import {
   getUIElements,
   updateDrawioStatus,
@@ -18,6 +19,10 @@ import {
   getI18n,
   type Lang,
 } from "./ui.js";
+import * as Y from "yjs";
+import { Awareness } from "y-protocols/awareness";
+
+const isInIframe = window.parent !== window;
 
 // === 状态 ===
 let collabState: CollabState = { provider: null, doc: null, binding: null };
@@ -29,6 +34,14 @@ const t = getI18n(lang);
 
 // === UI 元素 ===
 const ui = getUIElements();
+
+// === 在 iframe 中时隐藏 toolbar 和 status-bar ===
+if (isInIframe) {
+  const toolbar = document.getElementById("toolbar");
+  const statusBar = document.getElementById("status-bar");
+  if (toolbar) toolbar.style.display = "none";
+  if (statusBar) statusBar.style.display = "none";
+}
 
 // === 事件监听 ===
 ui.versionSelect.addEventListener("change", () => {
@@ -51,6 +64,14 @@ ui.versionSelect.addEventListener("change", () => {
 
 // === 初始化 ===
 async function init() {
+  if (isInIframe) {
+    await initIframeChild();
+  } else {
+    await initDirect();
+  }
+}
+
+async function initDirect() {
   // 从 URL 恢复房间
   restoreRoomFromURL(ui);
 
@@ -112,8 +133,57 @@ async function init() {
   }
 }
 
+async function initIframeChild() {
+  const urlParams = new URLSearchParams(location.search);
+  const version = urlParams.get("version") || "latest";
+  const customUrl = urlParams.get("customUrl") || undefined;
+  const iframeId = urlParams.get("iframeId") || "0";
+
+  const overlay = document.getElementById("loading-overlay")!;
+  const container = document.getElementById("drawio-container")!;
+
+  try {
+    await loadDrawioScript(
+      version,
+      {
+        onLoading: () => {},
+        onProgress: () => {},
+        onReady: () => {
+          overlay.style.display = "none";
+          container.style.removeProperty("display");
+        },
+        onError: (msg) => {
+          console.error(`[iframe ${iframeId}]`, msg);
+        },
+      },
+      customUrl,
+      lang,
+    );
+  } catch (e) {
+    console.error(`[iframe ${iframeId}] Failed to load draw.io:`, e);
+    return;
+  }
+
+  // 创建本地 ydoc 和 awareness（不连接 provider）
+  const ydoc = new Y.Doc();
+  const awareness = new Awareness(ydoc);
+
+  // 绑定 draw.io
+  bindDrawioFile(ydoc, awareness, null as any, () => {
+    console.log(`[iframe ${iframeId}] draw.io bound`);
+  });
+
+  // 创建 iframe-bridge child，与父容器同步
+  const bridgeChild = createIframeBridgeChild(ydoc, awareness);
+
+  // 暴露调试对象
+  (window as any).__iframeYdoc__ = ydoc;
+  (window as any).__iframeAwareness__ = awareness;
+  (window as any).__iframeBridgeChild__ = bridgeChild;
+}
+
 /**
- * 连接协作
+ * 连接协作（直接模式）
  */
 function connectCollaboration() {
   const roomName = ui.roomInput.value.trim() || DEFAULT_ROOM;
