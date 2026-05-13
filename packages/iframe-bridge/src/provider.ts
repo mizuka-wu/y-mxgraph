@@ -112,11 +112,10 @@ export class YMxGraphBridgeProvider extends Observable<BridgeProviderEvent> {
     // Forward local Y.Doc updates (i.e. updates from external providers or
     // host-side code) to the iframe. Skip updates that we just applied from
     // the iframe to break the echo loop.
+    // Note: 不使用 transfer，让 postMessage 做结构化克隆，避免 detached ArrayBuffer 问题
     this._onDocUpdate = (update, origin) => {
       if (origin === BRIDGE_REMOTE_ORIGIN) return;
-      this.send(makeMsg<SyncUpdatePayload>("SYNC_UPDATE", { update }), [
-        update.buffer,
-      ]);
+      this.send(makeMsg<SyncUpdatePayload>("SYNC_UPDATE", { update }));
     };
     doc.on("update", this._onDocUpdate);
 
@@ -148,9 +147,8 @@ export class YMxGraphBridgeProvider extends Observable<BridgeProviderEvent> {
   /** Manually push the full doc snapshot to the iframe (also used on SYNC_REQUEST). */
   sendFullSync(sv?: Uint8Array): void {
     const update = Y.encodeStateAsUpdate(this.doc, sv);
-    this.send(makeMsg<SyncUpdatePayload>("SYNC_UPDATE", { update }), [
-      update.buffer,
-    ]);
+    // Note: 不使用 transfer，让 postMessage 做结构化克隆
+    this.send(makeMsg<SyncUpdatePayload>("SYNC_UPDATE", { update }));
     // Also push the latest awareness snapshot so the iframe shows peers immediately.
     const states = Array.from(this.awareness.getStates().entries()) as Array<
       [number, Record<string, unknown>]
