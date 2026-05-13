@@ -28,8 +28,45 @@ interface BindDrawioFileOptions {
         userNameKey?: string;  // awareness field for user name, default 'user.name'
         userColorKey?: string; // awareness field for color, default 'user.color'
       };
+  initialContent?: InitialContentStrategy; // optional — default 'replace'
+  applyFileData?: (file, xml) => void;     // optional — custom file data apply
+  disableBeforeUnload?: boolean;           // optional — default true
 }
 ```
+
+#### `initialContent`
+
+Controls how the file and Y.Doc are aligned when binding. Default is `'replace'`.
+
+| Strategy | Behavior |
+|----------|----------|
+| `replace` | If doc has data, overwrite file with doc; if doc is empty, keep file as-is |
+| `merge-remote` | Union by diagram id; on conflict, doc wins (remote authoritative) |
+| `merge-client` | Union by diagram id; on conflict, file wins (local authoritative) |
+
+#### `applyFileData`
+
+Custom function to apply XML to the draw.io file. Default only calls `file.ui.setFileData(xml)` (rebuilds UI/pages), intentionally **not** calling `file.setData(xml)` to avoid marking the file as "modified" which triggers draw.io's "Save diagrams to:" storage dialog.
+
+If you need to sync `file.data` (e.g., for custom CollabFile or `file.save()`), provide a custom implementation:
+
+```ts
+new Binding(file, {
+  doc,
+  applyFileData: (f, xml) => {
+    f.ui.setFileData(xml);
+    f.setData(xml);
+  },
+});
+```
+
+#### `disableBeforeUnload`
+
+Whether to disable draw.io's `beforeunload` dialog. Default is `true`.
+
+After Yjs takes over persistence, draw.io's native save state is no longer meaningful. However, draw.io internally shows "All changes will be lost" or "Ensure your data has been saved" dialogs under certain conditions (e.g., LocalFile without fileHandle, non-empty diagram, etc.).
+
+Set to `true` (default) to completely disable these dialogs — suitable for pure Yjs collaboration scenarios. Set to `false` to preserve native behavior (e.g., when using File System Access API).
 
 ## Instance Properties
 

@@ -28,8 +28,45 @@ interface BindDrawioFileOptions {
         userNameKey?: string;  // awareness 中用户名字段，默认 'user.name'
         userColorKey?: string; // awareness 中颜色字段，默认 'user.color'
       };
+  initialContent?: InitialContentStrategy; // 可选，初始内容策略，默认 'replace'
+  applyFileData?: (file, xml) => void;     // 可选，自定义 file 数据应用方式
+  disableBeforeUnload?: boolean;           // 可选，禁用 beforeUnload 弹窗，默认 true
 }
 ```
+
+#### `initialContent`
+
+控制绑定时 file 与 Y.Doc 的初始内容对齐策略。默认 `'replace'`。
+
+| 策略 | 行为 |
+|------|------|
+| `replace` | doc 非空则用 doc 覆盖 file；doc 为空则保留 file 现有数据 |
+| `merge-remote` | 按 diagram id 取并集，同 id 冲突时以 doc 为准（远端权威） |
+| `merge-client` | 按 diagram id 取并集，同 id 冲突时以 file 为准（本地权威） |
+
+#### `applyFileData`
+
+自定义把 XML 应用到 file 的方式。默认只调用 `file.ui.setFileData(xml)`（刷新 UI / 重建 pages），**不会**调用 `file.setData(xml)`，以避免把 file 标记为「已修改」触发 draw.io 的 "Save diagrams to:" 存储选择对话框。
+
+若业务方确实需要同步 `file.data`（如自定义 CollabFile 或依赖 `file.save()`），可提供自定义实现：
+
+```ts
+new Binding(file, {
+  doc,
+  applyFileData: (f, xml) => {
+    f.ui.setFileData(xml);
+    f.setData(xml);
+  },
+});
+```
+
+#### `disableBeforeUnload`
+
+是否禁用 draw.io 的 `beforeunload` 弹窗。默认 `true`。
+
+Yjs 接管持久化后，draw.io 的原生保存状态不再有意义。但 draw.io 内部会在特定条件下（如 LocalFile 无 fileHandle、图表非空等）弹出 "All changes will be lost" 或 "Ensure your data has been saved" 提示。
+
+设为 `true`（默认）可彻底禁用这些弹窗，适合纯 Yjs 协作场景。若需要保留原生行为（如使用 File System Access API），设为 `false`。
 
 ## 实例属性
 

@@ -42,7 +42,10 @@ App.main((app) => {
   // `file.setData(xml)` is intentionally NOT called so draw.io does not
   // mark the file as modified and pop up the "Save diagrams to:" dialog.
   // Override via `applyFileData` if you need to sync `file.data` too.
-  const binding = new Binding(file, { doc /*, initialContent: 'merge-remote' */ });
+  //
+  // `disableBeforeUnload` (default: true) disables draw.io's native
+  // "All changes will be lost" dialog since Yjs handles persistence.
+  const binding = new Binding(file, { doc });
 
   window.addEventListener('beforeunload', () => binding.destroy());
 });

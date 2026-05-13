@@ -36,6 +36,8 @@ App.main((app) => {
     app.currentFile.data = Binding.generateFileTemplate('diagram-0');
   }
 
+  // `disableBeforeUnload`（默认 true）禁用 draw.io 的 "All changes will be lost" 弹窗，
+  // 因为 Yjs 已接管持久化。如需保留原生行为（如使用 File System Access API），设为 false。
   const binding = new Binding(app.currentFile, { doc });
 
   window.addEventListener('beforeunload', () => binding.destroy());

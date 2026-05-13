@@ -54,6 +54,18 @@ export interface BindDrawioFileOptions {
    * `file.save()`），可提供自定义实现。
    */
   applyFileData?: (file: DrawioFile, xml: string) => void;
+  /**
+   * 是否禁用 draw.io 的 beforeUnload 弹窗，默认 `true`。
+   *
+   * Yjs 接管持久化后，draw.io 的原生保存状态不再有意义。
+   * 但 draw.io 内部会在特定条件下（如 LocalFile 无 fileHandle、
+   * 图表非空等）弹出 "All changes will be lost" 或
+   * "Ensure your data has been saved" 提示。
+   *
+   * 设为 `true` 可彻底禁用这些弹窗，适合纯 Yjs 协作场景。
+   * 若需要保留原生行为（如使用 File System Access API），设为 `false`。
+   */
+  disableBeforeUnload?: boolean;
 }
 
 /**
@@ -273,6 +285,7 @@ export class Binding {
       cursor,
       initialContent = "replace",
       applyFileData = defaultApplyFileData,
+      disableBeforeUnload = true,
     } = options;
 
     this.doc = doc;
@@ -282,6 +295,13 @@ export class Binding {
     const graph = ui.editor.graph;
     this.mxGraphModel = graph.model;
     this.ui = ui;
+
+    // 禁用 draw.io 的 beforeUnload 弹窗
+    // Yjs 接管持久化后，draw.io 的原生保存状态不再有意义，
+    // 但 draw.io 内部会在特定条件下弹出 "All changes will be lost" 提示。
+    if (disableBeforeUnload) {
+      (ui as any).onBeforeUnload = () => null;
+    }
 
     // 统一初始化：根据 initialContent 策略对齐 file 与 doc。
     // 内部会调用 applyFileData 钩子（默认 ui.setFileData + file.setData），
