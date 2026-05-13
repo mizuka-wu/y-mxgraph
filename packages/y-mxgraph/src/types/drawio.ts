@@ -61,6 +61,7 @@ export interface DrawioEditor {
 /** draw.io UI */
 export interface DrawioUi {
   editor: DrawioEditor;
+  currentFile: DrawioFile | null;
   currentPage?: DrawioPage | null;
   diagramContainer: HTMLElement;
   pages: unknown[];
@@ -87,6 +88,8 @@ export interface DrawioFile {
   patch(patches: unknown[]): void;
   /** 仅赋值 this.data = xml，不触发 UI 重绘 */
   setData(data: string): void;
+  isModified(): boolean;
+  setModified(modified: boolean): void;
 }
 
 /** draw.io App（demo 中通过 iframe 访问） */

@@ -16,7 +16,7 @@ import {
   type YDiagram,
 } from "../models/diagram";
 import { parse as parseXml } from "../helper/xml";
-import type { DrawioFile, DrawioEditor, MxGraphModel } from "../types/drawio";
+import type { DrawioFile, DrawioUi, MxGraphModel } from "../types/drawio";
 
 /**
  * 控制 Binding 构造时 file 与 Y.Doc 的初始内容对齐策略。
@@ -256,8 +256,8 @@ export class Binding {
   private cleanupUndoManager?: () => void;
   /** 初始内容策略 */
   private initialContentStrategy: InitialContentStrategy;
-  /** draw.io editor 引用，用于重置状态 */
-  private editor: DrawioEditor | null = null;
+  /** draw.io UI 引用，用于重置状态和获取 currentFile */
+  private ui: DrawioUi | null = null;
 
   /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
   private get shouldReplaceWhenDocHasData(): boolean {
@@ -281,7 +281,7 @@ export class Binding {
     const ui = file.getUi();
     const graph = ui.editor.graph;
     this.mxGraphModel = graph.model;
-    this.editor = ui.editor;
+    this.ui = ui;
 
     // 统一初始化：根据 initialContent 策略对齐 file 与 doc。
     // 内部会调用 applyFileData 钩子（默认 ui.setFileData + file.setData），
@@ -405,14 +405,14 @@ export class Binding {
   }
 
   /**
-   * 延迟重置 editor 的 modified 状态和状态栏。
-   * draw.io 内部在 patch/setFileData 后会异步重新标记 modified，
-   * 需要延迟执行才能覆盖这些异步操作。
+   * 重置 editor 和 file 的 modified 状态及状态栏。
+   * Yjs 接管持久化后，draw.io 的原生保存状态不再有意义。
    */
   private resetEditorStatus(): void {
-    if (!this.editor) return;
-    this.editor.setModified(false);
-    this.editor.setStatus("");
+    if (!this.ui) return;
+    this.ui.editor.setModified(false);
+    this.ui.editor.setStatus("");
+    this.ui.currentFile?.setModified(false);
   }
 
   /**
