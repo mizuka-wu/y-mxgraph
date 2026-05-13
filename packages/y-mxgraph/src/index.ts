@@ -6,3 +6,11 @@ export {
   DEFAULT_USER_NAME_KEY,
   DEFAULT_USER_COLOR_KEY,
 } from "./binding/collaborator";
+export {
+  createIframeBridgeChild,
+  createIframeBridgeParent,
+} from "@y-mxgraph/iframe-bridge";
+export type {
+  IframeBridgeChild,
+  IframeBridgeParent,
+} from "@y-mxgraph/iframe-bridge";
