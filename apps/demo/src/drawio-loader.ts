@@ -96,11 +96,6 @@ export function loadDrawioScript(
       _noWrite?: boolean,
       onError?: (msg: string, e: any) => void,
     ) {
-      // 跳过 stencils 加载（部分版本 stencils 文件缺失或跨域报错）
-      if (src.includes("stencils")) {
-        if (onLoad) onLoad();
-        return;
-      }
       const fullSrc = src.startsWith("http") ? src : `${cdnBase}${src}`;
       const s = document.createElement("script");
       s.setAttribute("type", "text/javascript");
