@@ -5,20 +5,16 @@ import {
   encodeAwarenessUpdate,
 } from "y-protocols/awareness";
 
-export interface IframeBridgeParent {
+export interface IframeBridgeServer {
   addIframe: (iframe: HTMLIFrameElement, iframeId: string) => void;
   removeIframe: (iframeId: string) => void;
   dispose: () => void;
 }
 
-/**
- * 创建 iframe-bridge 父端。
- * 父端运行在主页面，通过 postMessage 与所有子 iframe 同步 ydoc 和 awareness。
- */
-export function createIframeBridgeParent(
+export function createIframeBridgeServer(
   ydoc: Y.Doc,
   awareness: Awareness,
-): IframeBridgeParent {
+): IframeBridgeServer {
   const iframes = new Map<string, HTMLIFrameElement>();
   const iframeReady = new Set<string>();
 
@@ -50,7 +46,6 @@ export function createIframeBridgeParent(
   }
 
   const onMessage = (event: MessageEvent) => {
-    // 检查消息来源是否是已注册的 iframe
     let iframeId: string | null = null;
     for (const [id, iframe] of iframes) {
       if (event.source === iframe.contentWindow) {
@@ -77,7 +72,16 @@ export function createIframeBridgeParent(
         "*",
       );
       sourceWindow.postMessage(
-        { type: "awareness-sync", payload: Array.from(awarenessState) },
+        {
+          type: "awareness-sync",
+          payload: Array.from(awarenessState),
+          serverClientId: awareness.clientID,
+        },
+        "*",
+      );
+    } else if (msgType === "ping") {
+      sourceWindow.postMessage(
+        { type: "pong", serverClientId: awareness.clientID },
         "*",
       );
     } else if (msgType === "ydoc-update") {

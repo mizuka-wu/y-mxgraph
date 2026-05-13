@@ -7,10 +7,10 @@ export {
   DEFAULT_USER_COLOR_KEY,
 } from "./binding/collaborator";
 export {
-  createIframeBridgeChild,
-  createIframeBridgeParent,
+  createIframeBridgeProvider,
+  createIframeBridgeServer,
 } from "@y-mxgraph/iframe-bridge";
 export type {
-  IframeBridgeChild,
-  IframeBridgeParent,
+  IframeBridgeProvider,
+  IframeBridgeServer,
 } from "@y-mxgraph/iframe-bridge";

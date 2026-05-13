@@ -1,4 +1,4 @@
-export { createIframeBridgeChild } from "./child.js";
-export type { IframeBridgeChild } from "./child.js";
-export { createIframeBridgeParent } from "./parent.js";
-export type { IframeBridgeParent } from "./parent.js";
+export { createIframeBridgeProvider } from "./provider.js";
+export type { IframeBridgeProvider } from "./provider.js";
+export { createIframeBridgeServer } from "./server.js";
+export type { IframeBridgeServer } from "./server.js";

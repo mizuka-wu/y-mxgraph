@@ -81,6 +81,9 @@ const external = [
   "lodash-es",
   "xml-js",
   "colord",
+  "@y-mxgraph/iframe-bridge",
+  "@y-mxgraph/iframe-bridge/server",
+  "@y-mxgraph/iframe-bridge/provider",
 ];
 
 const globals: Record<string, string> = {
@@ -90,6 +93,9 @@ const globals: Record<string, string> = {
   "lodash-es": "_",
   "xml-js": "xmljs",
   colord: "colord",
+  "@y-mxgraph/iframe-bridge": "YMxGraphIframeBridge",
+  "@y-mxgraph/iframe-bridge/server": "YMxGraphIframeBridgeServer",
+  "@y-mxgraph/iframe-bridge/provider": "YMxGraphIframeBridgeProvider",
 };
 
 export default defineConfig({

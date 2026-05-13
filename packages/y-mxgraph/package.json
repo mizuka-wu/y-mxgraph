@@ -26,15 +26,15 @@
       "require": "./src/index.ts",
       "types": "./src/index.ts"
     },
-    "./iframe-bridge/child": {
-      "import": "./src/iframe-bridge/child.ts",
-      "require": "./src/iframe-bridge/child.ts",
-      "types": "./src/iframe-bridge/child.ts"
+    "./iframe-bridge/server": {
+      "import": "./src/iframe-bridge/server.ts",
+      "require": "./src/iframe-bridge/server.ts",
+      "types": "./src/iframe-bridge/server.ts"
     },
-    "./iframe-bridge/parent": {
-      "import": "./src/iframe-bridge/parent.ts",
-      "require": "./src/iframe-bridge/parent.ts",
-      "types": "./src/iframe-bridge/parent.ts"
+    "./iframe-bridge/provider": {
+      "import": "./src/iframe-bridge/provider.ts",
+      "require": "./src/iframe-bridge/provider.ts",
+      "types": "./src/iframe-bridge/provider.ts"
     }
   },
   "files": [

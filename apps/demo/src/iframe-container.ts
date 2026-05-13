@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
-import { createIframeBridgeParent } from "y-mxgraph/iframe-bridge/parent";
+import { createIframeBridgeServer } from "y-mxgraph/iframe-bridge/server";
 import { DRAWIO_VERSIONS, SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 // === UI 元素 ===
@@ -19,7 +19,7 @@ const ui = {
 };
 
 let currentProvider: WebrtcProvider | null = null;
-let currentBridge: ReturnType<typeof createIframeBridgeParent> | null = null;
+let currentBridge: ReturnType<typeof createIframeBridgeServer> | null = null;
 
 function updateCollabStatus(
   status: "connected" | "disconnected" | "loading",
@@ -61,11 +61,11 @@ function initBridge(roomName: string) {
   });
   const awareness = provider.awareness;
 
-  const bridgeParent = createIframeBridgeParent(doc, awareness);
-  bridgeParent.addIframe(ui.iframe, "child");
+  const bridgeServer = createIframeBridgeServer(doc, awareness);
+  bridgeServer.addIframe(ui.iframe, "child");
 
   currentProvider = provider;
-  currentBridge = bridgeParent;
+  currentBridge = bridgeServer;
 
   provider.on("status", (event: { connected: boolean }) => {
     if (event.connected) {
@@ -86,7 +86,7 @@ function initBridge(roomName: string) {
   win.__provider__ = provider;
   win.__doc__ = doc;
   win.__awareness__ = awareness;
-  win.__bridge__ = bridgeParent;
+  win.__bridge__ = bridgeServer;
 }
 
 function init() {

@@ -5,7 +5,7 @@ import {
   bindDrawioFile,
   type CollabState,
 } from "./collaboration.js";
-import { createIframeBridgeChild } from "y-mxgraph/iframe-bridge/child";
+import { createIframeBridgeProvider } from "y-mxgraph/iframe-bridge/provider";
 import {
   getUIElements,
   updateDrawioStatus,
@@ -174,12 +174,12 @@ async function initIframeChild() {
   });
 
   // 创建 iframe-bridge child，与父容器同步
-  const bridgeChild = createIframeBridgeChild(ydoc, awareness);
+  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
 
   // 暴露调试对象
   (window as any).__iframeYdoc__ = ydoc;
   (window as any).__iframeAwareness__ = awareness;
-  (window as any).__iframeBridgeChild__ = bridgeChild;
+  (window as any).__iframeBridgeProvider__ = bridgeProvider;
 }
 
 /**
