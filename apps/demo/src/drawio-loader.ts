@@ -139,15 +139,6 @@ export function loadDrawioScript(
       script.onload = () => {
         callbacks.onProgress("init");
 
-        // 覆写 draw.io 原型：禁用与 Yjs 实时持久化冲突的 native 对话框
-        const w = window as any;
-        if (w.App?.prototype) {
-          w.App.prototype.onBeforeUnload = function () {}; // 禁止 "All changes will be lost"
-        }
-        if (w.DrawioFile?.prototype) {
-          w.DrawioFile.prototype.addUnsavedStatus = function () {}; // 禁止 "Unsaved changes" 提示
-        }
-
         setTimeout(() => {
           callbacks.onReady(version);
           resolve();
@@ -169,15 +160,6 @@ export function loadDrawioScript(
 
       script.onload = () => {
         callbacks.onProgress("init");
-
-        // 覆写 draw.io 原型：禁用与 Yjs 实时持久化冲突的 native 对话框
-        const w = window as any;
-        if (w.App?.prototype) {
-          w.App.prototype.onBeforeUnload = function () {}; // 禁止 "All changes will be lost"
-        }
-        if (w.DrawioFile?.prototype) {
-          w.DrawioFile.prototype.addUnsavedStatus = function () {}; // 禁止 "Unsaved changes" 提示
-        }
 
         setTimeout(() => {
           callbacks.onReady(version);
