@@ -10,6 +10,7 @@ Yjs binding for draw.io (mxGraph) documents, enabling real-time collaborative ed
 - **Real-time collaboration** via y-webrtc, y-websocket, or any Yjs provider
 - **Undo/Redo support** with Y.UndoManager
 - **Collaborative cursors** via y-protocols Awareness
+- **iframe Bridge** for isolated draw.io instances synced via postMessage
 - **Full TypeScript** support
 
 ## Installation
@@ -52,6 +53,7 @@ App.main((app) => {
 - [Getting Started](https://mizuka-wu.github.io/y-mxgraph/en/guide/getting-started)
 - [API Reference](https://mizuka-wu.github.io/y-mxgraph/en/api/)
 - [Architecture](https://mizuka-wu.github.io/y-mxgraph/en/guide/architecture)
+- [iframe Bridge](https://mizuka-wu.github.io/y-mxgraph/en/guide/iframe-bridge)
 
 ## Development
 
@@ -76,13 +78,62 @@ pnpm --filter y-mxgraph test
 # Single-page mode (draw.io loaded directly in the current page)
 pnpm --filter @y-mxgraph/demo dev
 
-# iframe mode (parent page runs WebRTC Provider, two iframes each run draw.io + y-mxgraph, synced via postMessage)
-# Visit http://localhost:5173/iframe-mode.html
+# iframe mode (server page runs WebRTC Provider, iframes each run draw.io + y-mxgraph, synced via postMessage)
+# Visit http://localhost:5173/iframe.html
 
 # WebSocket server mode (centralized server with file persistence)
 pnpm --filter @y-mxgraph/ws-demo server  # Start server on port 1234
 pnpm --filter @y-mxgraph/ws-demo dev     # Start client on port 5174
 ```
+
+## iframe Bridge
+
+`@y-mxgraph/iframe-bridge` enables collaborative editing in iframe-isolated environments. The **server** (parent page) manages the network connection (y-webrtc, y-websocket, etc.) and syncs Y.Doc + Awareness to one or more **providers** (iframe children) via `postMessage`.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Server (parent page)                                       │
+│  ┌──────────┐  ┌───────────┐  ┌──────────────────────────┐ │
+│  │  Y.Doc   │  │ Awareness │  │ Provider (y-webrtc, etc) │ │
+│  └────┬─────┘  └─────┬─────┘  └──────────────────────────┘ │
+│       │              │                                      │
+│       └──────┬───────┘                                      │
+│              ▼                                              │
+│   createIframeBridgeServer(doc, awareness)                  │
+│              │ postMessage                                  │
+└──────────────│──────────────────────────────────────────────┘
+               │
+    ┌──────────┴──────────┐
+    ▼                     ▼
+┌─────────────┐     ┌─────────────┐
+│ Iframe A    │     │ Iframe B    │
+│ create...   │     │ create...   │
+│ Provider()  │     │ Provider()  │
+│             │     │             │
+│ local Y.Doc │     │ local Y.Doc │
+│ + draw.io   │     │ + draw.io   │
+└─────────────┘     └─────────────┘
+```
+
+```ts
+// Server (parent page)
+import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
+
+const doc = new Y.Doc();
+const provider = new WebrtcProvider(roomName, doc, { signaling });
+const bridge = createIframeBridgeServer(doc, provider.awareness);
+bridge.addIframe(iframeElement, 'child-1');
+
+// Provider (iframe child)
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
+
+const doc = new Y.Doc();
+const awareness = new Awareness(doc);
+const bridge = createIframeBridgeProvider(doc, awareness);
+// awareness states are automatically synced with the server
+```
+
+See [iframe Bridge documentation](https://mizuka-wu.github.io/y-mxgraph/en/guide/iframe-bridge) for details.
 
 ## Docs
 

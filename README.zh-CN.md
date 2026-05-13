@@ -10,6 +10,7 @@ Yjs 与 draw.io (mxGraph) 文档的双向绑定库，让 draw.io 支持实时多
 - **实时协作** 支持 y-webrtc、y-websocket 及任意 Yjs Provider
 - **撤销/重做** 集成 Y.UndoManager
 - **协同光标** 基于 y-protocols Awareness 渲染远端光标与选区
+- **iframe Bridge** 通过 postMessage 同步隔离的 draw.io 实例
 - **完整 TypeScript** 类型支持
 
 ## 安装
@@ -46,6 +47,56 @@ App.main((app) => {
 - [快速开始](https://mizuka-wu.github.io/y-mxgraph/guide/getting-started)
 - [API 参考](https://mizuka-wu.github.io/y-mxgraph/api/)
 - [实现原理](https://mizuka-wu.github.io/y-mxgraph/guide/architecture)
+- [iframe Bridge](https://mizuka-wu.github.io/y-mxgraph/guide/iframe-bridge)
+
+## iframe Bridge
+
+`@y-mxgraph/iframe-bridge` 支持在 iframe 隔离环境中进行协同编辑。**Server**（父页面）管理网络连接（y-webrtc、y-websocket 等），通过 `postMessage` 将 Y.Doc 和 Awareness 同步到一个或多个 **Provider**（iframe 子页面）。
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Server（父页面）                                            │
+│  ┌──────────┐  ┌───────────┐  ┌──────────────────────────┐ │
+│  │  Y.Doc   │  │ Awareness │  │ Provider (y-webrtc 等)   │ │
+│  └────┬─────┘  └─────┬─────┘  └──────────────────────────┘ │
+│       │              │                                      │
+│       └──────┬───────┘                                      │
+│              ▼                                              │
+│   createIframeBridgeServer(doc, awareness)                  │
+│              │ postMessage                                  │
+└──────────────│──────────────────────────────────────────────┘
+               │
+    ┌──────────┴──────────┐
+    ▼                     ▼
+┌─────────────┐     ┌─────────────┐
+│ Iframe A    │     │ Iframe B    │
+│ create...   │     │ create...   │
+│ Provider()  │     │ Provider()  │
+│             │     │             │
+│ 本地 Y.Doc  │     │ 本地 Y.Doc  │
+│ + draw.io   │     │ + draw.io   │
+└─────────────┘     └─────────────┘
+```
+
+```ts
+// Server（父页面）
+import { createIframeBridgeServer } from '@y-mxgraph/iframe-bridge/server';
+
+const doc = new Y.Doc();
+const provider = new WebrtcProvider(roomName, doc, { signaling });
+const bridge = createIframeBridgeServer(doc, provider.awareness);
+bridge.addIframe(iframeElement, 'child-1');
+
+// Provider（iframe 子页面）
+import { createIframeBridgeProvider } from '@y-mxgraph/iframe-bridge/provider';
+
+const doc = new Y.Doc();
+const awareness = new Awareness(doc);
+const bridge = createIframeBridgeProvider(doc, awareness);
+// awareness 状态自动与 server 同步
+```
+
+详见 [iframe Bridge 文档](https://mizuka-wu.github.io/y-mxgraph/guide/iframe-bridge)。
 
 ## 本地开发
 

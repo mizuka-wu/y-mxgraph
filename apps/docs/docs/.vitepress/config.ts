@@ -24,6 +24,7 @@ export default defineConfig({
                 { text: "使用 Provider", link: "/guide/providers" },
                 { text: "集成 draw.io", link: "/guide/drawio-integration" },
                 { text: "同步策略", link: "/guide/sync-strategy" },
+                { text: "iframe Bridge", link: "/guide/iframe-bridge" },
                 { text: "实现原理", link: "/guide/architecture" },
                 { text: "与原版差异", link: "/guide/implementation-diff" },
               ],
@@ -67,6 +68,7 @@ export default defineConfig({
                   link: "/en/guide/drawio-integration",
                 },
                 { text: "Sync Strategy", link: "/en/guide/sync-strategy" },
+                { text: "iframe Bridge", link: "/en/guide/iframe-bridge" },
                 { text: "Architecture", link: "/en/guide/architecture" },
                 {
                   text: "Migration Guide",
