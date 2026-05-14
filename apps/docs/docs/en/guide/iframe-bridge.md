@@ -102,6 +102,11 @@ Server and Provider communicate via `postMessage` with the following message typ
 | Bidirectional | `awareness-update` | `Uint8Array` | Incremental awareness update |
 | Provider → Server | `ping` | none | Get serverClientId |
 | Server → Provider | `pong` | `serverClientId` | Response to ping |
+| Provider → Server | `undo` | none | Request undo |
+| Provider → Server | `redo` | none | Request redo |
+| Server → Provider | `undo` | none | Notify undo (broadcast to all iframes) |
+| Server → Provider | `redo` | none | Notify redo (broadcast to all iframes) |
+| Server → Provider | `clear` | none | Notify undo stack cleared |
 
 ## Awareness clientID Mapping
 
@@ -125,6 +130,99 @@ Result: only peerB's cursor is rendered (correct)
 
 - **Receiving**: `serverClientId → localClientId` — Server's self-state is identified as "local" in Provider
 - **Sending**: `localClientId → serverClientId` — Provider's state is identified as the same client in Server
+
+## Undo/Redo
+
+iframe Bridge supports cross-iframe undo/redo. The core idea: **undo/redo actually executes on the Server's shared `Y.UndoManager`; iframes only send commands and receive notifications**.
+
+### Architecture
+
+```text
+User presses Ctrl+Z in Iframe A
+  → draw.io calls editor.undoManager.undo()
+  → MxLike shim sends { type: "undo" } via postMessage to parent
+  → Server receives message → calls shared UndoManager.undo()
+  → Y.UndoManager pops stack → fires "stack-item-popped" event
+  → Server broadcasts "undo" to all iframes
+  → Iframe A and Iframe B each fire synthetic "undo" event
+  → draw.io updates UI state (toolbar, cursor position, etc.)
+```
+
+### Server-side Setup
+
+Create a `Y.UndoManager` on the parent page and pass it to `createIframeBridgeServer`:
+
+```ts
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
+import { LOCAL_ORIGIN } from 'y-mxgraph';
+import { IFRAME_ORIGIN } from 'y-mxgraph/iframe-bridge';
+import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
+
+const doc = new Y.Doc();
+const provider = new WebrtcProvider(roomName, doc, { signaling });
+const awareness = provider.awareness;
+
+// Create UndoManager, tracking local and iframe-originated transactions
+const undoManager = new Y.UndoManager(doc, {
+  trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
+});
+
+// Pass to bridge server
+const bridge = createIframeBridgeServer(doc, awareness, { undoManager });
+bridge.addIframe(iframeElement, 'editor-1');
+
+// Can call undo/redo directly on the parent page
+document.getElementById('undo-btn')!.onclick = () => {
+  if (undoManager.canUndo()) undoManager.undo();
+};
+document.getElementById('redo-btn')!.onclick = () => {
+  if (undoManager.canRedo()) undoManager.redo();
+};
+```
+
+> **`trackedOrigins` note**: `Y.UndoManager` defaults to tracking only `LOCAL_ORIGIN` transactions. In the iframe scenario, updates from iframes are applied to the Server's Y.Doc with `IFRAME_ORIGIN` as the origin. You must add `IFRAME_ORIGIN` to `trackedOrigins`, otherwise iframe edits won't enter the undo stack.
+
+### Provider-side UndoManager Takeover
+
+Inside the iframe, call `bridge.takeoverUndoManager(file)` to replace draw.io's native `editor.undoManager` with a compatibility shim. This makes draw.io's undo/redo operations delegate to the Server via postMessage:
+
+```ts
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import { Binding } from 'y-mxgraph';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
+
+const doc = new Y.Doc();
+const awareness = new Awareness(doc);
+const bridge = createIframeBridgeProvider(doc, awareness);
+
+App.main((app) => {
+  const file = app.currentFile;
+  const binding = new Binding(file, { doc, awareness });
+
+  // Takeover draw.io's UndoManager
+  const restoreUndoManager = bridge.takeoverUndoManager(file);
+
+  // To restore native UndoManager (usually handled automatically by destroy)
+  // restoreUndoManager();
+});
+```
+
+`takeoverUndoManager` returns a cleanup function that restores draw.io's native `editor.undoManager`. This cleanup is automatically called by `bridge.destroy()`.
+
+### How It Works
+
+`takeoverUndoManager` does the following:
+
+1. **Preserves original state**: Backs up draw.io's `editor.undoManager` and its event listeners
+2. **Replaces with MxLike shim**: A compatibility layer implementing the `mxUndoManager` interface, including:
+   - `history[]` + `indexOfNextAdd`: Local undo stack cursor (for UI state only, not storing actual data)
+   - `undo()` / `redo()`: Delegates to Server via postMessage
+   - `canUndo()` / `canRedo()`: Based on local cursor position
+   - `fireEvent()`: Fires events draw.io listens to (`"add"`, `"clear"`, `"undo"`, `"redo"`)
+3. **Listens for Server broadcasts**: Receives `"undo"`, `"redo"`, `"clear"` messages, updates local cursor and fires corresponding events
+4. **Preserves original listeners**: Migrates draw.io's existing event listeners to the shim
 
 ## Integration with draw.io
 
@@ -182,7 +280,7 @@ window.addEventListener('message', (event) => {
 
 ## API Reference
 
-### `createIframeBridgeServer(doc, awareness)`
+### `createIframeBridgeServer(doc, awareness, options?)`
 
 Creates the Server-side bridge.
 
@@ -190,6 +288,8 @@ Creates the Server-side bridge.
 
 - `doc: Y.Doc` — Server's Y.Doc instance
 - `awareness: Awareness` — Server's Awareness instance
+- `options?` — Optional configuration
+  - `undoManager?: Y.UndoManager` — Shared UndoManager instance, enables cross-iframe undo/redo
 
 **Returns**: `IframeBridgeServer`
 
@@ -197,7 +297,7 @@ Creates the Server-side bridge.
 
 - `addIframe(iframe: HTMLIFrameElement, iframeId: string)` — Register an iframe
 - `removeIframe(iframeId: string)` — Remove an iframe
-- `destroy()` — Clean up all listeners
+- `destroy()` — Clean up all listeners (including UndoManager event listeners)
 
 ### `createIframeBridgeProvider(doc, awareness)`
 
@@ -216,7 +316,8 @@ Creates the Provider-side bridge.
 
 **Methods**:
 
-- `destroy()` — Clean up all listeners
+- `takeoverUndoManager(file: DrawioFile) => () => void` — Takeover draw.io's `editor.undoManager`, returns cleanup function. See [Undo/Redo](#undoredo) section
+- `destroy()` — Clean up all listeners (including takeover'd UndoManager)
 
 ## SharedWorker Mode
 

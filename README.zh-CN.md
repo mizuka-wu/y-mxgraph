@@ -82,20 +82,45 @@ App.main((app) => {
 
 ```ts
 // Server（父页面）
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
+import { LOCAL_ORIGIN } from 'y-mxgraph';
+import { IFRAME_ORIGIN } from 'y-mxgraph/iframe-bridge';
 import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider(roomName, doc, { signaling });
-const bridge = createIframeBridgeServer(doc, provider.awareness);
+const awareness = provider.awareness;
+
+// 可选：启用跨 iframe 撤销/重做
+const undoManager = new Y.UndoManager(doc, {
+  trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
+});
+
+const bridge = createIframeBridgeServer(doc, awareness, { undoManager });
 bridge.addIframe(iframeElement, 'child-1');
 
+// 从父页面执行撤销/重做
+document.getElementById('undo-btn')!.onclick = () => {
+  if (undoManager.canUndo()) undoManager.undo();
+};
+
 // Provider（iframe 子页面）
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import { Binding } from 'y-mxgraph';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
 const awareness = new Awareness(doc);
 const bridge = createIframeBridgeProvider(doc, awareness);
-// awareness 状态自动与 server 同步
+
+App.main((app) => {
+  const file = app.currentFile;
+  const binding = new Binding(file, { doc, awareness });
+  // 接管 draw.io 的 undo manager，使其通过 Server 执行
+  bridge.takeoverUndoManager(file);
+});
 ```
 
 详见 [iframe Bridge 文档](https://mizuka-wu.github.io/y-mxgraph/guide/iframe-bridge)。

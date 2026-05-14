@@ -120,20 +120,45 @@ pnpm --filter @y-mxgraph/ws-demo dev     # Start client on port 5174
 
 ```ts
 // Server (parent page)
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
+import { LOCAL_ORIGIN } from 'y-mxgraph';
+import { IFRAME_ORIGIN } from 'y-mxgraph/iframe-bridge';
 import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider(roomName, doc, { signaling });
-const bridge = createIframeBridgeServer(doc, provider.awareness);
+const awareness = provider.awareness;
+
+// Optional: enable cross-iframe undo/redo
+const undoManager = new Y.UndoManager(doc, {
+  trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
+});
+
+const bridge = createIframeBridgeServer(doc, awareness, { undoManager });
 bridge.addIframe(iframeElement, 'child-1');
 
+// Undo/redo from parent page
+document.getElementById('undo-btn')!.onclick = () => {
+  if (undoManager.canUndo()) undoManager.undo();
+};
+
 // Provider (iframe child)
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import { Binding } from 'y-mxgraph';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
 const awareness = new Awareness(doc);
 const bridge = createIframeBridgeProvider(doc, awareness);
-// awareness states are automatically synced with the server
+
+App.main((app) => {
+  const file = app.currentFile;
+  const binding = new Binding(file, { doc, awareness });
+  // Takeover draw.io's undo manager to route through Server
+  bridge.takeoverUndoManager(file);
+});
 ```
 
 See [iframe Bridge documentation](https://mizuka-wu.github.io/y-mxgraph/en/guide/iframe-bridge) for details.
