@@ -83,6 +83,7 @@ export function bindDrawioFile(
     window.dispatchEvent(new Event("resize"));
 
     Reflect.set(window, "__doc__", doc);
+    Reflect.set(window, "__undoManager__", undoManager);
     Reflect.set(window, "__binding__", binding);
     Reflect.set(window, "__app__", app);
 
@@ -191,6 +192,7 @@ export function disconnectCollaboration(state: CollabState): void {
   }
 
   delete (window as any).__doc__;
+  delete (window as any).__undoManager__;
   delete (window as any).__provider__;
   delete (window as any).__binding__;
 }

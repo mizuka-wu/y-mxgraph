@@ -93,6 +93,7 @@ export function bindDrawioFile(
 
     // 暴露到 window 便于调试
     Reflect.set(window, "__doc__", doc);
+    Reflect.set(window, "__undoManager__", undoManager);
     Reflect.set(window, "__binding__", binding);
 
     onBind(binding);
@@ -176,6 +177,7 @@ export function disconnectCollaboration(state: CollabState): void {
 
   // 清理 window 上的调试对象
   delete (window as any).__doc__;
+  delete (window as any).__undoManager__;
   delete (window as any).__provider__;
   delete (window as any).__binding__;
 }

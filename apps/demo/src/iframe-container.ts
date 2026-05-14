@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { createIframeBridgeServer } from "y-mxgraph/iframe-bridge/server";
+import { LOCAL_ORIGIN } from "y-mxgraph";
 import { DRAWIO_VERSIONS, SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 // === UI 元素 ===
@@ -54,12 +55,16 @@ function initBridge(roomName: string) {
     currentProvider.destroy();
     currentProvider = null;
   }
+  delete (window as any).__undoManager__;
 
   const doc = new Y.Doc();
   const provider = new WebrtcProvider(roomName, doc, {
     signaling: SIGNALING_SERVERS,
   });
   const awareness = provider.awareness;
+  const undoManager = new Y.UndoManager(doc, {
+    trackedOrigins: new Set([LOCAL_ORIGIN]),
+  });
 
   const bridgeServer = createIframeBridgeServer(doc, awareness);
   bridgeServer.addIframe(ui.iframe, "child");
@@ -85,6 +90,7 @@ function initBridge(roomName: string) {
   const win = window as any;
   win.__provider__ = provider;
   win.__doc__ = doc;
+  win.__undoManager__ = undoManager;
   win.__awareness__ = awareness;
   win.__bridge__ = bridgeServer;
 }
