@@ -4,19 +4,24 @@ import {
   applyAwarenessUpdate,
   encodeAwarenessUpdate,
 } from "y-protocols/awareness";
+import { BRIDGE_ORIGIN } from "./origin.js";
 
 export interface IframeBridgeServer {
   addIframe: (iframe: HTMLIFrameElement, iframeId: string) => void;
   removeIframe: (iframeId: string) => void;
+  undoManager?: Y.UndoManager;
+  onUndoState: (iframeId: string, callback: (state: { canUndo: boolean; canRedo: boolean }) => void) => void;
   destroy: () => void;
 }
 
 export function createIframeBridgeServer(
   ydoc: Y.Doc,
   awareness: Awareness,
+  undoManager?: Y.UndoManager,
 ): IframeBridgeServer {
   const iframes = new Map<string, HTMLIFrameElement>();
   const iframeReady = new Set<string>();
+  const undoStateCallbacks = new Map<string, (state: { canUndo: boolean; canRedo: boolean }) => void>();
 
   const onYdocUpdate = (update: Uint8Array) => {
     broadcastToAll("ydoc-update", update);
@@ -85,7 +90,14 @@ export function createIframeBridgeServer(
         "*",
       );
     } else if (msgType === "ydoc-update") {
-      Y.applyUpdate(ydoc, new Uint8Array(payload));
+      ydoc.transact(() => {
+        Y.applyUpdate(ydoc, new Uint8Array(payload));
+      }, BRIDGE_ORIGIN);
+    } else if (msgType === "undo-state") {
+      const callback = undoStateCallbacks.get(iframeId);
+      if (callback) {
+        callback(payload as { canUndo: boolean; canRedo: boolean });
+      }
     } else if (msgType === "awareness-update") {
       applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
     }
@@ -107,10 +119,15 @@ export function createIframeBridgeServer(
   return {
     addIframe,
     removeIframe,
+    undoManager,
+    onUndoState: (iframeId: string, callback: (state: { canUndo: boolean; canRedo: boolean }) => void) => {
+      undoStateCallbacks.set(iframeId, callback);
+    },
     destroy: () => {
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
       window.removeEventListener("message", onMessage);
+      undoStateCallbacks.clear();
       iframes.clear();
       iframeReady.clear();
     },

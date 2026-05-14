@@ -5,6 +5,7 @@ import {
   bindDrawioFile,
   type CollabState,
 } from "./collaboration.js";
+import { LOCAL_ORIGIN } from "y-mxgraph";
 import { createIframeBridgeProvider } from "y-mxgraph/iframe-bridge/provider";
 import {
   getUIElements,
@@ -168,17 +169,27 @@ async function initIframeChild() {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
 
+  // 创建外部 UndoManager（仅用于 bridge undo-state 上报）
+  const undoManager = new Y.UndoManager(ydoc, {
+    trackedOrigins: new Set([LOCAL_ORIGIN]),
+  });
+
   // 绑定 draw.io
   bindDrawioFile(ydoc, awareness, null as any, () => {
     console.log(`[iframe ${iframeId}] draw.io bound`);
   });
 
   // 创建 iframe-bridge child，与父容器同步
-  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
+  const bridgeProvider = createIframeBridgeProvider(
+    ydoc,
+    awareness,
+    undoManager,
+  );
 
   // 暴露调试对象
   (window as any).__iframeYdoc__ = ydoc;
   (window as any).__iframeAwareness__ = awareness;
+  (window as any).__undoManager__ = undoManager;
   (window as any).__iframeBridgeProvider__ = bridgeProvider;
 }
 

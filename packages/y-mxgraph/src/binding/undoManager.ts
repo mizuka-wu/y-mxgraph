@@ -17,7 +17,12 @@ function createMxEventObject(name: string, props?: Record<string, unknown>) {
   };
 }
 
-export function bindUndoManager(doc: Y.Doc, file: DrawioFile, yUndo: Y.UndoManager) {
+export function bindUndoManager(
+  doc: Y.Doc,
+  file: DrawioFile,
+  yUndo: Y.UndoManager,
+  options?: { onUndoRedo?: (active: boolean) => void },
+) {
   const editor = file.getUi().editor;
   const originUndoManager = editor.undoManager;
 
@@ -114,7 +119,11 @@ export function bindUndoManager(doc: Y.Doc, file: DrawioFile, yUndo: Y.UndoManag
     },
   };
 
-  type YUndoEventName = "stack-item-added" | "stack-cleared" | "stack-item-popped" | "stack-item-updated";
+  type YUndoEventName =
+    | "stack-item-added"
+    | "stack-cleared"
+    | "stack-item-popped"
+    | "stack-item-updated";
   const bridgeHandlers: Array<[YUndoEventName, () => void]> = [];
   const bridge = (mxEventName: "add" | "clear", yEventName: YUndoEventName) => {
     const handler = () => {
@@ -150,7 +159,11 @@ export function bindUndoManager(doc: Y.Doc, file: DrawioFile, yUndo: Y.UndoManag
   bridge("add", "stack-item-added");
   bridge("clear", "stack-cleared");
 
-  const poppedHandler = (e: { type?: string; reason?: string; kind?: string }) => {
+  const poppedHandler = (e: {
+    type?: string;
+    reason?: string;
+    kind?: string;
+  }) => {
     const t = e && (e.type || e.reason || e.kind);
     if (t === "undo") {
       if (mxLike.indexOfNextAdd > 0) mxLike.indexOfNextAdd--;
