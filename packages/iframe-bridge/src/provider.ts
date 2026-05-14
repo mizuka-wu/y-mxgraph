@@ -75,6 +75,7 @@ function remapClientIdInUpdate(
 export function createIframeBridgeProvider(
   ydoc: Y.Doc,
   awareness: Awareness,
+  undoManager?: Y.UndoManager,
 ): IframeBridgeProvider {
   let applyingParentUpdate = false;
   let serverClientId: number | null = null;
@@ -146,7 +147,28 @@ export function createIframeBridgeProvider(
   awareness.on("update", onAwarenessUpdate);
   window.addEventListener("message", onMessage);
 
+  let onUndoStateChange: (() => void) | undefined;
+  if (undoManager) {
+    onUndoStateChange = () => {
+      window.parent.postMessage({
+        type: "undo-state",
+        payload: { canUndo: undoManager.canUndo(), canRedo: undoManager.canRedo() },
+      }, "*");
+    };
+    undoManager.on("stack-item-added", onUndoStateChange);
+    undoManager.on("stack-item-popped", onUndoStateChange);
+    undoManager.on("stack-item-updated", onUndoStateChange);
+    undoManager.on("stack-cleared", onUndoStateChange);
+  }
+
   window.parent.postMessage({ type: "init" }, "*");
+
+  if (undoManager) {
+    window.parent.postMessage({
+      type: "undo-state",
+      payload: { canUndo: undoManager.canUndo(), canRedo: undoManager.canRedo() },
+    }, "*");
+  }
 
   return {
     get serverClientId() {
@@ -156,6 +178,12 @@ export function createIframeBridgeProvider(
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
       window.removeEventListener("message", onMessage);
+      if (undoManager && onUndoStateChange) {
+        undoManager.off("stack-item-added", onUndoStateChange);
+        undoManager.off("stack-item-popped", onUndoStateChange);
+        undoManager.off("stack-item-updated", onUndoStateChange);
+        undoManager.off("stack-cleared", onUndoStateChange);
+      }
     },
   };
 }

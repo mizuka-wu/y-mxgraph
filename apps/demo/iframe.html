@@ -142,6 +142,34 @@
       height: 100%;
       border: none;
     }
+    #toolbar button {
+      background: #ffffff;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      padding: 4px 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #495057;
+      transition: background 0.2s, border-color 0.2s;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    #toolbar button:hover:not(:disabled) {
+      background: #e9ecef;
+      border-color: #adb5bd;
+    }
+
+    #toolbar button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    #toolbar button:active:not(:disabled) {
+      background: #dee2e6;
+    }
   </style>
 </head>
 
@@ -171,6 +199,19 @@
     <div class="toolbar-group">
       <label>Room:</label>
       <input type="text" id="room-input" value="y-mxgraph-demo" />
+    </div>
+    <div class="separator"></div>
+    <div class="toolbar-group">
+      <button id="undo-btn" disabled title="Undo (Ctrl+Z)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3.5 8L7 4.5V6.5H11C12.1 6.5 13 7.4 13 8.5C13 9.6 12.1 10.5 11 10.5H8V11.5L3.5 8.5L8 5.5V6.5H11C11.6 6.5 12 7 12 7.5C12 8 11.6 8.5 11 8.5H8V10.5L3.5 8Z" fill="currentColor"/>
+        </svg>
+      </button>
+      <button id="redo-btn" disabled title="Redo (Ctrl+Y)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M12.5 8L9 4.5V6.5H5C3.9 6.5 3 7.4 3 8.5C3 9.6 3.9 10.5 5 10.5H8V11.5L12.5 8.5L8 5.5V6.5H5C4.4 6.5 4 7 4 7.5C4 8 4.4 8.5 5 8.5H8V10.5L12.5 8Z" fill="currentColor"/>
+        </svg>
+      </button>
     </div>
   </div>
 

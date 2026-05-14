@@ -485,7 +485,7 @@ export function generatePatch(
   };
 
   // 如果 diagramOrder 为空但 diagram map 不为空,使用 diagram map 中的所有 ID
-  const orderIds = orderArr.toArray();
+  const orderIds = orderArr?.toArray() ?? [];
   const currDiagramOrder = orderIds.length > 0 
     ? orderIds 
     : (diagramsMap ? Array.from(diagramsMap.keys()) : []);

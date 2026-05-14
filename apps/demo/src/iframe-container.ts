@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { createIframeBridgeServer } from "y-mxgraph/iframe-bridge/server";
+import { BRIDGE_ORIGIN } from "y-mxgraph/iframe-bridge";
 import { DRAWIO_VERSIONS, SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 // === UI 元素 ===
@@ -16,10 +17,13 @@ const ui = {
   peerCount: document.getElementById("peer-count") as HTMLSpanElement,
   peerNum: document.getElementById("peer-num") as HTMLSpanElement,
   iframe: document.getElementById("child-iframe") as HTMLIFrameElement,
+  undoBtn: document.getElementById("undo-btn") as HTMLButtonElement,
+  redoBtn: document.getElementById("redo-btn") as HTMLButtonElement,
 };
 
 let currentProvider: WebrtcProvider | null = null;
 let currentBridge: ReturnType<typeof createIframeBridgeServer> | null = null;
+let currentUndoManager: Y.UndoManager | null = null;
 
 function updateCollabStatus(
   status: "connected" | "disconnected" | "loading",
@@ -54,6 +58,14 @@ function initBridge(roomName: string) {
     currentProvider.destroy();
     currentProvider = null;
   }
+  if (currentUndoManager) {
+    currentUndoManager.destroy();
+    currentUndoManager = null;
+  }
+
+  // 重置 undo/redo 按钮状态
+  ui.undoBtn.disabled = true;
+  ui.redoBtn.disabled = true;
 
   const doc = new Y.Doc();
   const provider = new WebrtcProvider(roomName, doc, {
@@ -61,8 +73,33 @@ function initBridge(roomName: string) {
   });
   const awareness = provider.awareness;
 
-  const bridgeServer = createIframeBridgeServer(doc, awareness);
+  const undoManager = new Y.UndoManager(doc, {
+    trackedOrigins: new Set([BRIDGE_ORIGIN]),
+  });
+  currentUndoManager = undoManager;
+
+  const bridgeServer = createIframeBridgeServer(doc, awareness, undoManager);
   bridgeServer.addIframe(ui.iframe, "child");
+
+  // 监听父容器 UndoManager 状态
+  const updateUndoState = () => {
+    ui.undoBtn.disabled = !undoManager.canUndo();
+    ui.redoBtn.disabled = !undoManager.canRedo();
+  };
+  undoManager.on("stack-item-added", updateUndoState);
+  undoManager.on("stack-item-popped", updateUndoState);
+  undoManager.on("stack-cleared", updateUndoState);
+
+  // 注册按钮点击事件
+  ui.undoBtn.addEventListener("click", () => {
+    undoManager.undo();
+  });
+  ui.redoBtn.addEventListener("click", () => {
+    undoManager.redo();
+  });
+
+  // 暴露调试对象
+  (window as any).__undoManager__ = undoManager;
 
   currentProvider = provider;
   currentBridge = bridgeServer;

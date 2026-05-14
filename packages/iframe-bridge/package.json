@@ -31,6 +31,14 @@
   "devDependencies": {
     "@y-mxgraph/eslint-config": "workspace:*",
     "@y-mxgraph/typescript-config": "workspace:*",
-    "typescript": "~5.5.4"
+    "jsdom": "^25.0.0",
+    "typescript": "~5.5.4",
+    "vitest": "^2.0.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
   }
 }
