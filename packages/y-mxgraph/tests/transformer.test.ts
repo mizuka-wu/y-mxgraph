@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import * as Y from "yjs";
-import { xml2doc, doc2xml } from "../src/transformer/index";
+import { xml2ydoc, ydoc2xml } from "../src/transformer/index";
 
 const MXFILE_XML = `<mxfile pages="1"><diagram name="Page-1" id="page1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`;
 
@@ -8,28 +8,28 @@ const MXFILE_2PAGES = `<mxfile pages="2"><diagram name="A" id="dA"><mxGraphModel
 
 const MXGRAPHMODEL_XML = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>`;
 
-describe("xml2doc", () => {
+describe("xml2ydoc", () => {
   it("mxfile 格式写入 doc，返回同一 doc", () => {
     const doc = new Y.Doc();
-    const result = xml2doc(MXFILE_XML, doc);
+    const result = xml2ydoc(MXFILE_XML, doc);
     expect(result).toBe(doc);
     expect(doc.share.has("mxfile")).toBe(true);
   });
 
   it("mxGraphModel 格式写入 doc", () => {
     const doc = new Y.Doc();
-    xml2doc(MXGRAPHMODEL_XML, doc);
+    xml2ydoc(MXGRAPHMODEL_XML, doc);
     expect(doc.share.has("mxGraphModel")).toBe(true);
   });
 
   it("不支持的格式抛出异常", () => {
     const doc = new Y.Doc();
-    expect(() => xml2doc("<foo/>", doc)).toThrow();
+    expect(() => xml2ydoc("<foo/>", doc)).toThrow();
   });
 
   it("解析 diagram 名称正确", () => {
     const doc = new Y.Doc();
-    xml2doc(MXFILE_XML, doc);
+    xml2ydoc(MXFILE_XML, doc);
     const mxfile = doc.getMap("mxfile");
     const diagrams = mxfile.get("diagram") as Y.Map<any>;
     const page1 = diagrams.get("page1") as Y.Map<any>;
@@ -38,7 +38,7 @@ describe("xml2doc", () => {
 
   it("解析多页 diagram 顺序正确", () => {
     const doc = new Y.Doc();
-    xml2doc(MXFILE_2PAGES, doc);
+    xml2ydoc(MXFILE_2PAGES, doc);
     const mxfile = doc.getMap("mxfile");
     const order = mxfile.get("diagramOrder") as Y.Array<string>;
     expect(order.toArray()).toEqual(["dA", "dB"]);
@@ -46,7 +46,7 @@ describe("xml2doc", () => {
 
   it("解析 mxCell 数量正确", () => {
     const doc = new Y.Doc();
-    xml2doc(MXFILE_XML, doc);
+    xml2ydoc(MXFILE_XML, doc);
     const mxfile = doc.getMap("mxfile");
     const diagrams = mxfile.get("diagram") as Y.Map<any>;
     const page1 = diagrams.get("page1") as Y.Map<any>;
@@ -56,11 +56,11 @@ describe("xml2doc", () => {
   });
 });
 
-describe("doc2xml", () => {
+describe("ydoc2xml", () => {
   it("mxfile 往返转换结构一致", () => {
     const doc = new Y.Doc();
-    xml2doc(MXFILE_XML, doc);
-    const out = doc2xml(doc);
+    xml2ydoc(MXFILE_XML, doc);
+    const out = ydoc2xml(doc);
     expect(out).toContain("mxfile");
     expect(out).toContain("Page-1");
     expect(out).toContain("mxCell");
@@ -68,33 +68,33 @@ describe("doc2xml", () => {
 
   it("mxGraphModel 往返转换结构一致", () => {
     const doc = new Y.Doc();
-    xml2doc(MXGRAPHMODEL_XML, doc);
-    const out = doc2xml(doc);
+    xml2ydoc(MXGRAPHMODEL_XML, doc);
+    const out = ydoc2xml(doc);
     expect(out).toContain("mxGraphModel");
     expect(out).toContain("mxCell");
   });
 
   it("空 doc 返回空字符串", () => {
     const doc = new Y.Doc();
-    const out = doc2xml(doc);
+    const out = ydoc2xml(doc);
     expect(out).toBe("");
   });
 
   it("spaces 参数影响缩进", () => {
     const doc = new Y.Doc();
-    xml2doc(MXFILE_XML, doc);
-    const compact = doc2xml(doc, 0);
-    const indented = doc2xml(doc, 2);
+    xml2ydoc(MXFILE_XML, doc);
+    const compact = ydoc2xml(doc, 0);
+    const indented = ydoc2xml(doc, 2);
     expect(indented.length).toBeGreaterThan(compact.length);
   });
 
   it("两次往返，mxCell id 保持不变", () => {
     const doc = new Y.Doc();
-    xml2doc(MXFILE_XML, doc);
-    const xml1 = doc2xml(doc);
+    xml2ydoc(MXFILE_XML, doc);
+    const xml1 = ydoc2xml(doc);
     const doc2 = new Y.Doc();
-    xml2doc(xml1, doc2);
-    const xml2 = doc2xml(doc2);
+    xml2ydoc(xml1, doc2);
+    const xml2 = ydoc2xml(doc2);
     expect(xml2).toContain('id="0"');
     expect(xml2).toContain('id="1"');
   });

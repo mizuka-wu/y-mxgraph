@@ -292,7 +292,7 @@ renderRemoteSelections()
 
 ## XML 转换
 
-### xml2doc
+### xml2ydoc
 
 ```
 mxfile XML → xml-js → Y.Map/Y.Array/Y.XmlElement → Y.Doc
@@ -304,7 +304,7 @@ mxfile XML → xml-js → Y.Map/Y.Array/Y.XmlElement → Y.Doc
 - 顺序信息提取到 `Y.Array`
 - diagram 结构扁平化存储
 
-### doc2xml
+### ydoc2xml
 
 ```
 Y.Doc → 遍历 Y 数据结构 → xml-js → mxfile XML

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as Y from "yjs";
 import { Binding } from "../src/binding/index";
-import { xml2doc } from "../src/transformer/index";
+import { xml2ydoc } from "../src/transformer/index";
 import type { DrawioFile } from "../src/types/drawio";
 
 const BASE_XML = `<mxfile pages="1">
@@ -67,8 +67,14 @@ function createMockFile(doc: Y.Doc): DrawioFile {
     data: BASE_XML,
     shadowPages,
     ui: {
-      editor: { graph: mockGraph, undoManager: undefined },
+      editor: { 
+        graph: mockGraph, 
+        undoManager: undefined,
+        setModified: vi.fn(),
+        setStatus: vi.fn(),
+      },
       currentPage: { getId: () => "p1" },
+      currentFile: { setModified: vi.fn() },
       diagramContainer: mockContainer,
       pages,
       diffPages: vi.fn(() => ({})),
@@ -103,7 +109,7 @@ describe("Binding", () => {
 
   beforeEach(() => {
     doc = new Y.Doc();
-    xml2doc(BASE_XML, doc);
+    xml2ydoc(BASE_XML, doc);
     file = createMockFile(doc);
   });
 

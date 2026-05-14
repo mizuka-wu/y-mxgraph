@@ -1,11 +1,11 @@
-# doc2xml
+# ydoc2xml
 
 Serializes a `Y.Doc` to a draw.io XML string.
 
 ## Signature
 
 ```ts
-function doc2xml(doc: Y.Doc, spaces?: number): string
+function ydoc2xml(doc: Y.Doc, spaces?: number): string
 ```
 
 ## Parameters
@@ -21,11 +21,11 @@ A draw.io XML string (`<mxfile>` or `<mxGraphModel>`, depending on the data stor
 
 ```ts
 import * as Y from 'yjs';
-import { xml2doc, doc2xml } from 'y-mxgraph';
+import { xml2ydoc, ydoc2xml } from 'y-mxgraph';
 
 const doc = new Y.Doc();
-xml2doc(myXmlString, doc);
+xml2ydoc(myXmlString, doc);
 
-const output = doc2xml(doc, 2);
+const output = ydoc2xml(doc, 2);
 console.log(output);
 ```

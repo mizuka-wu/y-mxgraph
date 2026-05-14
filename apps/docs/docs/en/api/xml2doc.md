@@ -1,11 +1,11 @@
-# xml2doc
+# xml2ydoc
 
 Parses a draw.io XML string and populates a `Y.Doc` with the result.
 
 ## Signature
 
 ```ts
-function xml2doc(xml: string, doc: Y.Doc): Y.Doc
+function xml2ydoc(xml: string, doc: Y.Doc): Y.Doc
 ```
 
 ## Parameters
@@ -21,10 +21,10 @@ The same `Y.Doc` that was passed in (for chaining).
 
 ```ts
 import * as Y from 'yjs';
-import { xml2doc } from 'y-mxgraph';
+import { xml2ydoc } from 'y-mxgraph';
 
 const doc = new Y.Doc();
 const xmlStr = `<mxfile><diagram name="Page-1" id="abc">...</diagram></mxfile>`;
 
-xml2doc(xmlStr, doc);
+xml2ydoc(xmlStr, doc);
 ```

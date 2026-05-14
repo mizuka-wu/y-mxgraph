@@ -66,9 +66,9 @@ pnpm format
 
 ## Core Library Architecture (`packages/y-mxgraph`)
 
-- **Entry**: `src/index.ts` — exports `Binding`, `xml2doc`, `doc2xml`, `LOCAL_ORIGIN`
+- **Entry**: `src/index.ts` — exports `Binding`, `xml2ydoc`, `ydoc2xml`, `LOCAL_ORIGIN`
 - **Binding** (`src/binding/`): Main class. Binds draw.io `file` to `Y.Doc`. Handles bidirectional sync, undo/redo, collaborator cursors.
-- **Transformer** (`src/transformer/`): `xml2doc(xml, doc)` and `doc2xml(doc)` — converts between draw.io XML and Y.Doc structure.
+- **Transformer** (`src/transformer/`): `xml2ydoc(xml, doc)` and `ydoc2xml(doc)` — converts between draw.io XML and Y.Doc structure.
 - **Models** (`src/models/`): Y.Doc data structure — `mxfile` → `diagram` map + `diagramOrder` array → `mxGraphModel` per diagram.
 - **iframe-bridge** (`src/iframe-bridge/`): Re-exports from `@y-mxgraph/iframe-bridge` package.
 
@@ -109,7 +109,7 @@ binding.test.ts              # Binding class tests
 binding-initial-content.test.ts  # Initial content strategy tests
 origin.test.ts               # LOCAL_ORIGIN tests
 patch.test.ts                # Patch generation/application
-transformer.test.ts          # xml2doc / doc2xml
+transformer.test.ts          # xml2ydoc / ydoc2xml
 ```
 
 Config: `packages/y-mxgraph/vitest.config.ts` — environment: node, includes `src/**` and `tests/**`

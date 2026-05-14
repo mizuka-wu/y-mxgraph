@@ -63,8 +63,8 @@ bindUndoManager(doc, file, yUndo: Y.UndoManager)  // use external instance direc
 | Export | Original | Current | Status |
 |--------|----------|---------|--------|
 | `Binding` | ❌ (function) | ✅ (class) | Changed to class |
-| `xml2doc` | ✅ | ✅ | Retained |
-| `doc2xml` | ✅ | ✅ | Retained |
+| `xml2ydoc` | ✅ | ✅ | Retained |
+| `ydoc2xml` | ✅ | ✅ | Retained |
 | `LOCAL_ORIGIN` | ✅ | ✅ | Retained |
 | `DEFAULT_USER_NAME_KEY` | ✅ (binding/index.ts) | ✅ (binding/collaborator) | Retained |
 | `DEFAULT_USER_COLOR_KEY` | ✅ (binding/index.ts) | ✅ (binding/collaborator) | Retained |

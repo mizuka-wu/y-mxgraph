@@ -7,7 +7,7 @@ import {
 
 export interface IframeBridgeProvider {
   serverClientId: number | null;
-  dispose: () => void;
+  destroy: () => void;
 }
 
 function readVarUint(data: Uint8Array, pos: number): [number, number] {
@@ -152,7 +152,7 @@ export function createIframeBridgeProvider(
     get serverClientId() {
       return serverClientId;
     },
-    dispose: () => {
+    destroy: () => {
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
       window.removeEventListener("message", onMessage);

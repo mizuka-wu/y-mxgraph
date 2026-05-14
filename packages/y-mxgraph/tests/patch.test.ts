@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
-import { xml2doc } from "../src/transformer/index";
+import { xml2ydoc } from "../src/transformer/index";
 import {
   applyFilePatch,
   generatePatch,
@@ -11,7 +11,7 @@ const BASE_XML = `<mxfile pages="1"><diagram name="Page-1" id="p1"><mxGraphModel
 
 function makeDoc(xml = BASE_XML) {
   const doc = new Y.Doc();
-  xml2doc(xml, doc);
+  xml2ydoc(xml, doc);
   initDocSnapshot(doc);
   return doc;
 }

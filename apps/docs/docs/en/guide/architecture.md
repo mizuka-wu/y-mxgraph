@@ -290,7 +290,7 @@ renderRemoteSelections()
 
 ## XML Conversion
 
-### xml2doc
+### xml2ydoc
 
 ```text
 mxfile XML → xml-js → Y.Map/Y.Array/Y.XmlElement → Y.Doc
@@ -300,7 +300,7 @@ mxfile XML → xml-js → Y.Map/Y.Array/Y.XmlElement → Y.Doc
 - Order information is extracted into `Y.Array`
 - Diagram structure is stored flat
 
-### doc2xml
+### ydoc2xml
 
 ```text
 Y.Doc → traverse Y data structures → xml-js → mxfile XML

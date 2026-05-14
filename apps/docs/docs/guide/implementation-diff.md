@@ -63,8 +63,8 @@ bindUndoManager(doc, file, yUndo: Y.UndoManager)  // 直接使用外部实例
 | 导出项 | 原始实现 | 当前实现 | 状态 |
 |--------|----------|----------|------|
 | `Binding` | ❌ (函数) | ✅ (Class) | 改为类 |
-| `xml2doc` | ✅ | ✅ | 保留 |
-| `doc2xml` | ✅ | ✅ | 保留 |
+| `xml2ydoc` | ✅ | ✅ | 保留 |
+| `ydoc2xml` | ✅ | ✅ | 保留 |
 | `LOCAL_ORIGIN` | ✅ | ✅ | 保留 |
 | `DEFAULT_USER_NAME_KEY` | ✅ (binding/index.ts) | ✅ (binding/collaborator) | 保留 |
 | `DEFAULT_USER_COLOR_KEY` | ✅ (binding/index.ts) | ✅ (binding/collaborator) | 保留 |

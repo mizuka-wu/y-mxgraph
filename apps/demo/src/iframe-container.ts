@@ -46,7 +46,7 @@ function getIframeSrc(version: string, customUrl?: string) {
 function initBridge(roomName: string) {
   // 清理旧的
   if (currentBridge) {
-    currentBridge.dispose();
+    currentBridge.destroy();
     currentBridge = null;
   }
   if (currentProvider) {

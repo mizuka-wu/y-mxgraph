@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as Y from "yjs";
 import { Binding } from "../src/binding/index";
-import { xml2doc, doc2xml } from "../src/transformer/index";
+import { xml2ydoc, ydoc2xml } from "../src/transformer/index";
 import type { DrawioFile } from "../src/types/drawio";
 
 const XML_FILE_ONLY = `<mxfile pages="1">
@@ -119,12 +119,12 @@ describe("Binding initialContent 策略", () => {
   describe("replace（默认）", () => {
     it("doc 有数据 → 用 doc XML 刷新 file UI，默认不调 setData（避开弹框）", () => {
       const doc = new Y.Doc();
-      xml2doc(XML_DOC, doc);
+      xml2ydoc(XML_DOC, doc);
       const file = createMockFile(XML_FILE_ONLY);
 
       new Binding(file, { doc });
 
-      const expected = doc2xml(doc);
+      const expected = ydoc2xml(doc);
       expect(file.ui.setFileData).toHaveBeenCalledWith(expected);
       // 默认 applyFileData 不调 setData，避免标记 file 为 modified 触发
       // draw.io 弹出 "Save diagrams to:" 存储选择对话框。
@@ -152,7 +152,7 @@ describe("Binding initialContent 策略", () => {
 
       expect(file.ui.setFileData).not.toHaveBeenCalled();
       expect(file.setData).not.toHaveBeenCalled();
-      // doc 仍然为空，等首次本地编辑触发 xml2doc
+      // doc 仍然为空，等首次本地编辑触发 xml2ydoc
       expect(doc.getMap("mxfile").size).toBe(0);
     });
 
@@ -174,7 +174,7 @@ describe("Binding initialContent 策略", () => {
   describe("merge-remote（doc 优先）", () => {
     it("双方都有且 id 冲突 → doc 内容保留，file 独有 id 合并", () => {
       const doc = new Y.Doc();
-      xml2doc(XML_DOC_OVERLAP, doc);
+      xml2ydoc(XML_DOC_OVERLAP, doc);
       const file = createMockFile(XML_BOTH_OVERLAP);
 
       new Binding(file, { doc, initialContent: "merge-remote" });
@@ -215,7 +215,7 @@ describe("Binding initialContent 策略", () => {
   describe("merge-client（file 优先）", () => {
     it("双方都有且 id 冲突 → file 覆盖 doc 的对应 diagram", () => {
       const doc = new Y.Doc();
-      xml2doc(XML_DOC_OVERLAP, doc);
+      xml2ydoc(XML_DOC_OVERLAP, doc);
       const file = createMockFile(XML_BOTH_OVERLAP);
 
       new Binding(file, { doc, initialContent: "merge-client" });
@@ -236,7 +236,7 @@ describe("Binding initialContent 策略", () => {
   describe("applyFileData 自定义钩子", () => {
     it("自定义钩子被调用，默认 setFileData 不再被触发", () => {
       const doc = new Y.Doc();
-      xml2doc(XML_DOC, doc);
+      xml2ydoc(XML_DOC, doc);
       const file = createMockFile(XML_FILE_ONLY);
       const customApply = vi.fn();
 
@@ -245,7 +245,7 @@ describe("Binding initialContent 策略", () => {
       expect(customApply).toHaveBeenCalledTimes(1);
       const [passedFile, passedXml] = customApply.mock.calls[0];
       expect(passedFile).toBe(file);
-      expect(passedXml).toBe(doc2xml(doc));
+      expect(passedXml).toBe(ydoc2xml(doc));
       // 用户自定义钩子接管后，默认实现不再调用 setFileData
       expect(file.ui.setFileData).not.toHaveBeenCalled();
       expect(file.setData).not.toHaveBeenCalled();
@@ -260,7 +260,7 @@ describe("Binding initialContent 策略", () => {
 
     it("merge-* 模式下 file XML 非法时回退到 replace（用 doc 覆盖）", () => {
       const doc = new Y.Doc();
-      xml2doc(XML_DOC, doc);
+      xml2ydoc(XML_DOC, doc);
       const file = createMockFile("<not valid mxfile><diagram></diagram>");
 
       new Binding(file, { doc, initialContent: "merge-remote" });

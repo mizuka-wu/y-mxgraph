@@ -139,7 +139,7 @@ setPersistence({
 });
 ```
 
-The client uses `doc2xml` to load server data into draw.io after `provider.synced`:
+The client uses `ydoc2xml` to load server data into draw.io after `provider.synced`:
 
 ```ts
 provider.on('sync', (isSynced) => {

@@ -13,7 +13,7 @@ import {
   type YMxGraphModel,
 } from "../models/mxGraphModel";
 
-export function xml2doc(xml: string, doc: Y.Doc): Y.Doc {
+export function xml2ydoc(xml: string, doc: Y.Doc): Y.Doc {
   const object = parse(xml);
 
   const mxfile = (object as Record<string, unknown>).mxfile;
@@ -33,7 +33,7 @@ export function xml2doc(xml: string, doc: Y.Doc): Y.Doc {
   return doc;
 }
 
-export function doc2xml(doc: Y.Doc, spaces = 0): string {
+export function ydoc2xml(doc: Y.Doc, spaces = 0): string {
   if (doc.share.has(mxfileKey)) {
     return serializer(
       {

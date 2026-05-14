@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
 import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
-import { xml2doc, doc2xml } from "../transformer";
+import { xml2ydoc, ydoc2xml } from "../transformer";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
 import { LOCAL_ORIGIN } from "../helper/origin";
@@ -174,7 +174,7 @@ function reconcileInitialContent(
 
   if (strategy === "replace") {
     if (docHasData) {
-      const xml = doc2xml(doc);
+      const xml = ydoc2xml(doc);
       if (xml && xml.includes("<diagram")) {
         applyFileData(file, xml);
       } else if (!fileHasAnyData) {
@@ -199,12 +199,12 @@ function reconcileInitialContent(
     // 仅 file 有 → 把 file 写入 doc，file 保持不变
     try {
       doc.transact(() => {
-        xml2doc(file.data, doc);
+        xml2ydoc(file.data, doc);
       });
       return true;
     } catch (err) {
       console.warn(
-        "[y-mxgraph] merge 模式下 xml2doc 失败，回退 replace：",
+        "[y-mxgraph] merge 模式下 xml2ydoc 失败，回退 replace：",
         err,
       );
       applyFileData(file, Binding.generateFileTemplate("diagram-0"));
@@ -214,7 +214,7 @@ function reconcileInitialContent(
 
   if (docHasData && !fileHasDiagrams) {
     // 仅 doc 有可用 diagram → 用 doc 覆盖 file
-    const xml = doc2xml(doc);
+    const xml = ydoc2xml(doc);
     if (xml && xml.includes("<diagram")) {
       applyFileData(file, xml);
     } else if (!fileHasAnyData) {
@@ -227,11 +227,11 @@ function reconcileInitialContent(
   const ok = mergeFileIntoDoc(doc, file.data, strategy);
   if (!ok) {
     // 解析失败回退到 replace（用 doc 覆盖 file）
-    const xml = doc2xml(doc);
+    const xml = ydoc2xml(doc);
     if (xml && xml.includes("<diagram")) applyFileData(file, xml);
     return mxfileMap.size > 0;
   }
-  const xml = doc2xml(doc);
+  const xml = ydoc2xml(doc);
   if (xml && xml.includes("<diagram")) applyFileData(file, xml);
   return true;
 }
@@ -341,7 +341,7 @@ export class Binding {
       // 第一次有实际本地编辑时才初始化 Y.Doc
       if (!this.docInitialized) {
         doc.transact(() => {
-          xml2doc(file.data, doc);
+          xml2ydoc(file.data, doc);
           initDocSnapshot(doc, false);
         });
         this.docInitialized = true;
@@ -372,7 +372,7 @@ export class Binding {
         const diagramMap = mxfileMap.get(diagramKey) as Y.Map<Y.XmlElement> | undefined;
         if (diagramMap && diagramMap.size > 0) {
           // doc 已有数据，执行强制替换
-          const xml = doc2xml(doc);
+          const xml = ydoc2xml(doc);
           if (xml && xml.includes("<diagram")) {
             this.suppressLocalApply = true;
             try {

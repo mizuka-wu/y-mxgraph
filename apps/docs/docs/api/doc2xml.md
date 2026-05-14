@@ -1,11 +1,11 @@
-# doc2xml
+# ydoc2xml
 
 将 `Y.Doc` 序列化为 draw.io XML 字符串。
 
 ## 签名
 
 ```ts
-function doc2xml(doc: Y.Doc, spaces?: number): string
+function ydoc2xml(doc: Y.Doc, spaces?: number): string
 ```
 
 ## 参数
@@ -21,11 +21,11 @@ draw.io XML 字符串（`<mxfile>` 或 `<mxGraphModel>`，取决于 `doc` 中存
 
 ```ts
 import * as Y from 'yjs';
-import { xml2doc, doc2xml } from 'y-mxgraph';
+import { xml2ydoc, ydoc2xml } from 'y-mxgraph';
 
 const doc = new Y.Doc();
-xml2doc(myXmlString, doc);
+xml2ydoc(myXmlString, doc);
 
-const output = doc2xml(doc, 2);
+const output = ydoc2xml(doc, 2);
 console.log(output);
 ```

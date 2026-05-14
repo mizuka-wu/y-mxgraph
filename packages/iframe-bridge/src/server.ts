@@ -8,7 +8,7 @@ import {
 export interface IframeBridgeServer {
   addIframe: (iframe: HTMLIFrameElement, iframeId: string) => void;
   removeIframe: (iframeId: string) => void;
-  dispose: () => void;
+  destroy: () => void;
 }
 
 export function createIframeBridgeServer(
@@ -107,7 +107,7 @@ export function createIframeBridgeServer(
   return {
     addIframe,
     removeIframe,
-    dispose: () => {
+    destroy: () => {
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
       window.removeEventListener("message", onMessage);

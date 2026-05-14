@@ -66,7 +66,7 @@ const iframe = document.getElementById('editor-iframe') as HTMLIFrameElement;
 bridge.addIframe(iframe, 'editor-1');
 
 // Cleanup
-// bridge.dispose();
+// bridge.destroy();
 ```
 
 ### Provider (iframe child)
@@ -86,7 +86,7 @@ const bridge = createIframeBridgeProvider(doc, awareness);
 console.log(bridge.serverClientId);
 
 // Cleanup
-// bridge.dispose();
+// bridge.destroy();
 ```
 
 ## Message Protocol
@@ -197,7 +197,7 @@ Creates the Server-side bridge.
 
 - `addIframe(iframe: HTMLIFrameElement, iframeId: string)` — Register an iframe
 - `removeIframe(iframeId: string)` — Remove an iframe
-- `dispose()` — Clean up all listeners
+- `destroy()` — Clean up all listeners
 
 ### `createIframeBridgeProvider(doc, awareness)`
 
@@ -216,7 +216,7 @@ Creates the Provider-side bridge.
 
 **Methods**:
 
-- `dispose()` — Clean up all listeners
+- `destroy()` — Clean up all listeners
 
 ## SharedWorker Mode
 

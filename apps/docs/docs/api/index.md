@@ -6,8 +6,8 @@
 |---|---|---|
 | `Binding` | class | draw.io file 与 Y.Doc 的绑定类 |
 | `BindDrawioFileOptions` | type | Binding 构造函数的 options 类型 |
-| `xml2doc` | function | draw.io XML → Y.Doc |
-| `doc2xml` | function | Y.Doc → draw.io XML |
+| `xml2ydoc` | function | draw.io XML → Y.Doc |
+| `ydoc2xml` | function | Y.Doc → draw.io XML |
 | `LOCAL_ORIGIN` | object | 标记本地事务的 origin 标识 |
 | `DEFAULT_USER_NAME_KEY` | string | Awareness 中用户名的默认字段 |
 | `DEFAULT_USER_COLOR_KEY` | string | Awareness 中颜色的默认字段 |
@@ -15,8 +15,8 @@
 ```ts
 import {
   Binding,
-  xml2doc,
-  doc2xml,
+  xml2ydoc,
+  ydoc2xml,
   LOCAL_ORIGIN,
   DEFAULT_USER_NAME_KEY,
   DEFAULT_USER_COLOR_KEY,

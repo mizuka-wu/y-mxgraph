@@ -66,7 +66,7 @@ const iframe = document.getElementById('editor-iframe') as HTMLIFrameElement;
 bridge.addIframe(iframe, 'editor-1');
 
 // 清理
-// bridge.dispose();
+// bridge.destroy();
 ```
 
 ### Provider（iframe 子页面）
@@ -86,7 +86,7 @@ const bridge = createIframeBridgeProvider(doc, awareness);
 console.log(bridge.serverClientId);
 
 // 清理
-// bridge.dispose();
+// bridge.destroy();
 ```
 
 ## 消息协议
@@ -197,7 +197,7 @@ window.addEventListener('message', (event) => {
 
 - `addIframe(iframe: HTMLIFrameElement, iframeId: string)` — 注册 iframe
 - `removeIframe(iframeId: string)` — 移除 iframe
-- `dispose()` — 清理所有监听器
+- `destroy()` — 清理所有监听器
 
 ### `createIframeBridgeProvider(doc, awareness)`
 
@@ -216,7 +216,7 @@ window.addEventListener('message', (event) => {
 
 **方法**：
 
-- `dispose()` — 清理所有监听器
+- `destroy()` — 清理所有监听器
 
 ## SharedWorker 模式
 
