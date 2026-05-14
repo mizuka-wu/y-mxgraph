@@ -26,6 +26,11 @@
       "require": "./src/index.ts",
       "types": "./src/index.ts"
     },
+    "./iframe-bridge": {
+      "import": "./src/iframe-bridge/index.ts",
+      "require": "./src/iframe-bridge/index.ts",
+      "types": "./src/iframe-bridge/index.ts"
+    },
     "./iframe-bridge/server": {
       "import": "./src/iframe-bridge/server.ts",
       "require": "./src/iframe-bridge/server.ts",

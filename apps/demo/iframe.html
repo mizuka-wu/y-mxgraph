@@ -75,6 +75,30 @@
       width: 220px;
     }
 
+    #undo-btn,
+    #redo-btn {
+      background: #ffffff;
+      border: 1px solid #ced4da;
+      color: #333333;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    #undo-btn:hover:not(:disabled),
+    #redo-btn:hover:not(:disabled) {
+      background: #e9ecef;
+    }
+
+    #undo-btn:disabled,
+    #redo-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .separator {
       width: 1px;
       height: 20px;
@@ -171,6 +195,13 @@
     <div class="toolbar-group">
       <label>Room:</label>
       <input type="text" id="room-input" value="y-mxgraph-demo" />
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <button id="undo-btn" disabled title="Undo (Ctrl+Z)">↩ Undo</button>
+      <button id="redo-btn" disabled title="Redo (Ctrl+Y)">↪ Redo</button>
     </div>
   </div>
 

@@ -32,7 +32,13 @@ export type InitialContentStrategy =
 export interface BindDrawioFileOptions {
   doc: Y.Doc;
   awareness?: Awareness;
-  undoManager?: Y.UndoManager;
+  /**
+   * UndoManager 实例，用于支持 undo/redo。
+   * - 传入 Y.UndoManager 实例：绑定到 draw.io 的 undoManager
+   * - 传入 false：跳过绑定（用于 iframe-bridge 等外部接管场景）
+   * - 不传或 undefined：不绑定 undoManager
+   */
+  undoManager?: Y.UndoManager | false;
   mouseMoveThrottle?: number;
   cursor?:
     | boolean
@@ -247,6 +253,8 @@ function reconcileInitialContent(
 export class Binding {
   /** Y.Doc 实例，用于协同数据存储 */
   readonly doc: Y.Doc;
+  /** draw.io file 实例 */
+  readonly file: DrawioFile;
   /** mxGraph 的数据模型，用于监听本地变更 */
   private mxGraphModel: MxGraphModel;
   /** 本地变更抑制标志，防止循环同步 */
@@ -289,6 +297,7 @@ export class Binding {
     } = options;
 
     this.doc = doc;
+    this.file = file;
     this.initialContentStrategy = initialContent;
 
     const ui = file.getUi();

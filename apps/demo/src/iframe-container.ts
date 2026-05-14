@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { createIframeBridgeServer } from "y-mxgraph/iframe-bridge/server";
+import { IFRAME_ORIGIN } from "y-mxgraph/iframe-bridge";
 import { LOCAL_ORIGIN } from "y-mxgraph";
 import { DRAWIO_VERSIONS, SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
@@ -17,10 +18,13 @@ const ui = {
   peerCount: document.getElementById("peer-count") as HTMLSpanElement,
   peerNum: document.getElementById("peer-num") as HTMLSpanElement,
   iframe: document.getElementById("child-iframe") as HTMLIFrameElement,
+  undoBtn: document.getElementById("undo-btn") as HTMLButtonElement,
+  redoBtn: document.getElementById("redo-btn") as HTMLButtonElement,
 };
 
 let currentProvider: WebrtcProvider | null = null;
 let currentBridge: ReturnType<typeof createIframeBridgeServer> | null = null;
+let currentUndoManager: Y.UndoManager | null = null;
 
 function updateCollabStatus(
   status: "connected" | "disconnected" | "loading",
@@ -44,6 +48,16 @@ function getIframeSrc(version: string, customUrl?: string) {
   return `./index.html?${params.toString()}`;
 }
 
+function updateUndoRedoButtons() {
+  if (!currentUndoManager) {
+    ui.undoBtn.disabled = true;
+    ui.redoBtn.disabled = true;
+    return;
+  }
+  ui.undoBtn.disabled = !currentUndoManager.canUndo();
+  ui.redoBtn.disabled = !currentUndoManager.canRedo();
+}
+
 function initBridge(roomName: string) {
   // 清理旧的
   if (currentBridge) {
@@ -55,6 +69,10 @@ function initBridge(roomName: string) {
     currentProvider.destroy();
     currentProvider = null;
   }
+  if (currentUndoManager) {
+    currentUndoManager.destroy();
+    currentUndoManager = null;
+  }
   delete (window as any).__undoManager__;
 
   const doc = new Y.Doc();
@@ -63,14 +81,22 @@ function initBridge(roomName: string) {
   });
   const awareness = provider.awareness;
   const undoManager = new Y.UndoManager(doc, {
-    trackedOrigins: new Set([LOCAL_ORIGIN]),
+    trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
   });
 
-  const bridgeServer = createIframeBridgeServer(doc, awareness);
+  const bridgeServer = createIframeBridgeServer(doc, awareness, {
+    undoManager,
+  });
   bridgeServer.addIframe(ui.iframe, "child");
 
   currentProvider = provider;
   currentBridge = bridgeServer;
+  currentUndoManager = undoManager;
+
+  undoManager.on("stack-item-added", updateUndoRedoButtons);
+  undoManager.on("stack-item-popped", updateUndoRedoButtons);
+  undoManager.on("stack-cleared", updateUndoRedoButtons);
+  updateUndoRedoButtons();
 
   provider.on("status", (event: { connected: boolean }) => {
     if (event.connected) {
@@ -112,8 +138,18 @@ function init() {
   // 加载子 iframe
   ui.iframe.src = getIframeSrc(version, customUrl);
 
-  // 初始化 bridge
   initBridge(roomName);
+
+  ui.undoBtn.addEventListener("click", () => {
+    if (currentUndoManager && currentUndoManager.canUndo()) {
+      currentUndoManager.undo();
+    }
+  });
+  ui.redoBtn.addEventListener("click", () => {
+    if (currentUndoManager && currentUndoManager.canRedo()) {
+      currentUndoManager.redo();
+    }
+  });
 
   // 版本切换
   ui.versionSelect.addEventListener("change", () => {

@@ -56,10 +56,13 @@ export function bindDrawioFile(
   awareness: Awareness,
   provider: WebrtcProvider | null,
   onBind: (binding: Binding) => void,
+  skipUndoManager = false,
 ): () => void {
-  const undoManager = new Y.UndoManager(doc, {
-    trackedOrigins: new Set([LOCAL_ORIGIN]),
-  });
+  const undoManager = skipUndoManager
+    ? false
+    : new Y.UndoManager(doc, {
+        trackedOrigins: new Set([LOCAL_ORIGIN]),
+      });
 
   let bindingCreated = false;
   let isMounted = true;

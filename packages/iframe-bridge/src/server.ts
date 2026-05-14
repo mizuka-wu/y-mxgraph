@@ -4,6 +4,11 @@ import {
   applyAwarenessUpdate,
   encodeAwarenessUpdate,
 } from "y-protocols/awareness";
+import { IFRAME_ORIGIN } from "./origin.js";
+
+export interface IframeBridgeServerOptions {
+  undoManager?: Y.UndoManager;
+}
 
 export interface IframeBridgeServer {
   addIframe: (iframe: HTMLIFrameElement, iframeId: string) => void;
@@ -14,11 +19,14 @@ export interface IframeBridgeServer {
 export function createIframeBridgeServer(
   ydoc: Y.Doc,
   awareness: Awareness,
+  options?: IframeBridgeServerOptions,
 ): IframeBridgeServer {
+  const { undoManager } = options ?? {};
   const iframes = new Map<string, HTMLIFrameElement>();
   const iframeReady = new Set<string>();
 
-  const onYdocUpdate = (update: Uint8Array) => {
+  const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
+    if (origin === IFRAME_ORIGIN) return;
     broadcastToAll("ydoc-update", update);
   };
 
@@ -85,9 +93,13 @@ export function createIframeBridgeServer(
         "*",
       );
     } else if (msgType === "ydoc-update") {
-      Y.applyUpdate(ydoc, new Uint8Array(payload));
+      Y.applyUpdate(ydoc, new Uint8Array(payload), IFRAME_ORIGIN);
     } else if (msgType === "awareness-update") {
       applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
+    } else if (msgType === "undo" && undoManager) {
+      undoManager.undo();
+    } else if (msgType === "redo" && undoManager) {
+      undoManager.redo();
     }
   };
 
@@ -100,9 +112,26 @@ export function createIframeBridgeServer(
     iframeReady.delete(iframeId);
   }
 
+  const onUndoPopped = (e: { type?: string; reason?: string; kind?: string }) => {
+    const t = e && (e.type || e.reason || e.kind);
+    if (t === "undo") {
+      broadcastToAll("undo", new Uint8Array());
+    } else if (t === "redo") {
+      broadcastToAll("redo", new Uint8Array());
+    }
+  };
+
+  const onStackCleared = () => {
+    broadcastToAll("clear", new Uint8Array());
+  };
+
   ydoc.on("update", onYdocUpdate);
   awareness.on("update", onAwarenessUpdate);
   window.addEventListener("message", onMessage);
+  if (undoManager) {
+    undoManager.on("stack-item-popped", onUndoPopped);
+    undoManager.on("stack-cleared", onStackCleared);
+  }
 
   return {
     addIframe,
@@ -111,6 +140,10 @@ export function createIframeBridgeServer(
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
       window.removeEventListener("message", onMessage);
+      if (undoManager) {
+        undoManager.off("stack-item-popped", onUndoPopped);
+        undoManager.off("stack-cleared", onStackCleared);
+      }
       iframes.clear();
       iframeReady.clear();
     },

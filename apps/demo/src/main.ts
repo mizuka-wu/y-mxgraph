@@ -164,19 +164,16 @@ async function initIframeChild() {
     return;
   }
 
-  // 创建本地 ydoc 和 awareness（不连接 provider）
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
 
-  // 绑定 draw.io
-  bindDrawioFile(ydoc, awareness, null as any, () => {
-    console.log(`[iframe ${iframeId}] draw.io bound`);
-  });
-
-  // 创建 iframe-bridge child，与父容器同步
   const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
 
-  // 暴露调试对象
+  bindDrawioFile(ydoc, awareness, null as any, (binding) => {
+    console.log(`[iframe ${iframeId}] draw.io bound`);
+    bridgeProvider.takeoverUndoManager(binding.file);
+  }, false);
+
   (window as any).__iframeYdoc__ = ydoc;
   (window as any).__iframeAwareness__ = awareness;
   (window as any).__iframeBridgeProvider__ = bridgeProvider;
