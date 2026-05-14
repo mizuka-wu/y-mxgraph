@@ -45,9 +45,9 @@ export function createIframeBridgeServer(
     broadcastToAll("awareness-update", update);
   };
 
-  function broadcastToAll(type: string, payload: Uint8Array) {
+  function broadcastToAll(type: string, payload: Uint8Array, excludeSource?: Window) {
     for (const iframe of iframes.values()) {
-      if (iframe.contentWindow) {
+      if (iframe.contentWindow && iframe.contentWindow !== excludeSource) {
         iframe.contentWindow.postMessage({ type, payload }, "*");
       }
     }
@@ -93,7 +93,9 @@ export function createIframeBridgeServer(
         "*",
       );
     } else if (msgType === "ydoc-update") {
-      Y.applyUpdate(ydoc, new Uint8Array(payload), IFRAME_ORIGIN);
+      const update = new Uint8Array(payload);
+      Y.applyUpdate(ydoc, update, IFRAME_ORIGIN);
+      broadcastToAll("ydoc-update", update, sourceWindow);
     } else if (msgType === "awareness-update") {
       applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
     } else if (msgType === "undo" && undoManager) {
