@@ -45,7 +45,11 @@ export function createIframeBridgeServer(
     broadcastToAll("awareness-update", update);
   };
 
-  function broadcastToAll(type: string, payload: Uint8Array, excludeSource?: Window) {
+  function broadcastToAll(
+    type: string,
+    payload: Uint8Array,
+    excludeSource?: Window,
+  ) {
     for (const iframe of iframes.values()) {
       if (iframe.contentWindow && iframe.contentWindow !== excludeSource) {
         iframe.contentWindow.postMessage({ type, payload }, "*");
@@ -114,7 +118,11 @@ export function createIframeBridgeServer(
     iframeReady.delete(iframeId);
   }
 
-  const onUndoPopped = (e: { type?: string; reason?: string; kind?: string }) => {
+  const onUndoPopped = (e: {
+    type?: string;
+    reason?: string;
+    kind?: string;
+  }) => {
     const t = e && (e.type || e.reason || e.kind);
     if (t === "undo") {
       broadcastToAll("undo", new Uint8Array());
@@ -127,12 +135,17 @@ export function createIframeBridgeServer(
     broadcastToAll("clear", new Uint8Array());
   };
 
+  const onStackItemAdded = () => {
+    broadcastToAll("add", new Uint8Array());
+  };
+
   ydoc.on("update", onYdocUpdate);
   awareness.on("update", onAwarenessUpdate);
   window.addEventListener("message", onMessage);
   if (undoManager) {
     undoManager.on("stack-item-popped", onUndoPopped);
     undoManager.on("stack-cleared", onStackCleared);
+    undoManager.on("stack-item-added", onStackItemAdded);
   }
 
   return {
@@ -145,6 +158,7 @@ export function createIframeBridgeServer(
       if (undoManager) {
         undoManager.off("stack-item-popped", onUndoPopped);
         undoManager.off("stack-cleared", onStackCleared);
+        undoManager.off("stack-item-added", onStackItemAdded);
       }
       iframes.clear();
       iframeReady.clear();

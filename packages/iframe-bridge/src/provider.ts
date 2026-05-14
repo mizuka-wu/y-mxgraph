@@ -120,18 +120,6 @@ export function createIframeBridgeProvider(
 
   const onYdocUpdate = (update: Uint8Array) => {
     if (applyingParentUpdate) return;
-    // 本地编辑，添加 history 条目
-    if (currentMxLike) {
-      if (currentMxLike.indexOfNextAdd < currentMxLike.history.length) {
-        currentMxLike.history.splice(
-          currentMxLike.indexOfNextAdd,
-          currentMxLike.history.length - currentMxLike.indexOfNextAdd,
-        );
-      }
-      currentMxLike.history.push({});
-      currentMxLike.indexOfNextAdd = currentMxLike.history.length;
-      currentMxLike.fireEvent(createMxEventObject("add", { edit: { changes: [] } }));
-    }
     window.parent.postMessage(
       { type: "ydoc-update", payload: Array.from(update) },
       "*",
@@ -190,15 +178,34 @@ export function createIframeBridgeProvider(
       applyingParentUpdate = true;
       applyAwarenessUpdate(awareness, remapped, null);
       applyingParentUpdate = false;
+    } else if (type === "add" && currentMxLike) {
+      applyingParentUpdate = true;
+      if (currentMxLike.indexOfNextAdd < currentMxLike.history.length) {
+        currentMxLike.history.splice(
+          currentMxLike.indexOfNextAdd,
+          currentMxLike.history.length - currentMxLike.indexOfNextAdd,
+        );
+      }
+      currentMxLike.history.push({});
+      currentMxLike.indexOfNextAdd = currentMxLike.history.length;
+      currentMxLike.fireEvent(
+        createMxEventObject("add", { edit: { changes: [] } }),
+      );
+      applyingParentUpdate = false;
     } else if (type === "undo" && currentMxLike) {
       applyingParentUpdate = true;
       if (currentMxLike.indexOfNextAdd > 0) currentMxLike.indexOfNextAdd--;
-      currentMxLike.fireEvent(createMxEventObject("undo", { edit: { changes: [] } }));
+      currentMxLike.fireEvent(
+        createMxEventObject("undo", { edit: { changes: [] } }),
+      );
       applyingParentUpdate = false;
     } else if (type === "redo" && currentMxLike) {
       applyingParentUpdate = true;
-      if (currentMxLike.indexOfNextAdd < currentMxLike.history.length) currentMxLike.indexOfNextAdd++;
-      currentMxLike.fireEvent(createMxEventObject("redo", { edit: { changes: [] } }));
+      if (currentMxLike.indexOfNextAdd < currentMxLike.history.length)
+        currentMxLike.indexOfNextAdd++;
+      currentMxLike.fireEvent(
+        createMxEventObject("redo", { edit: { changes: [] } }),
+      );
       applyingParentUpdate = false;
     } else if (type === "clear" && currentMxLike) {
       applyingParentUpdate = true;
@@ -249,7 +256,8 @@ export function createIframeBridgeProvider(
         fireEvent(evt: unknown) {
           const eventName: string =
             (evt as { name?: string } | undefined)?.name ||
-            ((evt as { getName?: () => string } | undefined)?.getName?.() ?? "");
+            ((evt as { getName?: () => string } | undefined)?.getName?.() ??
+              "");
           for (let i = 0; i + 1 < this.eventListeners.length; i += 2) {
             const key = this.eventListeners[i];
             const listener = this.eventListeners[i + 1] as ListenerFn;
@@ -257,7 +265,10 @@ export function createIframeBridgeProvider(
               try {
                 listener(this, evt);
               } catch (e) {
-                console.warn("[iframe-bridge] undoManager event listener error:", e);
+                console.warn(
+                  "[iframe-bridge] undoManager event listener error:",
+                  e,
+                );
               }
             }
           }
@@ -301,7 +312,9 @@ export function createIframeBridgeProvider(
 
       const cleanup = () => {
         editor.undoManager = originUndoManager;
-        editor.undoListener = originUndoManager?.undoListener as ((...args: unknown[]) => void) | undefined;
+        editor.undoListener = originUndoManager?.undoListener as
+          | ((...args: unknown[]) => void)
+          | undefined;
         currentMxLike = null;
       };
 
