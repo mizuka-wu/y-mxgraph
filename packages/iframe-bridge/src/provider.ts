@@ -139,10 +139,16 @@ export function createIframeBridgeProvider(
     const changes = [...added, ...updated, ...removed];
     if (changes.length === 0) return;
 
-    const update = encodeAwarenessUpdate(awareness, changes);
+    // 只发送本地 clientID 的更新给父页面
+    // 其他 peers 的更新通过父页面的 WebrtcProvider 同步，不应该从 iframe 回传
+    const localClientId = awareness.clientID;
+    const localChanged = changes.includes(localClientId);
+    if (!localChanged) return;
+
+    const update = encodeAwarenessUpdate(awareness, [localClientId]);
     const remapped =
       serverClientId != null
-        ? remapClientIdInUpdate(update, awareness.clientID, serverClientId)
+        ? remapClientIdInUpdate(update, localClientId, serverClientId)
         : update;
 
     window.parent.postMessage(
@@ -169,14 +175,13 @@ export function createIframeBridgeProvider(
         serverClientId = receivedServerId;
       }
 
-      const raw = new Uint8Array(payload);
-      const remapped =
-        serverClientId != null
-          ? remapClientIdInUpdate(raw, serverClientId, awareness.clientID)
-          : raw;
-
+      // 直接使用 server 发送的原始 clientID，不做映射
+      // iframe 的 awareness 中会包含：
+      // - iframe 自身的 clientID (awareness.clientID)
+      // - server 的 clientID (serverClientId)
+      // - 其他 Webrtc peers 的 clientID
       applyingParentUpdate = true;
-      applyAwarenessUpdate(awareness, remapped, null);
+      applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
       applyingParentUpdate = false;
     } else if (type === "add" && currentMxLike) {
       applyingParentUpdate = true;
@@ -221,6 +226,11 @@ export function createIframeBridgeProvider(
   window.addEventListener("message", onMessage);
 
   window.parent.postMessage({ type: "init" }, "*");
+
+  // 发送 ping 获取 serverClientId
+  setTimeout(() => {
+    window.parent.postMessage({ type: "ping" }, "*");
+  }, 100);
 
   return {
     get serverClientId() {
