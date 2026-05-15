@@ -84,10 +84,9 @@ function initBridge(roomName: string) {
     trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
   });
 
-  const bridgeServer = createIframeBridgeServer(doc, awareness, {
+  const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
     undoManager,
   });
-  bridgeServer.addIframe(ui.iframe, "child");
 
   currentProvider = provider;
   currentBridge = bridgeServer;
