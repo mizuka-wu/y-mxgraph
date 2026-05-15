@@ -4,7 +4,7 @@ import {
   applyAwarenessUpdate,
   encodeAwarenessUpdate,
 } from "y-protocols/awareness";
-import { IFRAME_ORIGIN } from "./origin.js";
+import { IFRAME_ORIGIN, BASELINE_ORIGIN } from "./origin.js";
 
 export interface IframeBridgeServerOptions {
   undoManager?: Y.UndoManager;
@@ -88,7 +88,10 @@ export function createIframeBridgeServer(
       }
     } else if (msgType === "ydoc-update") {
       const update = new Uint8Array(payload);
-      Y.applyUpdate(ydoc, update, IFRAME_ORIGIN);
+      const isBaseline = event.data.isBaseline;
+      // 基线数据使用 BASELINE_ORIGIN（不进入 undo 栈），编辑数据使用 IFRAME_ORIGIN
+      const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
+      Y.applyUpdate(ydoc, update, applyOrigin);
       // 源 iframe 已经持有此 update，无需回传
     } else if (msgType === "awareness-update") {
       // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传

@@ -118,10 +118,12 @@ export function createIframeBridgeProvider(
   let currentCleanup: (() => void) | null = null;
   let currentMxLike: MxLike | null = null;
 
-  const onYdocUpdate = (update: Uint8Array) => {
+  const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
     if (applyingParentUpdate) return;
+    // 检测基线数据：origin 为 null 时是 xml2ydoc 首次初始化
+    const isBaseline = origin === null || origin === undefined;
     window.parent.postMessage(
-      { type: "ydoc-update", payload: Array.from(update) },
+      { type: "ydoc-update", payload: Array.from(update), isBaseline },
       "*",
     );
   };
@@ -197,6 +199,18 @@ export function createIframeBridgeProvider(
         createMxEventObject("add", { edit: { changes: [] } }),
       );
       applyingParentUpdate = false;
+    } else if (type === "undo-state" && currentMxLike) {
+      // 从 Server 同步真实的 undo/redo 状态
+      const { canUndo, canRedo, undoStackSize, redoStackSize } = event.data;
+      // 调整 history 长度匹配 Server
+      const totalSize = (undoStackSize || 0) + (redoStackSize || 0);
+      while (currentMxLike.history.length < totalSize) {
+        currentMxLike.history.push({});
+      }
+      while (currentMxLike.history.length > totalSize) {
+        currentMxLike.history.pop();
+      }
+      currentMxLike.indexOfNextAdd = undoStackSize || 0;
     } else if (type === "undo" && currentMxLike) {
       applyingParentUpdate = true;
       if (currentMxLike.indexOfNextAdd > 0) currentMxLike.indexOfNextAdd--;

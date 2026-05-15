@@ -92,6 +92,12 @@ function initBridge(roomName: string) {
   currentBridge = bridgeServer;
   currentUndoManager = undoManager;
 
+  // 挂载到 window 供调试
+  (window as any).__doc__ = doc;
+  (window as any).__undoManager__ = undoManager;
+  (window as any).__provider__ = provider;
+  (window as any).__bridge__ = bridgeServer;
+
   undoManager.on("stack-item-added", updateUndoRedoButtons);
   undoManager.on("stack-item-popped", updateUndoRedoButtons);
   undoManager.on("stack-cleared", updateUndoRedoButtons);
