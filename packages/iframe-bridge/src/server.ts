@@ -22,6 +22,7 @@ export function createIframeBridgeServer(
 ): IframeBridgeServer {
   const { undoManager } = options ?? {};
   let iframeReady = false;
+  let applyingIframeUpdate = false;
 
   function postToIframe(type: string, payload: Uint8Array) {
     const cw = iframe.contentWindow;
@@ -44,8 +45,12 @@ export function createIframeBridgeServer(
     updated: number[];
     removed: number[];
   }) => {
+    if (applyingIframeUpdate) return;
     const changes = [...added, ...updated, ...removed];
     if (changes.length === 0) return;
+
+    // 把所有变化的 clientID 都发送给 iframe（包括其他 Webrtc peers 的光标更新）
+    // 但要注意：server 自身的 clientID 需要被 iframe 识别为 serverClientId
     const update = encodeAwarenessUpdate(awareness, changes);
     postToIframe("awareness-update", update);
   };
@@ -65,10 +70,14 @@ export function createIframeBridgeServer(
         Array.from(awareness.getStates().keys()),
       );
       postToIframe("ydoc-sync", new Uint8Array(Array.from(docState)));
-      postToIframe(
-        "awareness-sync",
-        new Uint8Array(Array.from(awarenessState)),
-      );
+      // 在单独的 postMessage 中发送 serverClientId，方便 iframe 接收
+      const cw = iframe.contentWindow;
+      if (cw) {
+        cw.postMessage(
+          { type: "awareness-sync", payload: Array.from(awarenessState), serverClientId: awareness.clientID },
+          "*",
+        );
+      }
     } else if (msgType === "ping") {
       const cw = iframe.contentWindow;
       if (cw) {
@@ -82,7 +91,10 @@ export function createIframeBridgeServer(
       Y.applyUpdate(ydoc, update, IFRAME_ORIGIN);
       // 源 iframe 已经持有此 update，无需回传
     } else if (msgType === "awareness-update") {
-      applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
+      // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传
+      applyingIframeUpdate = true;
+      applyAwarenessUpdate(awareness, new Uint8Array(payload), IFRAME_ORIGIN);
+      applyingIframeUpdate = false;
     } else if (msgType === "undo" && undoManager) {
       undoManager.undo();
     } else if (msgType === "redo" && undoManager) {
