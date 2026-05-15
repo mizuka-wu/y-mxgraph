@@ -16,24 +16,23 @@
 │       │              │                                      │
 │       └──────┬───────┘                                      │
 │              ▼                                              │
-│   createIframeBridgeServer(doc, awareness)                  │
+│   createIframeBridgeServer(iframe, doc, awareness)          │
 │              │ postMessage                                  │
 └──────────────│──────────────────────────────────────────────┘
                │
-    ┌──────────┴──────────┐
-    ▼                     ▼
-┌─────────────┐     ┌─────────────┐
-│ Iframe A    │     │ Iframe B    │
-│             │     │             │
-│ local Y.Doc │     │ local Y.Doc │
-│ + Awareness │     │ + Awareness │
-│ + draw.io   │     │ + draw.io   │
-└─────────────┘     └─────────────┘
+               ▼
+        ┌─────────────┐
+        │   Iframe    │
+        │             │
+        │ local Y.Doc │
+        │ + Awareness │
+        │ + draw.io   │
+        └─────────────┘
 ```
 
 ### Core Design
 
-- **Server**: Runs on the parent page, holds the single `Y.Doc` and `Awareness` instance, connects to the network via y-webrtc / y-websocket / etc.
+- **Server**: Runs on the parent page, holds the single `Y.Doc` and `Awareness` instance, connects to the network via y-webrtc / y-websocket / etc. Each iframe gets its own Server instance bound directly to the target iframe
 - **Provider**: Runs inside iframes, holds local `Y.Doc` and `Awareness`, syncs with Server via `postMessage`
 - **Single connection**: Only the Server maintains a network connection; iframes can be sandboxed with no network access
 - **ID mapping**: Provider automatically maps the Server's `clientID` to its local `clientID`, ensuring collaborative cursors correctly identify "self"
@@ -58,12 +57,9 @@ const provider = new WebrtcProvider('my-room', doc, {
   signaling: ['wss://y-webrtc-eu.fly.dev'],
 });
 
-// Create bridge server
-const bridge = createIframeBridgeServer(doc, provider.awareness);
-
-// Register iframe
+// Create bridge server, bound directly to the target iframe
 const iframe = document.getElementById('editor-iframe') as HTMLIFrameElement;
-bridge.addIframe(iframe, 'editor-1');
+const bridge = createIframeBridgeServer(iframe, doc, provider.awareness);
 
 // Cleanup
 // bridge.destroy();
@@ -104,9 +100,13 @@ Server and Provider communicate via `postMessage` with the following message typ
 | Server → Provider | `pong` | `serverClientId` | Response to ping |
 | Provider → Server | `undo` | none | Request undo |
 | Provider → Server | `redo` | none | Request redo |
-| Server → Provider | `undo` | none | Notify undo (broadcast to all iframes) |
-| Server → Provider | `redo` | none | Notify redo (broadcast to all iframes) |
-| Server → Provider | `clear` | none | Notify undo stack cleared |
+| Server → Provider | `undo-state` | `canUndo`, `canRedo`, `undoStackSize`, `redoStackSize` | Sync undo stack state |
+
+### Baseline Data
+
+When the Provider initializes for the first time (e.g. data produced by `xml2ydoc`), it sends `ydoc-update` with `isBaseline: true`. The Server applies these updates with `BASELINE_ORIGIN`, ensuring they **do not enter the UndoManager's stack**.
+
+Regular edits use `IFRAME_ORIGIN` and are correctly tracked by the UndoManager.
 
 ## Awareness clientID Mapping
 
@@ -133,19 +133,19 @@ Result: only peerB's cursor is rendered (correct)
 
 ## Undo/Redo
 
-iframe Bridge supports cross-iframe undo/redo. The core idea: **undo/redo actually executes on the Server's shared `Y.UndoManager`; iframes only send commands and receive notifications**.
+iframe Bridge supports cross-iframe undo/redo. The core idea: **undo/redo actually executes on the Server's shared `Y.UndoManager`; iframes only send commands and receive state syncs**.
 
 ### Architecture
 
 ```text
-User presses Ctrl+Z in Iframe A
+User presses Ctrl+Z in Iframe
   → draw.io calls editor.undoManager.undo()
   → MxLike shim sends { type: "undo" } via postMessage to parent
   → Server receives message → calls shared UndoManager.undo()
   → Y.UndoManager pops stack → fires "stack-item-popped" event
-  → Server broadcasts "undo" to all iframes
-  → Iframe A and Iframe B each fire synthetic "undo" event
-  → draw.io updates UI state (toolbar, cursor position, etc.)
+  → Server sends "undo-state" to iframe (includes canUndo/canRedo/stack sizes)
+  → iframe's MxLike rebuilds history/indexOfNextAdd based on state
+  → fires synthetic events to notify draw.io to update UI (toolbar, cursor, etc.)
 ```
 
 ### Server-side Setup
@@ -168,9 +168,8 @@ const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
 });
 
-// Pass to bridge server
-const bridge = createIframeBridgeServer(doc, awareness, { undoManager });
-bridge.addIframe(iframeElement, 'editor-1');
+// Pass to bridge server, binding directly to the iframe
+const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // Can call undo/redo directly on the parent page
 document.getElementById('undo-btn')!.onclick = () => {
@@ -221,12 +220,14 @@ App.main((app) => {
    - `undo()` / `redo()`: Delegates to Server via postMessage
    - `canUndo()` / `canRedo()`: Based on local cursor position
    - `fireEvent()`: Fires events draw.io listens to (`"add"`, `"clear"`, `"undo"`, `"redo"`)
-3. **Listens for Server broadcasts**: Receives `"undo"`, `"redo"`, `"clear"` messages, updates local cursor and fires corresponding events
+3. **Listens for Server state sync**: Receives `"undo-state"` messages and rebuilds local history / indexOfNextAdd based on the server's real undo stack state, then fires corresponding events
 4. **Preserves original listeners**: Migrates draw.io's existing event listeners to the shim
 
 ## Integration with draw.io
 
 ### Server Side
+
+Each iframe gets its own Server instance:
 
 ```ts
 import * as Y from 'yjs';
@@ -235,10 +236,20 @@ import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider(roomName, doc, { signaling });
-const bridge = createIframeBridgeServer(doc, provider.awareness);
 
-bridge.addIframe(document.getElementById('iframe-1')!, 'editor-1');
-bridge.addIframe(document.getElementById('iframe-2')!, 'editor-2');
+// iframe-1
+const bridge1 = createIframeBridgeServer(
+  document.getElementById('iframe-1')!,
+  doc,
+  provider.awareness,
+);
+
+// iframe-2 (shares the same doc and awareness)
+const bridge2 = createIframeBridgeServer(
+  document.getElementById('iframe-2')!,
+  doc,
+  provider.awareness,
+);
 ```
 
 ### Provider Side (inside iframe)
@@ -280,12 +291,13 @@ window.addEventListener('message', (event) => {
 
 ## API Reference
 
-### `createIframeBridgeServer(doc, awareness, options?)`
+### `createIframeBridgeServer(iframe, doc, awareness, options?)`
 
-Creates the Server-side bridge.
+Creates the Server-side bridge, bound directly to a single iframe.
 
 **Parameters**:
 
+- `iframe: HTMLIFrameElement` — Target iframe element
 - `doc: Y.Doc` — Server's Y.Doc instance
 - `awareness: Awareness` — Server's Awareness instance
 - `options?` — Optional configuration
@@ -295,8 +307,6 @@ Creates the Server-side bridge.
 
 **Methods**:
 
-- `addIframe(iframe: HTMLIFrameElement, iframeId: string)` — Register an iframe
-- `removeIframe(iframeId: string)` — Remove an iframe
 - `destroy()` — Clean up all listeners (including UndoManager event listeners)
 
 ### `createIframeBridgeProvider(doc, awareness)`

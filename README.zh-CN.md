@@ -53,7 +53,7 @@ App.main((app) => {
 
 ## iframe Bridge
 
-`@y-mxgraph/iframe-bridge` 支持在 iframe 隔离环境中进行协同编辑。**Server**（父页面）管理网络连接（y-webrtc、y-websocket 等），通过 `postMessage` 将 Y.Doc 和 Awareness 同步到一个或多个 **Provider**（iframe 子页面）。
+`@y-mxgraph/iframe-bridge` 支持在 iframe 隔离环境中进行协同编辑。**Server**（父页面）管理网络连接（y-webrtc、y-websocket 等），通过 `postMessage` 将 Y.Doc 和 Awareness 同步到 **Provider**（iframe 子页面）。
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -64,20 +64,18 @@ App.main((app) => {
 │       │              │                                      │
 │       └──────┬───────┘                                      │
 │              ▼                                              │
-│   createIframeBridgeServer(doc, awareness)                  │
+│   createIframeBridgeServer(iframe, doc, awareness)          │
 │              │ postMessage                                  │
 └──────────────│──────────────────────────────────────────────┘
                │
-    ┌──────────┴──────────┐
-    ▼                     ▼
-┌─────────────┐     ┌─────────────┐
-│ Iframe A    │     │ Iframe B    │
-│ create...   │     │ create...   │
-│ Provider()  │     │ Provider()  │
-│             │     │             │
-│ 本地 Y.Doc  │     │ 本地 Y.Doc  │
-│ + draw.io   │     │ + draw.io   │
-└─────────────┘     └─────────────┘
+               ▼
+        ┌─────────────┐
+        │   Iframe    │
+        │             │
+        │ 本地 Y.Doc  │
+        │ + Awareness │
+        │ + draw.io   │
+        └─────────────┘
 ```
 
 ```ts
@@ -97,8 +95,8 @@ const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
 });
 
-const bridge = createIframeBridgeServer(doc, awareness, { undoManager });
-bridge.addIframe(iframeElement, 'child-1');
+// 创建 bridge server，直接绑定到目标 iframe
+const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // 从父页面执行撤销/重做
 document.getElementById('undo-btn')!.onclick = () => {

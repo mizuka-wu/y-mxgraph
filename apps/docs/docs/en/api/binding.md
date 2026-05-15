@@ -20,7 +20,7 @@ The draw.io editor's internal file object, obtained via `App.main((app) => app.c
 interface BindDrawioFileOptions {
   doc: Y.Doc;                  // required — externally provided Y.Doc
   awareness?: Awareness;       // optional — y-protocols awareness (cursors/selections)
-  undoManager?: Y.UndoManager; // optional — enables undo/redo when provided
+  undoManager?: Y.UndoManager | false; // optional — pass instance to enable undo/redo; pass false to explicitly skip (e.g. iframe-bridge scenario)
   mouseMoveThrottle?: number;  // optional — cursor throttle in ms, default 100
   cursor?:                     // optional — remote cursor rendering config
     | boolean

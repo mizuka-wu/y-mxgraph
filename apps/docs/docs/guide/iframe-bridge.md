@@ -16,24 +16,23 @@
 │       │              │                                      │
 │       └──────┬───────┘                                      │
 │              ▼                                              │
-│   createIframeBridgeServer(doc, awareness)                  │
+│   createIframeBridgeServer(iframe, doc, awareness)          │
 │              │ postMessage                                  │
 └──────────────│──────────────────────────────────────────────┘
                │
-    ┌──────────┴──────────┐
-    ▼                     ▼
-┌─────────────┐     ┌─────────────┐
-│ Iframe A    │     │ Iframe B    │
-│             │     │             │
-│ 本地 Y.Doc  │     │ 本地 Y.Doc  │
-│ + Awareness │     │ + Awareness │
-│ + draw.io   │     │ + draw.io   │
-└─────────────┘     └─────────────┘
+               ▼
+        ┌─────────────┐
+        │   Iframe    │
+        │             │
+        │ 本地 Y.Doc  │
+        │ + Awareness │
+        │ + draw.io   │
+        └─────────────┘
 ```
 
 ### 核心设计
 
-- **Server**：运行在父页面，持有唯一的 `Y.Doc` 和 `Awareness` 实例，通过 y-webrtc / y-websocket 等 Provider 连接网络
+- **Server**：运行在父页面，持有唯一的 `Y.Doc` 和 `Awareness` 实例，通过 y-webrtc / y-websocket 等 Provider 连接网络。每个 iframe 对应一个 Server 实例，直接绑定到目标 iframe
 - **Provider**：运行在 iframe 内部，持有本地 `Y.Doc` 和 `Awareness`，通过 `postMessage` 与 Server 同步
 - **单连接**：只有 Server 维护网络连接，iframe 可以被沙盒化且无需网络访问
 - **ID 映射**：Provider 自动将 Server 的 `clientID` 映射为本地 `clientID`，确保协同光标正确识别"自己"
@@ -58,12 +57,9 @@ const provider = new WebrtcProvider('my-room', doc, {
   signaling: ['wss://y-webrtc-eu.fly.dev'],
 });
 
-// 创建 bridge server
-const bridge = createIframeBridgeServer(doc, provider.awareness);
-
-// 注册 iframe
+// 创建 bridge server，直接绑定到目标 iframe
 const iframe = document.getElementById('editor-iframe') as HTMLIFrameElement;
-bridge.addIframe(iframe, 'editor-1');
+const bridge = createIframeBridgeServer(iframe, doc, provider.awareness);
 
 // 清理
 // bridge.destroy();
@@ -104,9 +100,13 @@ Server 和 Provider 通过 `postMessage` 通信，支持以下消息类型：
 | Server → Provider | `pong` | `serverClientId` | 响应 ping |
 | Provider → Server | `undo` | 无 | 请求撤销 |
 | Provider → Server | `redo` | 无 | 请求重做 |
-| Server → Provider | `undo` | 无 | 通知撤销（广播给所有 iframe） |
-| Server → Provider | `redo` | 无 | 通知重做（广播给所有 iframe） |
-| Server → Provider | `clear` | 无 | 通知撤销栈已清空 |
+| Server → Provider | `undo-state` | `canUndo`, `canRedo`, `undoStackSize`, `redoStackSize` | 同步撤销栈状态 |
+
+### 基线数据（Baseline）
+
+Provider 在首次初始化时（如 `xml2ydoc` 产生的初始数据），会通过 `ydoc-update` 附带 `isBaseline: true` 标记。Server 使用 `BASELINE_ORIGIN` 应用这类更新，确保它们**不进入 UndoManager 的撤销栈**。
+
+普通编辑数据则使用 `IFRAME_ORIGIN`，会被 UndoManager 正确追踪。
 
 ## Awareness clientID 映射
 
@@ -133,19 +133,19 @@ Provider awareness: { localClientId: cursorA, peerB: cursorB }
 
 ## Undo/Redo
 
-iframe Bridge 支持跨 iframe 的撤销/重做。核心思路是：**撤销/重做的实际执行发生在 Server 端的共享 `Y.UndoManager` 上，iframe 只负责发送命令和接收通知**。
+iframe Bridge 支持跨 iframe 的撤销/重做。核心思路是：**撤销/重做的实际执行发生在 Server 端的共享 `Y.UndoManager` 上，iframe 只负责发送命令和接收状态同步**。
 
 ### 架构
 
 ```text
-用户在 Iframe A 按下 Ctrl+Z
+用户在 Iframe 按下 Ctrl+Z
   → draw.io 调用 editor.undoManager.undo()
   → MxLike shim 通过 postMessage 发送 { type: "undo" } 到父页面
   → Server 收到消息 → 调用共享 UndoManager.undo()
   → Y.UndoManager 弹出栈 → 触发 "stack-item-popped" 事件
-  → Server 广播 "undo" 到所有 iframe
-  → Iframe A 和 Iframe B 各自的 currentMxLike 触发合成 "undo" 事件
-  → draw.io 更新 UI 状态（工具栏、光标位置等）
+  → Server 发送 "undo-state" 到 iframe（包含 canUndo/canRedo/栈大小）
+  → iframe 的 MxLike 根据状态重建 history/indexOfNextAdd
+  → 触发合成事件通知 draw.io 更新 UI（工具栏、光标位置等）
 ```
 
 ### Server 端配置
@@ -168,9 +168,8 @@ const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
 });
 
-// 传入 bridge server
-const bridge = createIframeBridgeServer(doc, awareness, { undoManager });
-bridge.addIframe(iframeElement, 'editor-1');
+// 传入 bridge server，直接绑定 iframe
+const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // 可以在父页面直接调用 undo/redo
 document.getElementById('undo-btn')!.onclick = () => {
@@ -221,12 +220,14 @@ App.main((app) => {
    - `undo()` / `redo()`：通过 postMessage 委托给 Server
    - `canUndo()` / `canRedo()`：基于本地光标判断
    - `fireEvent()`：触发 draw.io 监听的事件（`"add"`, `"clear"`, `"undo"`, `"redo"`）
-3. **监听 Server 广播**：接收 `"undo"`, `"redo"`, `"clear"` 消息，更新本地光标并触发对应事件
+3. **监听 Server 状态同步**：接收 `"undo-state"` 消息，根据 server 的真实撤销栈状态重建本地 history 和 indexOfNextAdd，并触发对应事件
 4. **保留原始监听器**：将 draw.io 原有的事件监听器迁移到 shim 上
 
 ## 与 draw.io 集成
 
 ### Server 端
+
+每个 iframe 对应一个独立的 Server 实例：
 
 ```ts
 import * as Y from 'yjs';
@@ -235,10 +236,20 @@ import { createIframeBridgeServer } from 'y-mxgraph/iframe-bridge/server';
 
 const doc = new Y.Doc();
 const provider = new WebrtcProvider(roomName, doc, { signaling });
-const bridge = createIframeBridgeServer(doc, provider.awareness);
 
-bridge.addIframe(document.getElementById('iframe-1')!, 'editor-1');
-bridge.addIframe(document.getElementById('iframe-2')!, 'editor-2');
+// iframe-1
+const bridge1 = createIframeBridgeServer(
+  document.getElementById('iframe-1')!,
+  doc,
+  provider.awareness,
+);
+
+// iframe-2（共享同一个 doc 和 awareness）
+const bridge2 = createIframeBridgeServer(
+  document.getElementById('iframe-2')!,
+  doc,
+  provider.awareness,
+);
 ```
 
 ### Provider 端（iframe 内部）
@@ -280,12 +291,13 @@ window.addEventListener('message', (event) => {
 
 ## API 参考
 
-### `createIframeBridgeServer(doc, awareness, options?)`
+### `createIframeBridgeServer(iframe, doc, awareness, options?)`
 
-创建 Server 端 bridge。
+创建 Server 端 bridge，直接与单个 iframe 绑定。
 
 **参数**：
 
+- `iframe: HTMLIFrameElement` — 目标 iframe 元素
 - `doc: Y.Doc` — Server 的 Y.Doc 实例
 - `awareness: Awareness` — Server 的 Awareness 实例
 - `options?` — 可选配置
@@ -295,8 +307,6 @@ window.addEventListener('message', (event) => {
 
 **方法**：
 
-- `addIframe(iframe: HTMLIFrameElement, iframeId: string)` — 注册 iframe
-- `removeIframe(iframeId: string)` — 移除 iframe
 - `destroy()` — 清理所有监听器（包括 UndoManager 事件监听）
 
 ### `createIframeBridgeProvider(doc, awareness)`

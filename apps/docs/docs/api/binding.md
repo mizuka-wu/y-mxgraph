@@ -20,7 +20,7 @@ draw.io 编辑器内部的文件对象，通过 `App.main((app) => app.currentFi
 interface BindDrawioFileOptions {
   doc: Y.Doc;                  // 必填，外部传入的 Y.Doc
   awareness?: Awareness;       // 可选，y-protocols awareness（协作光标/选区）
-  undoManager?: Y.UndoManager; // 可选，外部传入后启用撤销/重做绑定
+  undoManager?: Y.UndoManager | false; // 可选，传入实例启用撤销/重做；传 false 显式跳过（如 iframe-bridge 场景）
   mouseMoveThrottle?: number;  // 可选，光标移动节流 ms，默认 100
   cursor?:                     // 可选，远端光标渲染配置
     | boolean

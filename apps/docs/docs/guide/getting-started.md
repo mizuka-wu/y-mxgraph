@@ -24,7 +24,7 @@ App.main((app) => {
   //   - 'replace'      ：doc 非空时用 doc 内容覆盖 file UI（推荐）
   //   - 'merge-remote' ：按 diagram id 合并，冲突 id 以 doc 为准
   //   - 'merge-client' ：按 diagram id 合并，冲突 id 以 file 为准
-  // 内部会调用 `file.ui.setFileData(xml)` + `file.setData(xml)` 触发 UI 重绘。
+  // 内部默认只调用 `file.ui.setFileData(xml)` 重建 UI，避免触发 draw.io 保存弹窗。
   const binding = new Binding(file, { doc /*, initialContent: 'merge-remote' */ });
 });
 ```

@@ -91,7 +91,7 @@ pnpm --filter @y-mxgraph/ws-demo dev     # Start client on port 5174
 
 ## iframe Bridge
 
-`@y-mxgraph/iframe-bridge` enables collaborative editing in iframe-isolated environments. The **server** (parent page) manages the network connection (y-webrtc, y-websocket, etc.) and syncs Y.Doc + Awareness to one or more **providers** (iframe children) via `postMessage`.
+`@y-mxgraph/iframe-bridge` enables collaborative editing in iframe-isolated environments. The **server** (parent page) manages the network connection (y-webrtc, y-websocket, etc.) and syncs Y.Doc + Awareness to **providers** (iframe children) via `postMessage`.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -102,20 +102,18 @@ pnpm --filter @y-mxgraph/ws-demo dev     # Start client on port 5174
 │       │              │                                      │
 │       └──────┬───────┘                                      │
 │              ▼                                              │
-│   createIframeBridgeServer(doc, awareness)                  │
+│   createIframeBridgeServer(iframe, doc, awareness)          │
 │              │ postMessage                                  │
 └──────────────│──────────────────────────────────────────────┘
                │
-    ┌──────────┴──────────┐
-    ▼                     ▼
-┌─────────────┐     ┌─────────────┐
-│ Iframe A    │     │ Iframe B    │
-│ create...   │     │ create...   │
-│ Provider()  │     │ Provider()  │
-│             │     │             │
-│ local Y.Doc │     │ local Y.Doc │
-│ + draw.io   │     │ + draw.io   │
-└─────────────┘     └─────────────┘
+               ▼
+        ┌─────────────┐
+        │   Iframe    │
+        │             │
+        │ local Y.Doc │
+        │ + Awareness │
+        │ + draw.io   │
+        └─────────────┘
 ```
 
 ```ts
@@ -135,8 +133,8 @@ const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
 });
 
-const bridge = createIframeBridgeServer(doc, awareness, { undoManager });
-bridge.addIframe(iframeElement, 'child-1');
+// Create bridge server, bound directly to the target iframe
+const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // Undo/redo from parent page
 document.getElementById('undo-btn')!.onclick = () => {
