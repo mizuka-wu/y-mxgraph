@@ -185,52 +185,32 @@ export function createIframeBridgeProvider(
       applyingParentUpdate = true;
       applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
       applyingParentUpdate = false;
-    } else if (type === "add" && currentMxLike) {
-      applyingParentUpdate = true;
-      if (currentMxLike.indexOfNextAdd < currentMxLike.history.length) {
-        currentMxLike.history.splice(
-          currentMxLike.indexOfNextAdd,
-          currentMxLike.history.length - currentMxLike.indexOfNextAdd,
-        );
-      }
-      currentMxLike.history.push({});
-      currentMxLike.indexOfNextAdd = currentMxLike.history.length;
-      currentMxLike.fireEvent(
-        createMxEventObject("add", { edit: { changes: [] } }),
-      );
-      applyingParentUpdate = false;
     } else if (type === "undo-state" && currentMxLike) {
       // 从 Server 同步真实的 undo/redo 状态
-      const { canUndo, canRedo, undoStackSize, redoStackSize } = event.data;
-      // 调整 history 长度匹配 Server
-      const totalSize = (undoStackSize || 0) + (redoStackSize || 0);
-      while (currentMxLike.history.length < totalSize) {
-        currentMxLike.history.push({});
+      const { undoStackSize, redoStackSize } = event.data;
+
+      const oldIndex = currentMxLike.indexOfNextAdd;
+      const newIndex = undoStackSize || 0;
+      const newTotal = (undoStackSize || 0) + (redoStackSize || 0);
+
+      // 直接根据 server 状态重建本地状态
+      applyingParentUpdate = true;
+
+      // 重建 history 数组匹配 server 的总大小
+      currentMxLike.history = new Array(newTotal).fill({});
+      currentMxLike.indexOfNextAdd = newIndex;
+
+      // 触发对应事件通知 UI 更新
+      if (newTotal === 0) {
+        currentMxLike.fireEvent(createMxEventObject("clear"));
+      } else if (newIndex < oldIndex) {
+        currentMxLike.fireEvent(createMxEventObject("undo", { edit: { changes: [] } }));
+      } else if (newIndex > oldIndex) {
+        currentMxLike.fireEvent(createMxEventObject("redo", { edit: { changes: [] } }));
+      } else {
+        currentMxLike.fireEvent(createMxEventObject("add", { edit: { changes: [] } }));
       }
-      while (currentMxLike.history.length > totalSize) {
-        currentMxLike.history.pop();
-      }
-      currentMxLike.indexOfNextAdd = undoStackSize || 0;
-    } else if (type === "undo" && currentMxLike) {
-      applyingParentUpdate = true;
-      if (currentMxLike.indexOfNextAdd > 0) currentMxLike.indexOfNextAdd--;
-      currentMxLike.fireEvent(
-        createMxEventObject("undo", { edit: { changes: [] } }),
-      );
-      applyingParentUpdate = false;
-    } else if (type === "redo" && currentMxLike) {
-      applyingParentUpdate = true;
-      if (currentMxLike.indexOfNextAdd < currentMxLike.history.length)
-        currentMxLike.indexOfNextAdd++;
-      currentMxLike.fireEvent(
-        createMxEventObject("redo", { edit: { changes: [] } }),
-      );
-      applyingParentUpdate = false;
-    } else if (type === "clear" && currentMxLike) {
-      applyingParentUpdate = true;
-      currentMxLike.history = [];
-      currentMxLike.indexOfNextAdd = 0;
-      currentMxLike.fireEvent(createMxEventObject("clear"));
+
       applyingParentUpdate = false;
     }
   };

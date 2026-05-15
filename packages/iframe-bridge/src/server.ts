@@ -24,10 +24,27 @@ export function createIframeBridgeServer(
   let iframeReady = false;
   let applyingIframeUpdate = false;
 
-  function postToIframe(type: string, payload: Uint8Array) {
+  function postToIframe(type: string, payload?: Uint8Array) {
     const cw = iframe.contentWindow;
     if (cw) {
-      cw.postMessage({ type, payload }, "*");
+      cw.postMessage({ type, payload: payload ? Array.from(payload) : [] }, "*");
+    }
+  }
+
+  function postUndoStateToIframe() {
+    if (!undoManager) return;
+    const undoStack = (undoManager as any).undoStack;
+    const redoStack = (undoManager as any).redoStack;
+    const cw = iframe.contentWindow;
+    if (cw) {
+      const state = {
+        type: "undo-state",
+        canUndo: undoManager.canUndo(),
+        canRedo: undoManager.canRedo(),
+        undoStackSize: undoStack?.length ?? 0,
+        redoStackSize: redoStack?.length ?? 0,
+      };
+      cw.postMessage(state, "*");
     }
   }
 
@@ -78,6 +95,8 @@ export function createIframeBridgeServer(
           "*",
         );
       }
+      // 同步初始 undo 状态
+      postUndoStateToIframe();
     } else if (msgType === "ping") {
       const cw = iframe.contentWindow;
       if (cw) {
@@ -100,30 +119,23 @@ export function createIframeBridgeServer(
       applyingIframeUpdate = false;
     } else if (msgType === "undo" && undoManager) {
       undoManager.undo();
+      postUndoStateToIframe();
     } else if (msgType === "redo" && undoManager) {
       undoManager.redo();
+      postUndoStateToIframe();
     }
   };
 
-  const onUndoPopped = (e: {
-    type?: string;
-    reason?: string;
-    kind?: string;
-  }) => {
-    const t = e && (e.type || e.reason || e.kind);
-    if (t === "undo") {
-      postToIframe("undo", new Uint8Array());
-    } else if (t === "redo") {
-      postToIframe("redo", new Uint8Array());
-    }
+  const onUndoPopped = () => {
+    postUndoStateToIframe();
   };
 
   const onStackCleared = () => {
-    postToIframe("clear", new Uint8Array());
+    postUndoStateToIframe();
   };
 
   const onStackItemAdded = () => {
-    postToIframe("add", new Uint8Array());
+    postUndoStateToIframe();
   };
 
   ydoc.on("update", onYdocUpdate);
