@@ -1,6 +1,6 @@
 {
   "name": "y-mxgraph",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "type": "module",
   "description": "Yjs binding for draw.io (mxGraph) documents",
   "keywords": [
@@ -25,6 +25,11 @@
       "import": "./src/index.ts",
       "require": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./transformer": {
+      "import": "./src/transformer/index.ts",
+      "require": "./src/transformer/index.ts",
+      "types": "./src/transformer/index.ts"
     },
     "./iframe-bridge": {
       "import": "./src/iframe-bridge/index.ts",

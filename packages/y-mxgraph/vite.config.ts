@@ -17,24 +17,29 @@ const pkg = {
   version: rootPkg.version,
   description: "Yjs binding for draw.io (mxGraph) documents",
   keywords: rootPkg.keywords,
-  main: "./y-mxgraph.cjs.js",
-  module: "./y-mxgraph.es.js",
+  main: "./y-mxgraph.cjs",
+  module: "./y-mxgraph.js",
   types: "./index.d.ts",
   exports: {
     ".": {
-      import: "./y-mxgraph.es.js",
-      require: "./y-mxgraph.cjs.js",
+      import: "./y-mxgraph.js",
+      require: "./y-mxgraph.cjs",
       types: "./index.d.ts",
     },
     "./iframe-bridge/server": {
-      import: "./iframe-bridge/server.es.js",
-      require: "./iframe-bridge/server.cjs.js",
+      import: "./iframe-bridge/server.js",
+      require: "./iframe-bridge/server.cjs",
       types: "./iframe-bridge/server.d.ts",
     },
     "./iframe-bridge/provider": {
-      import: "./iframe-bridge/provider.es.js",
-      require: "./iframe-bridge/provider.cjs.js",
+      import: "./iframe-bridge/provider.js",
+      require: "./iframe-bridge/provider.cjs",
       types: "./iframe-bridge/provider.d.ts",
+    },
+    "./transformer": {
+      import: "./transformer.js",
+      require: "./transformer.cjs",
+      types: "./transformer.d.ts",
     },
   },
   dependencies: {
@@ -117,14 +122,16 @@ export default defineConfig({
           __dirname,
           "src/iframe-bridge/provider.ts",
         ),
+        transformer: path.resolve(__dirname, "src/transformer/index.ts"),
       },
       name: "YMXGraph",
       formats: ["es", "cjs"],
       fileName: (format, entryName) => {
+        const ext = format === "cjs" ? ".cjs" : ".js";
         if (entryName === "index") {
-          return `y-mxgraph.${format}.js`;
+          return `y-mxgraph${ext}`;
         }
-        return `${entryName}.${format}.js`;
+        return `${entryName}${ext}`;
       },
     },
     rollupOptions: {
