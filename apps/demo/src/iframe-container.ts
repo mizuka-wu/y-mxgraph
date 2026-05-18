@@ -29,19 +29,35 @@ let currentProvider: WebrtcProvider | null = null;
 let currentBridge: ReturnType<typeof createIframeBridgeServer> | null = null;
 let currentUndoManager: Y.UndoManager | null = null;
 
-function updateCollabStatus(
-  status: "connected" | "disconnected" | "loading",
-  text: string,
-) {
-  ui.collabStatus.textContent = text;
+let providerConnected = false;
+let bridgeConnected = false;
+
+function renderStatus() {
+  const providerText = providerConnected
+    ? "Provider: Connected"
+    : "Provider: Disconnected";
+  const bridgeText = bridgeConnected ? "Bridge: Connected" : "Bridge: Waiting";
+  ui.collabStatus.textContent = `${providerText} | ${bridgeText}`;
   ui.collabDot.className = "status-dot";
-  if (status === "connected") ui.collabDot.classList.add("connected");
-  else if (status === "loading") ui.collabDot.classList.add("loading");
+  if (providerConnected && bridgeConnected)
+    ui.collabDot.classList.add("connected");
+  else ui.collabDot.classList.add("loading");
 }
 
 function updatePeerCount(count: number) {
   ui.peerNum.textContent = String(count);
   ui.peerCount.style.display = count > 0 ? "inline" : "none";
+}
+
+function updateCollabStatus(
+  status: "connected" | "disconnected" | "loading",
+  text: string,
+) {
+  // 兼容旧用法，直接设置文字
+  ui.collabStatus.textContent = text;
+  ui.collabDot.className = "status-dot";
+  if (status === "connected") ui.collabDot.classList.add("connected");
+  else if (status === "loading") ui.collabDot.classList.add("loading");
 }
 
 function getIframeSrc(version: string, customUrl?: string) {
@@ -88,18 +104,17 @@ function initBridge(roomName: string, serverDelay: number = 0) {
   currentProvider = provider;
 
   provider.on("status", (event: { connected: boolean }) => {
-    if (event.connected) {
-      updateCollabStatus("connected", `Connected (${roomName})`);
-    } else {
-      updateCollabStatus("loading", "Reconnecting...");
-    }
+    providerConnected = event.connected;
+    renderStatus();
   });
 
   awareness.on("update", () => {
     updatePeerCount(awareness.getStates().size);
   });
 
-  updateCollabStatus("loading", "Connecting...");
+  providerConnected = false;
+  bridgeConnected = false;
+  renderStatus();
 
   // 暴露 provider 调试对象
   const win = window as any;
@@ -136,14 +151,16 @@ function initBridge(roomName: string, serverDelay: number = 0) {
       console.log(
         `[iframe-container] server onConnect — iframe client connected`,
       );
-      updateCollabStatus("connected", `Connected (${roomName}) — iframe ready`);
+      bridgeConnected = true;
+      renderStatus();
     });
 
     bridgeServer.onDisconnect(() => {
       console.log(
         `[iframe-container] server onDisconnect — iframe client disconnected`,
       );
-      updateCollabStatus("loading", `Reconnecting... — iframe disconnected`);
+      bridgeConnected = false;
+      renderStatus();
     });
 
     // 挂载 server 调试对象
@@ -152,7 +169,6 @@ function initBridge(roomName: string, serverDelay: number = 0) {
   };
 
   if (serverDelay > 0) {
-    updateCollabStatus("loading", `Server starting in ${serverDelay}ms...`);
     setTimeout(createServer, serverDelay);
   } else {
     createServer();

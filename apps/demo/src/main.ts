@@ -191,6 +191,14 @@ async function initIframeChild() {
       (binding) => {
         console.log(`[iframe ${iframeId}] draw.io bound to ydoc`);
         bridgeProvider.takeoverUndoManager(binding.file);
+        // 重置 modified 状态，消除 "unsaved changes" 提示
+        const ui = binding.file.getUi();
+        ui.editor.setModified(false);
+        ui.editor.setStatus("");
+        binding.file.setModified(false);
+        console.log(
+          `[iframe ${iframeId}] editor status reset — unsaved changes cleared`,
+        );
       },
       false,
     );

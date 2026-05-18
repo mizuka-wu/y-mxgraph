@@ -7,7 +7,7 @@ iframe-bridge 实现了标准的 server-client 协同模式：
 - **Server**（父页面 `iframe-container.ts`）：持有 `Y.Doc` + `WebrtcProvider`，负责网络同步和 iframe 桥接
 - **Client**（子页面 iframe 内）：通过 `createIframeBridgeProvider` 连接到 server，本地也有独立的 `Y.Doc`
 
-核心设计：**Client 必须先连接上 Server 才能初始化编辑器**，未连接时处于 loading 状态。
+核心设计：**draw.io 编辑器先加载就绪，overlay 保持半透明 waiting 状态，等 connect 后才显示编辑器并 bind**。这让用户在等待 server 时能看到背后已加载的编辑器界面。
 
 ---
 
@@ -38,25 +38,30 @@ iframe-bridge 实现了标准的 server-client 协同模式：
 ```
 时间轴 ──────────────────────────────►
 
-[Parent] createIframeBridgeServer() ─┐
-                                    │  server 就绪
 [iframe] load iframe.html            │
+       ├─ loadDrawioScript() ────────┤  draw.io 加载中...
+       ├─ draw.io 就绪              │  editor 已初始化
        ├─ create Y.Doc              │
        ├─ createIframeBridgeProvider()│
-       ├─ post "init" ─────────────►│  server 收到 init
-                                    │  server 发送 ydoc-sync
+       ├─ post "init" ─────────────►│
+                                    │
+[Parent] initBridge()               │
+       ├─ create Provider ─────────┤  Webrtc 连接其他 tab
+       ├─ create Server ──────────►│  server 收到 init
+       │                            │  server 发送 ydoc-sync
        ├─ receive "ydoc-sync" ◄─────┘
        ├─ connected = true
-       ├─ trigger onConnect
-       └─ loadDrawioScript()
+       ├─ overlay 消失
+       └─ bindDrawioFile()
 ```
 
-**数据状态**：server 的 ydoc 为空 → client 的 ydoc 也为空 → draw.io 初始化后默认空白画布 → 双方通过 bridge 实时同步编辑内容。
+**数据状态**：server 的 ydoc 为空 → client 收到空状态的 sync → draw.io 以空白画布初始化 → 双方通过 bridge 实时同步编辑内容。
 
 **验证要点**：
 
-- ✅ client 收到 `ydoc-sync` 后 `connected` 变为 `true`
-- ✅ `onConnect` 回调触发，开始加载 draw.io
+- ✅ draw.io 先加载，editor 在后台已就绪
+- ✅ overlay 半透明遮挡，文字 "Waiting for server..."
+- ✅ connect 后 overlay 消失，bind 触发，开始协同
 - ✅ 编辑内容通过 `ydoc-update` 双向同步
 
 ---
@@ -67,30 +72,42 @@ iframe-bridge 实现了标准的 server-client 协同模式：
 时间轴 ──────────────────────────────►
 
 [iframe] load iframe.html            │
+       ├─ loadDrawioScript() ────────┤  draw.io 加载中...
+       ├─ draw.io 就绪              │  editor 已初始化
        ├─ create Y.Doc              │
        ├─ createIframeBridgeProvider()│
-       ├─ post "init" ─────────────►│  无人响应（server 还未创建）
-       ├─ 显示 "Waiting for server..." │
-       ├─ 每 1s 重试 "init"         │
-                                    │
-[Parent] setTimeout(5000)           │
-       └─ initBridge(room) ─────────┤  5秒后 server 才创建
+       ├─ overlay 半透明             │  "Waiting for server..."
+       ├─ 每 1s 重试 "init" ────────►│  无人响应
+       │                            │
+[Parent] initBridge(room, 5000)     │
+       ├─ create Provider ─────────┤  立即开始 Webrtc 同步
+       │  ├─ 与其他 tab 同步中...    │
+       │                            │
+       ├─ setTimeout(5000)          │
+       │                            │
+       └─ create Server ───────────►│  5秒后 server 才创建
                                     │  server 收到最新的 init
                                     │  server 发送 ydoc-sync
        ├─ receive "ydoc-sync" ◄─────┘
        ├─ connected = true
-       └─ loadDrawioScript()
+       ├─ overlay 消失
+       └─ bindDrawioFile()
 ```
 
-**数据状态**：server 的 ydoc 为空（新建）→ client 收到空状态的 sync → 正常初始化 → 双方同步。
+**关键区别**：Provider（Webrtc）在 `initBridge` 第一步就创建了，server 延迟 5 秒后才创建。这意味着：
+
+- 在 delay 的 5 秒内，ydoc 已经通过 Webrtc 与其他 tab 同步了数据
+- 5 秒后 server 创建时，ydoc 可能已经有来自其他 peer 的数据
+- server 发送的 `ydoc-sync` 包含的是**已同步后的数据**
 
 **验证要点**：
 
-- ✅ client 在 server 创建前持续显示 waiting
-- ✅ server 创建后立即响应 client 的 `init`
-- ✅ client 收到 sync 后正常进入编辑器
+- ✅ draw.io 先加载，editor 在后台可见
+- ✅ provider 立即开始 Webrtc 同步（server 尚未创建）
+- ✅ server 延迟创建后立即响应 client 的 `init`
+- ✅ client 收到 sync 后 bind，editor 显示远端数据
 
-**测试 URL**：`http://localhost:5174/iframe.html?serverDelay=5000`
+**测试方式**：打开 `iframe.html`，在顶部工具栏的 **"Server Delay (ms)"** 输入框输入 `5000`，按回车。URL 自动更新为 `?serverDelay=5000`。
 
 ---
 
@@ -102,58 +119,64 @@ iframe-bridge 实现了标准的 server-client 协同模式：
 [Peer A] ──Webrtc──► [Server Y.Doc] 已有 mxfile 数据
                           │
 [iframe] 新窗口打开     │
-       ├─ create Y.Doc  │
+       ├─ loadDrawioScript()  draw.io 就绪
+       ├─ create Y.Doc        │
        ├─ createIframeBridgeProvider()
-       ├─ post "init" ─►│
+       ├─ overlay 半透明       │ "Waiting for server..."
+       ├─ 每 1s post "init" ─►│
                          │ server 发送现有 ydoc 的完整 state
        ├─ receive "ydoc-sync" ◄─┘
        ├─ connected = true
-       └─ loadDrawioScript() 并以现有数据初始化
+       ├─ overlay 消失
+       └─ bindDrawioFile()  ← 已有数据初始化
 ```
 
-**数据状态**：server 的 ydoc 非空（已有 diagram 数据）→ client 收到完整的 state update → `Y.applyUpdate` 后 client 的 ydoc 与 server 一致 → draw.io 以这些数据初始化。
+**数据状态**：server 的 ydoc 非空（已有 diagram 数据）→ client 收到完整的 state update → `Y.applyUpdate` 后 client 的 ydoc 与 server 一致 → draw.io 以这些数据 bind。
 
 **验证要点**：
 
+- ✅ draw.io 先加载，overlay 半透明遮挡
 - ✅ client 的 ydoc 在 apply sync 后与 server 完全一致
-- ✅ draw.io 加载后直接显示已有 diagram，而非空白画布
+- ✅ bind 后直接显示已有 diagram，而非空白画布
 - ✅ 后续编辑双向实时同步
 
 ---
 
-### 场景 4：Client 和 Server 都有本地数据（需要合并）
+### 场景 4：Provider 先同步，Server 后创建（推荐架构）
 
 ```
 时间轴 ──────────────────────────────►
 
-[Parent] initBridge() 创建 server    │
-       └─ server Y.Doc 有旧数据     │  来自 localStorage / 缓存
-                                    │
-[iframe] 同时有本地缓存数据           │
-       ├─ create Y.Doc (有旧数据)    │
-       ├─ createIframeBridgeProvider()
-       ├─ post "init" ─────────────►│
-                                    │ server 发送 ydoc-sync
-                                    │ （server 的完整 state）
-       ├─ receive "ydoc-sync" ◄─────┘
-       ├─ Y.applyUpdate(clientYdoc, serverState)
-       │   → Yjs CRDT 自动合并
+[Parent] initBridge(room, delay)    │
+       ├─ create Y.Doc            │
+       ├─ create Provider ─────────┤  Webrtc 立即连接
+       │  ├─ 同步其他 tab 数据 ────►│
+       │  └─ ydoc 已有数据        │
+       │                            │
+       ├─ setTimeout(delay)        │
+       │                            │
+       └─ create Server ──────────►│  delay 后创建
+                                    │  server 的 ydoc 已有数据
+                                    │  发送给 iframe
+[iframe] load iframe.html            │
+       ├─ loadDrawioScript()        │  editor 就绪
+       ├─ create bridgeProvider      │
+       ├─ overlay 半透明             │
+       ├─ 重试 init ──────────────►│  server 收到 init
+       ├─ receive ydoc-sync ◄──────┘  （含远端数据）
        ├─ connected = true
-       └─ loadDrawioScript()
+       ├─ overlay 消失
+       └─ bindDrawioFile() ← 显示远端 diagram
 ```
 
-**数据状态**：
-
-- Server Y.Doc：本地旧数据 A
-- Client Y.Doc：本地旧数据 B
-- 收到 sync 后：`Y.applyUpdate(clientYdoc, serverState)` → Yjs 的 CRDT 机制自动合并 A + B
-- 合并结果：双方最终一致
+**核心设计**：`initBridge` 内部**先创建 Provider（Webrtc）同步数据，后创建 Server** 绑定 iframe。这样 server 创建时 ydoc 已经可能包含其他 peer 的数据。
 
 **验证要点**：
 
-- ✅ `Y.applyUpdate` 不会覆盖 client 数据，而是 CRDT 合并
-- ✅ 最终 server 和 client 的 ydoc state 一致
-- ⚠️ 如果 A 和 B 在相同位置有冲突内容，Yjs 保留两个版本（通常表现为两个 diagram），这是 CRDT 的预期行为
+- ✅ Provider 总是先于 Server 创建
+- ✅ delay 期间 ydoc 通过 Webrtc 同步远端数据
+- ✅ server 创建时 ydoc 已有数据，sync 发送给 iframe
+- ✅ iframe 以远端数据初始化 editor，而非空白画布
 
 ---
 
@@ -165,27 +188,28 @@ iframe-bridge 实现了标准的 server-client 协同模式：
 [Parent] 切换房间                    │
        ├─ oldBridge.destroy()       │  发送 "disconnect"
        ├─ oldProvider.destroy()      │
-       ├─ 创建新的 Y.Doc + Provider  │
-       └─ createIframeBridgeServer() │
+       ├─ 创建新的 Y.Doc + Provider  │  新 Provider 立即 Webrtc 同步
+       ├─ create Server             │  （可延迟）
                                     │
 [iframe] receive "disconnect"       │
        ├─ connected = false         │
-       ├─ 显示 "Waiting for server..." │
+       ├─ overlay 半透明恢复        │  "Waiting for server..."
        ├─ 每 1s 重试 "init" ───────►│  新 server 收到 init
                                     │  新 server 发送 ydoc-sync
        ├─ receive "ydoc-sync" ◄─────┘
        ├─ connected = true
-       └─ 编辑器以新房间数据刷新
+       ├─ overlay 消失
+       └─ 以新房间数据 bind
 ```
 
-**数据状态**：新 server 可能有不同房间的数据 → client 收到 sync 后刷新 ydoc → draw.io 数据刷新。
+**数据状态**：新 Provider 先与其他 tab 同步 → server 创建后发送已同步的数据 → client 以新数据 bind。
 
 **验证要点**：
 
 - ✅ `disconnect` 消息正确到达 iframe
 - ✅ client 正确进入 waiting 状态并开始重试
+- ✅ 新 Provider 先同步，新 server 发送同步后的数据
 - ✅ 新 server 响应后 client 正常 re-connect
-- ⚠️ draw.io 需要重新绑定或刷新以加载新数据（当前实现中 `bindDrawioFile` 会处理）
 
 ---
 
@@ -280,12 +304,85 @@ bridge.on("disconnect", () => { ... });
 
 ---
 
+## `initBridge` 架构
+
+```ts
+function initBridge(roomName: string, serverDelay: number = 0) {
+  // 1. 先创建 Y.Doc + Provider（独立同步数据）
+  const doc = new Y.Doc();
+  const provider = new WebrtcProvider(roomName, doc, ...);
+  // provider 立即开始与其他 tab 同步...
+
+  // 2. 创建 Server（可延迟，让 provider 有时间同步）
+  const createServer = () => {
+    const undoManager = new Y.UndoManager(doc, ...);
+    const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, ...);
+    // server 绑定 iframe，发送 ydoc-sync
+  };
+
+  if (serverDelay > 0) {
+    setTimeout(createServer, serverDelay);
+  } else {
+    createServer();
+  }
+}
+```
+
+**关键设计**：Provider 总是先于 Server 创建，且两者之间可以有时间差。这保证了：
+
+1. 即使 server 延迟创建，ydoc 也能先与其他 tab 同步
+2. server 创建后发送的 `ydoc-sync` 已经是同步后的数据
+3. iframe 子页面以最新数据初始化 editor
+
+---
+
+## Server Delay UI
+
+顶部工具栏新增了 **"Server Delay (ms)"** 输入框：
+
+- 默认值 `0`：Provider 和 Server 同时创建
+- 输入 `5000` 按回车：Provider 先创建，Server 延迟 5 秒后再创建
+- 输入值自动同步到 URL（`?serverDelay=5000`），刷新后恢复
+- 修改 delay 会重新加载 iframe 和重建 bridge
+
+---
+
+## Console 日志参考
+
+**iframe 子页面 (main.ts)**：
+
+```
+[iframe 0] draw.io loading...
+[iframe 0] draw.io loaded — editor ready
+[iframe 0] bridgeProvider created — connected=false
+[iframe 0] not connected — showing waiting overlay
+[iframe 0] doBind — hiding overlay, binding draw.io
+[iframe 0] draw.io bound to ydoc
+```
+
+**iframe 外层容器 (iframe-container.ts)**：
+
+```
+[iframe-container] createServer — ydoc hasData=true, diagramMap size=1
+[iframe-container] server onConnect — iframe client connected
+[iframe-container] server onDisconnect — iframe client disconnected
+```
+
+**server (server.ts)**：
+
+```
+[iframe-bridge server] received init — connected=false
+[iframe-bridge server] sending ydoc-sync — docState bytes=247
+```
+
+---
+
 ## 测试检查清单
 
 | 场景 | 测试步骤 | 预期结果 |
 |------|----------|----------|
-| Server 先创建 | 正常打开 `iframe.html` | iframe 短暂 waiting 后加载编辑器 |
-| Server 晚创建 | `iframe.html?serverDelay=5000` | iframe waiting 5s 后加载编辑器 |
-| Server 有数据 | 先在其他窗口编辑，再打开 iframe | iframe 加载后直接显示已有 diagram |
-| 切换房间 | 在 iframe.html 修改房间名 | iframe 收到 disconnect，重新 waiting，然后加载新数据 |
+| Server 先创建 | 打开 `iframe.html`，delay=0 | draw.io 先加载，短暂 waiting 后 bind |
+| Server 晚创建 | 在顶部输入框改 delay=5000，回车 | Provider 先同步，5s 后 server 创建，editor 显示远端数据 |
+| Server 有数据 | 先在其他窗口编辑，再改 delay>0 打开 iframe | iframe 加载后直接显示已有 diagram |
+| 切换房间 | 修改 Room 名称，回车 | iframe 收到 disconnect，重新 waiting，加载新房间数据 |
 | 网络中断恢复 | server 暂时断开再恢复 | iframe 收到 disconnect → 重试 init → 重新连接 |
