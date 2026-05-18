@@ -13,6 +13,9 @@ const ui = {
     "custom-url-input",
   ) as HTMLInputElement,
   roomInput: document.getElementById("room-input") as HTMLInputElement,
+  serverDelayInput: document.getElementById(
+    "server-delay-input",
+  ) as HTMLInputElement,
   collabDot: document.getElementById("collab-dot") as HTMLSpanElement,
   collabStatus: document.getElementById("collab-status") as HTMLSpanElement,
   peerCount: document.getElementById("peer-count") as HTMLSpanElement,
@@ -58,7 +61,7 @@ function updateUndoRedoButtons() {
   ui.redoBtn.disabled = !currentUndoManager.canRedo();
 }
 
-function initBridge(roomName: string) {
+function initBridge(roomName: string, serverDelay: number = 0) {
   // 清理旧的
   if (currentBridge) {
     currentBridge.destroy();
@@ -75,33 +78,14 @@ function initBridge(roomName: string) {
   }
   delete (window as any).__undoManager__;
 
+  // 1. 先创建 Y.Doc + Provider（独立同步数据）
   const doc = new Y.Doc();
   const provider = new WebrtcProvider(roomName, doc, {
     signaling: SIGNALING_SERVERS,
   });
   const awareness = provider.awareness;
-  const undoManager = new Y.UndoManager(doc, {
-    trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
-  });
-
-  const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
-    undoManager,
-  });
 
   currentProvider = provider;
-  currentBridge = bridgeServer;
-  currentUndoManager = undoManager;
-
-  // 挂载到 window 供调试
-  (window as any).__doc__ = doc;
-  (window as any).__undoManager__ = undoManager;
-  (window as any).__provider__ = provider;
-  (window as any).__bridge__ = bridgeServer;
-
-  undoManager.on("stack-item-added", updateUndoRedoButtons);
-  undoManager.on("stack-item-popped", updateUndoRedoButtons);
-  undoManager.on("stack-cleared", updateUndoRedoButtons);
-  updateUndoRedoButtons();
 
   provider.on("status", (event: { connected: boolean }) => {
     if (event.connected) {
@@ -117,13 +101,62 @@ function initBridge(roomName: string) {
 
   updateCollabStatus("loading", "Connecting...");
 
-  // 暴露调试对象到全局
+  // 暴露 provider 调试对象
   const win = window as any;
   win.__provider__ = provider;
   win.__doc__ = doc;
-  win.__undoManager__ = undoManager;
   win.__awareness__ = awareness;
-  win.__bridge__ = bridgeServer;
+
+  // 2. 创建 Server（可延迟，让 provider 有时间同步数据）
+  const createServer = () => {
+    const mxfileMap = doc.getMap("mxfile");
+    const diagramMap = mxfileMap.get("diagram") as any;
+    const hasData = diagramMap && diagramMap.size > 0;
+    console.log(
+      `[iframe-container] createServer — ydoc hasData=${hasData}, diagramMap size=${diagramMap?.size ?? 0}`,
+    );
+
+    const undoManager = new Y.UndoManager(doc, {
+      trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
+    });
+
+    const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
+      undoManager,
+    });
+
+    currentBridge = bridgeServer;
+    currentUndoManager = undoManager;
+
+    undoManager.on("stack-item-added", updateUndoRedoButtons);
+    undoManager.on("stack-item-popped", updateUndoRedoButtons);
+    undoManager.on("stack-cleared", updateUndoRedoButtons);
+    updateUndoRedoButtons();
+
+    bridgeServer.onConnect(() => {
+      console.log(
+        `[iframe-container] server onConnect — iframe client connected`,
+      );
+      updateCollabStatus("connected", `Connected (${roomName}) — iframe ready`);
+    });
+
+    bridgeServer.onDisconnect(() => {
+      console.log(
+        `[iframe-container] server onDisconnect — iframe client disconnected`,
+      );
+      updateCollabStatus("loading", `Reconnecting... — iframe disconnected`);
+    });
+
+    // 挂载 server 调试对象
+    win.__undoManager__ = undoManager;
+    win.__bridge__ = bridgeServer;
+  };
+
+  if (serverDelay > 0) {
+    updateCollabStatus("loading", `Server starting in ${serverDelay}ms...`);
+    setTimeout(createServer, serverDelay);
+  } else {
+    createServer();
+  }
 }
 
 function init() {
@@ -134,16 +167,18 @@ function init() {
     urlVersion && DRAWIO_VERSIONS[urlVersion] ? urlVersion : "latest";
   const customUrl = urlParams.get("customUrl") || undefined;
   const roomName = urlParams.get("room") || DEFAULT_ROOM;
+  const serverDelay = parseInt(urlParams.get("serverDelay") || "0", 10);
 
   ui.versionSelect.value = version;
   ui.customUrlGroup.style.display = version === "custom" ? "flex" : "none";
   if (customUrl) ui.customUrlInput.value = customUrl;
   ui.roomInput.value = roomName;
+  ui.serverDelayInput.value = String(serverDelay);
 
   // 加载子 iframe
   ui.iframe.src = getIframeSrc(version, customUrl);
 
-  initBridge(roomName);
+  initBridge(roomName, serverDelay);
 
   ui.undoBtn.addEventListener("click", () => {
     if (currentUndoManager && currentUndoManager.canUndo()) {
@@ -189,11 +224,30 @@ function init() {
   ui.roomInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       const room = ui.roomInput.value.trim() || DEFAULT_ROOM;
+      const delay = parseInt(ui.serverDelayInput.value.trim() || "0", 10);
       const url = new URL(location.href);
       if (room === DEFAULT_ROOM) url.searchParams.delete("room");
       else url.searchParams.set("room", room);
       history.replaceState(null, "", url.toString());
-      initBridge(room);
+      initBridge(room, delay);
+    }
+  });
+
+  // Server Delay 切换
+  ui.serverDelayInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const delay = parseInt(ui.serverDelayInput.value.trim() || "0", 10);
+      const url = new URL(location.href);
+      if (delay <= 0) url.searchParams.delete("serverDelay");
+      else url.searchParams.set("serverDelay", String(delay));
+      history.replaceState(null, "", url.toString());
+      // 需要重新加载 iframe 才能用新的 delay 创建 server
+      const room = ui.roomInput.value.trim() || DEFAULT_ROOM;
+      ui.iframe.src = getIframeSrc(
+        ui.versionSelect.value,
+        ui.customUrlInput.value.trim() || undefined,
+      );
+      initBridge(room, delay);
     }
   });
 

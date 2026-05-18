@@ -43,6 +43,10 @@ export interface DrawioFile {
 
 export interface IframeBridgeProvider {
   serverClientId: number | null;
+  connected: boolean;
+  onConnect: (fn: () => void) => () => void;
+  onDisconnect: (fn: () => void) => () => void;
+  on: (event: "connect" | "disconnect", fn: () => void) => () => void;
   takeoverUndoManager: (file: DrawioFile) => () => void;
   destroy: () => void;
 }
@@ -117,6 +121,32 @@ export function createIframeBridgeProvider(
   let serverClientId: number | null = null;
   let currentCleanup: (() => void) | null = null;
   let currentMxLike: MxLike | null = null;
+  let connected = false;
+  let initRetryTimer: ReturnType<typeof setInterval> | null = null;
+  const connectListeners = new Set<() => void>();
+  const disconnectListeners = new Set<() => void>();
+
+  function setConnected(value: boolean) {
+    if (connected === value) return;
+    connected = value;
+    if (value) {
+      connectListeners.forEach((fn) => fn());
+    } else {
+      disconnectListeners.forEach((fn) => fn());
+    }
+  }
+
+  function startInitRetry() {
+    if (initRetryTimer) {
+      clearInterval(initRetryTimer);
+    }
+    window.parent.postMessage({ type: "init" }, "*");
+    initRetryTimer = setInterval(() => {
+      if (!connected) {
+        window.parent.postMessage({ type: "init" }, "*");
+      }
+    }, 1000);
+  }
 
   const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
     if (applyingParentUpdate) return;
@@ -172,6 +202,13 @@ export function createIframeBridgeProvider(
       applyingParentUpdate = true;
       Y.applyUpdate(ydoc, new Uint8Array(payload));
       applyingParentUpdate = false;
+      if (type === "ydoc-sync" && !connected) {
+        setConnected(true);
+        if (initRetryTimer) {
+          clearInterval(initRetryTimer);
+          initRetryTimer = null;
+        }
+      }
     } else if (type === "awareness-sync" || type === "awareness-update") {
       if (receivedServerId != null) {
         serverClientId = receivedServerId;
@@ -204,14 +241,23 @@ export function createIframeBridgeProvider(
       if (newTotal === 0) {
         currentMxLike.fireEvent(createMxEventObject("clear"));
       } else if (newIndex < oldIndex) {
-        currentMxLike.fireEvent(createMxEventObject("undo", { edit: { changes: [] } }));
+        currentMxLike.fireEvent(
+          createMxEventObject("undo", { edit: { changes: [] } }),
+        );
       } else if (newIndex > oldIndex) {
-        currentMxLike.fireEvent(createMxEventObject("redo", { edit: { changes: [] } }));
+        currentMxLike.fireEvent(
+          createMxEventObject("redo", { edit: { changes: [] } }),
+        );
       } else {
-        currentMxLike.fireEvent(createMxEventObject("add", { edit: { changes: [] } }));
+        currentMxLike.fireEvent(
+          createMxEventObject("add", { edit: { changes: [] } }),
+        );
       }
 
       applyingParentUpdate = false;
+    } else if (type === "disconnect") {
+      setConnected(false);
+      startInitRetry();
     }
   };
 
@@ -219,7 +265,7 @@ export function createIframeBridgeProvider(
   awareness.on("update", onAwarenessUpdate);
   window.addEventListener("message", onMessage);
 
-  window.parent.postMessage({ type: "init" }, "*");
+  startInitRetry();
 
   // 发送 ping 获取 serverClientId
   setTimeout(() => {
@@ -229,6 +275,26 @@ export function createIframeBridgeProvider(
   return {
     get serverClientId() {
       return serverClientId;
+    },
+    get connected() {
+      return connected;
+    },
+    onConnect(fn: () => void) {
+      connectListeners.add(fn);
+      return () => connectListeners.delete(fn);
+    },
+    onDisconnect(fn: () => void) {
+      disconnectListeners.add(fn);
+      return () => disconnectListeners.delete(fn);
+    },
+    on(event: "connect" | "disconnect", fn: () => void) {
+      if (event === "connect") {
+        connectListeners.add(fn);
+        return () => connectListeners.delete(fn);
+      } else {
+        disconnectListeners.add(fn);
+        return () => disconnectListeners.delete(fn);
+      }
     },
     takeoverUndoManager(file: DrawioFile) {
       if (currentCleanup) {
@@ -329,6 +395,12 @@ export function createIframeBridgeProvider(
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
       window.removeEventListener("message", onMessage);
+      if (initRetryTimer) {
+        clearInterval(initRetryTimer);
+        initRetryTimer = null;
+      }
+      connectListeners.clear();
+      disconnectListeners.clear();
       if (currentCleanup) {
         currentCleanup();
       }

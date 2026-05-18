@@ -11,6 +11,10 @@ export interface IframeBridgeServerOptions {
 }
 
 export interface IframeBridgeServer {
+  connected: boolean;
+  onConnect: (fn: () => void) => () => void;
+  onDisconnect: (fn: () => void) => () => void;
+  on: (event: "connect" | "disconnect", fn: () => void) => () => void;
   destroy: () => void;
 }
 
@@ -21,13 +25,28 @@ export function createIframeBridgeServer(
   options?: IframeBridgeServerOptions,
 ): IframeBridgeServer {
   const { undoManager } = options ?? {};
-  let iframeReady = false;
+  let connected = false;
   let applyingIframeUpdate = false;
+  const connectListeners = new Set<() => void>();
+  const disconnectListeners = new Set<() => void>();
+
+  function setConnected(value: boolean) {
+    if (connected === value) return;
+    connected = value;
+    if (value) {
+      connectListeners.forEach((fn) => fn());
+    } else {
+      disconnectListeners.forEach((fn) => fn());
+    }
+  }
 
   function postToIframe(type: string, payload?: Uint8Array) {
     const cw = iframe.contentWindow;
     if (cw) {
-      cw.postMessage({ type, payload: payload ? Array.from(payload) : [] }, "*");
+      cw.postMessage(
+        { type, payload: payload ? Array.from(payload) : [] },
+        "*",
+      );
     }
   }
 
@@ -78,10 +97,16 @@ export function createIframeBridgeServer(
     const { type: msgType, payload } = event.data;
 
     if (msgType === "init") {
-      if (!iframeReady) {
-        iframeReady = true;
+      console.log(
+        `[iframe-bridge server] received init — connected=${connected}`,
+      );
+      if (!connected) {
+        setConnected(true);
       }
       const docState = Y.encodeStateAsUpdate(ydoc);
+      console.log(
+        `[iframe-bridge server] sending ydoc-sync — docState bytes=${docState.length}`,
+      );
       const awarenessState = encodeAwarenessUpdate(
         awareness,
         Array.from(awareness.getStates().keys()),
@@ -91,7 +116,11 @@ export function createIframeBridgeServer(
       const cw = iframe.contentWindow;
       if (cw) {
         cw.postMessage(
-          { type: "awareness-sync", payload: Array.from(awarenessState), serverClientId: awareness.clientID },
+          {
+            type: "awareness-sync",
+            payload: Array.from(awarenessState),
+            serverClientId: awareness.clientID,
+          },
           "*",
         );
       }
@@ -148,7 +177,29 @@ export function createIframeBridgeServer(
   }
 
   return {
+    get connected() {
+      return connected;
+    },
+    onConnect(fn: () => void) {
+      connectListeners.add(fn);
+      return () => connectListeners.delete(fn);
+    },
+    onDisconnect(fn: () => void) {
+      disconnectListeners.add(fn);
+      return () => disconnectListeners.delete(fn);
+    },
+    on(event: "connect" | "disconnect", fn: () => void) {
+      if (event === "connect") {
+        connectListeners.add(fn);
+        return () => connectListeners.delete(fn);
+      } else {
+        disconnectListeners.add(fn);
+        return () => disconnectListeners.delete(fn);
+      }
+    },
     destroy: () => {
+      setConnected(false);
+      postToIframe("disconnect");
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
       window.removeEventListener("message", onMessage);
@@ -157,7 +208,8 @@ export function createIframeBridgeServer(
         undoManager.off("stack-cleared", onStackCleared);
         undoManager.off("stack-item-added", onStackItemAdded);
       }
-      iframeReady = false;
+      connectListeners.clear();
+      disconnectListeners.clear();
     },
   };
 }

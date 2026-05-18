@@ -142,6 +142,12 @@ async function initIframeChild() {
   const overlay = document.getElementById("loading-overlay")!;
   const container = document.getElementById("drawio-container")!;
 
+  const loadingText = overlay.querySelector("p")!;
+  const loadingSteps = document.getElementById("loading-steps");
+
+  console.log(`[iframe ${iframeId}] draw.io loading...`);
+
+  // 1. 先加载 draw.io（不等待 server）
   try {
     await loadDrawioScript(
       version,
@@ -149,8 +155,7 @@ async function initIframeChild() {
         onLoading: () => {},
         onProgress: () => {},
         onReady: () => {
-          overlay.style.display = "none";
-          container.style.removeProperty("display");
+          console.log(`[iframe ${iframeId}] draw.io loaded — editor ready`);
         },
         onError: (msg) => {
           console.error(`[iframe ${iframeId}]`, msg);
@@ -164,15 +169,44 @@ async function initIframeChild() {
     return;
   }
 
+  // 2. draw.io 加载完成，创建 bridge provider
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
-
   const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
+  console.log(
+    `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
+  );
 
-  bindDrawioFile(ydoc, awareness, null as any, (binding) => {
-    console.log(`[iframe ${iframeId}] draw.io bound`);
-    bridgeProvider.takeoverUndoManager(binding.file);
-  }, false);
+  // 3. 根据 connect 状态决定是否显示编辑器并 bind
+  const doBind = () => {
+    overlay.style.display = "none";
+    container.style.removeProperty("display");
+    console.log(
+      `[iframe ${iframeId}] doBind — hiding overlay, binding draw.io`,
+    );
+    bindDrawioFile(
+      ydoc,
+      awareness,
+      null as any,
+      (binding) => {
+        console.log(`[iframe ${iframeId}] draw.io bound to ydoc`);
+        bridgeProvider.takeoverUndoManager(binding.file);
+      },
+      false,
+    );
+  };
+
+  if (bridgeProvider.connected) {
+    console.log(`[iframe ${iframeId}] already connected — binding immediately`);
+    doBind();
+  } else {
+    if (loadingSteps) loadingSteps.style.display = "none";
+    loadingText.textContent =
+      lang === "zh" ? "等待服务器连接..." : "Waiting for server...";
+    overlay.style.background = "rgba(255, 255, 255, 0.5)";
+    console.log(`[iframe ${iframeId}] not connected — showing waiting overlay`);
+    bridgeProvider.onConnect(doBind);
+  }
 
   (window as any).__iframeYdoc__ = ydoc;
   (window as any).__iframeAwareness__ = awareness;
