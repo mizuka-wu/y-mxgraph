@@ -17,7 +17,6 @@ const pkg = {
   version: rootPkg.version,
   description: "Yjs binding for draw.io (mxGraph) documents",
   keywords: rootPkg.keywords,
-  type: "module",
   main: "./y-mxgraph.cjs.js",
   module: "./y-mxgraph.es.js",
   types: "./index.d.ts",
