@@ -1,4 +1,4 @@
-import { throttle } from "lodash-es";
+import { throttle } from "../../helper/throttle";
 import { colord } from "colord";
 import { createCursorImage } from "../../helper/cursor";
 

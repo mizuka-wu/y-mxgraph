@@ -39,7 +39,6 @@ const pkg = {
   },
   dependencies: {
     colord: "^2.9.3",
-    "lodash-es": "^4.17.21",
     "xml-js": "^1.6.11",
   },
   peerDependencies: {
@@ -85,7 +84,6 @@ const external = [
   "yjs",
   "y-protocols",
   "y-protocols/awareness",
-  "lodash-es",
   "xml-js",
   "colord",
 ];
@@ -94,7 +92,6 @@ const globals: Record<string, string> = {
   yjs: "Y",
   "y-protocols": "YProtocols",
   "y-protocols/awareness": "YProtocolsAwareness",
-  "lodash-es": "_",
   "xml-js": "xmljs",
   colord: "colord",
 };
