@@ -110,6 +110,9 @@ export default defineConfig({
     emitDistPackageJson(),
     copyRootFiles("README.md", "README.zh-CN.md"),
   ],
+  esbuild: {
+    target: "es2015",
+  },
   build: {
     lib: {
       entry: {
