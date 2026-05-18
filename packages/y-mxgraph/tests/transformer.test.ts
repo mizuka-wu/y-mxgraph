@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import * as Y from "yjs";
-import { xml2ydoc, ydoc2xml } from "../src/transformer/index";
+import { xml2ydoc, ydoc2xml } from "../src/transform/index";
 
 const MXFILE_XML = `<mxfile pages="1"><diagram name="Page-1" id="page1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`;
 

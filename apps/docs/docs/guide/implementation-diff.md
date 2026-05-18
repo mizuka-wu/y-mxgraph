@@ -21,7 +21,7 @@
 | `binding/index.ts` | `console.log("local patch", patch)` | **已删除** |
 | `binding/index.ts` | `console.log("undoManager/remote patch", patch)` | **已删除** |
 | `patch.ts` | `console.log(mxfile.toJSON(), patch)` | **已删除** |
-| `transformer/index.ts` | `console.warn("无支持的文件类型")` | **已删除** |
+| `transform/index.ts` | `console.warn("无支持的文件类型")` | **已删除** |
 
 ### UndoManager 行为
 
@@ -98,7 +98,7 @@ function bindDrawioFile(file: any, options: { ... } = {})
 
 以下模块与原始实现基本一致：
 
-- `transformer/` - XML ↔ Y.Doc 转换
+- `transform/` - XML ↔ Y.Doc 转换
 - `models/` - Yjs 数据模型定义
 - `helper/xml.ts` - XML 序列化/反序列化
 - `helper/awarenessStateValue.ts` - Awareness 状态管理

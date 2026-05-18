@@ -21,7 +21,7 @@ This document lists the key differences between the current `y-mxgraph` implemen
 | `binding/index.ts` | `console.log("local patch", patch)` | **removed** |
 | `binding/index.ts` | `console.log("undoManager/remote patch", patch)` | **removed** |
 | `patch.ts` | `console.log(mxfile.toJSON(), patch)` | **removed** |
-| `transformer/index.ts` | `console.warn("unsupported file type")` | **removed** |
+| `transform/index.ts` | `console.warn("unsupported file type")` | **removed** |
 
 ### UndoManager Behavior
 
@@ -98,7 +98,7 @@ function bindDrawioFile(file: any, options: { ... } = {})
 
 The following modules are essentially identical to the original:
 
-- `transformer/` — XML ↔ Y.Doc conversion
+- `transform/` — XML ↔ Y.Doc conversion
 - `models/` — Yjs data model definitions
 - `helper/xml.ts` — XML serialization/deserialization
 - `helper/awarenessStateValue.ts` — Awareness state management

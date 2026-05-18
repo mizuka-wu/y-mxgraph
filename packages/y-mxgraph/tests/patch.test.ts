@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
-import { xml2ydoc } from "../src/transformer/index";
+import { xml2ydoc } from "../src/transform/index";
 import {
   applyFilePatch,
   generatePatch,

@@ -1,6 +1,6 @@
 export { Binding } from "./binding";
 export type { BindDrawioFileOptions, InitialContentStrategy } from "./binding";
-export { xml2ydoc, ydoc2xml } from "./transformer";
+export { xml2ydoc, ydoc2xml } from "./transform";
 export { LOCAL_ORIGIN } from "./helper/origin";
 export {
   DEFAULT_USER_NAME_KEY,

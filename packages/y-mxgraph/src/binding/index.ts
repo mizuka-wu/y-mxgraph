@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
 import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
-import { xml2ydoc, ydoc2xml } from "../transformer";
+import { xml2ydoc, ydoc2xml } from "../transform";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
 import { LOCAL_ORIGIN } from "../helper/origin";

@@ -36,10 +36,10 @@ const pkg = {
       require: "./iframe-bridge/provider.cjs",
       types: "./iframe-bridge/provider.d.ts",
     },
-    "./transformer": {
-      import: "./transformer.js",
-      require: "./transformer.cjs",
-      types: "./transformer.d.ts",
+    "./transform": {
+      import: "./transform.js",
+      require: "./transform.cjs",
+      types: "./transform.d.ts",
     },
   },
   dependencies: {
@@ -125,7 +125,7 @@ export default defineConfig({
           __dirname,
           "src/iframe-bridge/provider.ts",
         ),
-        transformer: path.resolve(__dirname, "src/transformer/index.ts"),
+        transform: path.resolve(__dirname, "src/transform/index.ts"),
       },
       name: "YMXGraph",
       formats: ["es", "cjs"],

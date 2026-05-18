@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as Y from "yjs";
 import { Binding } from "../src/binding/index";
-import { xml2ydoc } from "../src/transformer/index";
+import { xml2ydoc } from "../src/transform/index";
 import type { DrawioFile } from "../src/types/drawio";
 
 const BASE_XML = `<mxfile pages="1">
