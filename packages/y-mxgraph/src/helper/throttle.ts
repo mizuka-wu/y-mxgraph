@@ -1,4 +1,4 @@
-export function throttle<T extends (...args: unknown[]) => unknown>(
+export function throttle<T extends (...args: any[]) => any>(
   fn: T,
   wait: number,
 ): (...args: Parameters<T>) => ReturnType<T> | undefined {
