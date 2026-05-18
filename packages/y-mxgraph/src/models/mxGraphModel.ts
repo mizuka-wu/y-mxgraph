@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { getMap, getArray } from "../helper/yjs";
 
 import {
   key as mxCellKey,
@@ -45,14 +46,14 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
 }
 
 export function serialize(map: YMxGraphModel) {
-  const cells = map.get(mxCellKey) as unknown as Y.Map<Y.XmlElement>;
-  const cellsOrder = map.get(mxCellOrderKey) as unknown as Y.Array<string>;
+  const cells = getMap<Y.XmlElement>(map, mxCellKey)!;
+  const cellsOrder = getArray<string>(map, mxCellOrderKey)!;
   return {
     _attributes: {},
     root: {
       [mxCellKey]: cellsOrder
         .toArray()
-        .map((id) => serializeMxCell(cells.get(id) as Y.XmlElement)),
+        .map((id) => serializeMxCell(cells!.get(id) as Y.XmlElement)),
     },
   };
 }

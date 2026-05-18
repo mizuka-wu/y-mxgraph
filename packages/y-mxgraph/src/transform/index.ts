@@ -24,7 +24,10 @@ export function xml2ydoc(xml: string, doc: Y.Doc): Y.Doc {
     });
   } else if (mxGraphModel) {
     doc.transact(() => {
-      parseMxGraphModel(mxGraphModel as import("../models/mxGraphModel").MxGraphModel, doc);
+      parseMxGraphModel(
+        mxGraphModel as import("../models/mxGraphModel").MxGraphModel,
+        doc,
+      );
     });
   } else {
     throw new Error("不支持的文件格式");
@@ -37,18 +40,15 @@ export function ydoc2xml(doc: Y.Doc, spaces = 0): string {
   if (doc.share.has(mxfileKey)) {
     return serializer(
       {
-        [mxfileKey]: serializerMxFile(
-          doc.share.get(mxfileKey) as unknown as YMxFile,
-        ),
+        [mxfileKey]: serializerMxFile(doc.getMap(mxfileKey)),
       },
       spaces,
     );
-  } else if (doc.share.has(mxGraphModelKey)) {
+  }
+  if (doc.share.has(mxGraphModelKey)) {
     return serializer(
       {
-        [mxGraphModelKey]: serializerMxGraphModel(
-          doc.share.get(mxGraphModelKey) as unknown as YMxGraphModel,
-        ),
+        [mxGraphModelKey]: serializerMxGraphModel(doc.getMap(mxGraphModelKey)),
       },
       spaces,
     );

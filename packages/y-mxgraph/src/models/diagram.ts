@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { getMap } from "../helper/yjs";
 import {
   parse as parseMxGraphModel,
   serialize as serializeMxGraphModel,
@@ -28,14 +29,12 @@ export function parse(object: Diagram): YDiagram {
 }
 
 export function serialize(yDiagram: YDiagram) {
-  const mxGraphModel = yDiagram.get(mxGraphModelKey) as unknown as
-    | YMxGraphModel
-    | undefined;
+  const mxGraphModel = getMap(yDiagram, mxGraphModelKey);
 
   return {
     _attributes: {
-      name: yDiagram.get("name") as unknown as string,
-      id: yDiagram.get("id") as unknown as string,
+      name: yDiagram.get("name") as string,
+      id: yDiagram.get("id") as string,
     },
     [mxGraphModelKey]: mxGraphModel
       ? serializeMxGraphModel(mxGraphModel)

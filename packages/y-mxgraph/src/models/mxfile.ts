@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { getMap, getArray } from "../helper/yjs";
 import {
   parse as parseDiagram,
   key as diagramKey,
@@ -37,21 +38,24 @@ export function parse(object: MxFile, doc: Y.Doc) {
 }
 
 export function serializer(yMxFile: YMxFile): ElementCompact {
-  const diagrams = yMxFile.get(diagramKey) as unknown as Y.Map<YDiagram>;
-  const diagramOrder = yMxFile.get(
-    diagramOrderKey,
-  ) as unknown as Y.Array<string>;
+  const diagrams = getMap<YDiagram>(yMxFile, diagramKey);
+  const diagramOrder = getArray<string>(yMxFile, diagramOrderKey);
 
   const orderIds = diagramOrder ? diagramOrder.toArray() : [];
   // 如果 diagramOrder 为空但 diagram map 不为空,使用 diagram map 中的所有 ID
-  const ids = orderIds.length > 0 ? orderIds : (diagrams ? Array.from(diagrams.keys()) : []);
+  const ids =
+    orderIds.length > 0
+      ? orderIds
+      : diagrams
+        ? Array.from(diagrams.keys())
+        : [];
 
   const obj: Record<string, unknown> = {
     _attributes: {
       pages: (yMxFile.get("pages") as string) || "1",
     },
     [diagramKey]: ids
-      .map((id) => diagrams.get(id) as unknown as YDiagram)
+      .map((id) => diagrams!.get(id) as YDiagram)
       .filter((d): d is YDiagram => !!d)
       .map((diagramElement) => serializeDiagram(diagramElement)),
   };
