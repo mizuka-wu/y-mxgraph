@@ -174,13 +174,21 @@ async function initIframeChild() {
   const awareness = new Awareness(ydoc);
 
   // 从 URL 参数读取初始 user 信息
-  const initUserName = urlParams.get("userName") || "User";
+  const initAccount =
+    urlParams.get("account") || urlParams.get("userName") || "alice";
+  const initName = urlParams.get("name") || initAccount;
   const initUserColor = urlParams.get("userColor") || "#2563eb";
   awareness.setLocalState({
-    user: { name: initUserName, color: initUserColor },
+    user: { account: initAccount, name: initName, color: initUserColor },
   });
 
-  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
+  const awarenessSyncMode =
+    urlParams.get("awarenessSyncMode") === "local-state"
+      ? ("local-state" as const)
+      : ("binary" as const);
+  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness, {
+    awarenessSyncMode,
+  });
   console.log(
     `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
   );
@@ -247,10 +255,12 @@ function connectCollaboration() {
 
   // 设置初始 awareness user
   const urlParams = new URLSearchParams(location.search);
-  const initUserName = urlParams.get("userName") || "User";
+  const initAccount =
+    urlParams.get("account") || urlParams.get("userName") || "alice";
+  const initName = urlParams.get("name") || initAccount;
   const initUserColor = urlParams.get("userColor") || "#2563eb";
   collabState.provider!.awareness.setLocalState({
-    user: { name: initUserName, color: initUserColor },
+    user: { account: initAccount, name: initName, color: initUserColor },
   });
 
   // 绑定 draw.io（等待 Provider 初始同步）

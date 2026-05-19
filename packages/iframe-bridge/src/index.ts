@@ -1,6 +1,7 @@
 export { createIframeBridgeProvider } from "./provider.js";
 export type {
   IframeBridgeProvider,
+  IframeBridgeProviderOptions,
   DrawioEditor,
   DrawioFile,
 } from "./provider.js";

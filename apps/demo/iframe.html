@@ -201,19 +201,35 @@
 
     <div class="toolbar-group">
       <label>Server Delay (ms):</label>
-      <input type="text" id="server-delay-input" value="0" title="0 = no delay, positive = delay server creation by N ms" />
+      <input type="text" id="server-delay-input" value="0"
+        title="0 = no delay, positive = delay server creation by N ms" />
     </div>
 
     <div class="separator"></div>
 
     <div class="toolbar-group">
-      <label>User:</label>
-      <input type="text" id="user-name-input" value="User" />
+      <label>Account:</label>
+      <input type="text" id="user-account-input" value="alice" />
+    </div>
+
+    <div class="toolbar-group">
+      <label>Name:</label>
+      <input type="text" id="user-name-input" value="Alice" />
     </div>
 
     <div class="toolbar-group">
       <label>Color:</label>
       <input type="color" id="user-color-input" value="#2563eb" />
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <label>Sync Mode:</label>
+      <select id="awareness-sync-mode">
+        <option value="binary">binary</option>
+        <option value="local-state">local-state</option>
+      </select>
     </div>
 
     <div class="separator"></div>

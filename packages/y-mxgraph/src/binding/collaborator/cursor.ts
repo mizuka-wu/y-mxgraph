@@ -8,7 +8,7 @@ import type { DrawioFile, MxGraph } from "../../types/drawio";
 
 export const CacheKey = "__remoteCursor__";
 
-function createCursorEl(color: string, username: string) {
+function createCursorEl(color: string, username: string, userAccount?: string) {
   const cursor = document.createElement("div");
   cursor.style.position = "absolute";
   cursor.style.opacity = "0.9";
@@ -28,12 +28,12 @@ function createCursorEl(color: string, username: string) {
   name.style.padding = "3px 7px";
   name.style.marginTop = "8px";
   name.style.borderRadius = "10px";
-  name.style.maxWidth = "100px";
+  name.style.maxWidth = "140px";
   name.style.overflow = "hidden";
   name.style.textOverflow = "ellipsis";
   name.style.whiteSpace = "nowrap";
 
-  name.innerText = username;
+  name.innerText = userAccount ? `${username} (${userAccount})` : username;
   cursor.appendChild(name);
   return cursor;
 }
@@ -103,14 +103,24 @@ export function bindCursor(
 }
 
 export function renderRemoteCursors(
-  ui: { editor: { graph: MxGraph }; currentPage?: { getId(): string } | null; diagramContainer: HTMLElement },
+  ui: {
+    editor: { graph: MxGraph };
+    currentPage?: { getId(): string } | null;
+    diagramContainer: HTMLElement;
+  },
   remotes: Map<number, RemoteCursor>,
 ) {
   if (!(CacheKey in ui)) {
-    (ui as Record<string, unknown>)[CacheKey] = new Map<number, HTMLDivElement>();
+    (ui as Record<string, unknown>)[CacheKey] = new Map<
+      number,
+      HTMLDivElement
+    >();
   }
 
-  const cache = (ui as Record<string, unknown>)[CacheKey] as Map<number, HTMLDivElement>;
+  const cache = (ui as Record<string, unknown>)[CacheKey] as Map<
+    number,
+    HTMLDivElement
+  >;
   const currentPageId = ui.currentPage?.getId();
 
   if (!currentPageId) {
@@ -154,7 +164,7 @@ export function renderRemoteCursors(
   const { translate, scale } = graph.view;
 
   currentPageRemotes.forEach(
-    ({ clientId, cursorState, userColor, userName }) => {
+    ({ clientId, cursorState, userColor, userName, userAccount }) => {
       if (!cursorState) return;
       let el = cache.get(clientId);
 
@@ -168,7 +178,7 @@ export function renderRemoteCursors(
       }
 
       if (!el) {
-        el = createCursorEl(userColor, userName);
+        el = createCursorEl(userColor, userName, userAccount);
         ui.diagramContainer.appendChild(el);
         cache.set(clientId, el);
       }

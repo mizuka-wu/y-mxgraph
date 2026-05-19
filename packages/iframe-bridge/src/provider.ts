@@ -41,6 +41,10 @@ export interface DrawioFile {
   getUi(): { editor: DrawioEditor };
 }
 
+export interface IframeBridgeProviderOptions {
+  awarenessSyncMode?: "binary" | "local-state";
+}
+
 export interface IframeBridgeProvider {
   serverClientId: number | null;
   connected: boolean;
@@ -116,7 +120,9 @@ function remapClientIdInUpdate(
 export function createIframeBridgeProvider(
   ydoc: Y.Doc,
   awareness: Awareness,
+  options?: IframeBridgeProviderOptions,
 ): IframeBridgeProvider {
+  const { awarenessSyncMode = "binary" } = options ?? {};
   let applyingParentUpdate = false;
   let serverClientId: number | null = null;
   let currentCleanup: (() => void) | null = null;
@@ -177,16 +183,23 @@ export function createIframeBridgeProvider(
     const localChanged = changes.includes(localClientId);
     if (!localChanged) return;
 
-    const update = encodeAwarenessUpdate(awareness, [localClientId]);
-    const remapped =
-      serverClientId != null
-        ? remapClientIdInUpdate(update, localClientId, serverClientId)
-        : update;
+    if (awarenessSyncMode === "local-state") {
+      window.parent.postMessage(
+        { type: "awareness-local-state", state: awareness.getLocalState() },
+        "*",
+      );
+    } else {
+      const update = encodeAwarenessUpdate(awareness, [localClientId]);
+      const remapped =
+        serverClientId != null
+          ? remapClientIdInUpdate(update, localClientId, serverClientId)
+          : update;
 
-    window.parent.postMessage(
-      { type: "awareness-update", payload: Array.from(remapped) },
-      "*",
-    );
+      window.parent.postMessage(
+        { type: "awareness-update", payload: Array.from(remapped) },
+        "*",
+      );
+    }
   };
 
   const onMessage = (event: MessageEvent) => {
@@ -228,12 +241,15 @@ export function createIframeBridgeProvider(
       if (serverClientId != null) {
         const serverState = awareness.getStates().get(serverClientId);
         if (serverState) {
+          const serverUserAccount = (
+            serverState as { user?: { account?: unknown } }
+          ).user?.account;
           const serverUserName = (serverState as { user?: { name?: unknown } })
             .user?.name;
           const serverUserColor = (
             serverState as { user?: { color?: unknown } }
           ).user?.color;
-          if (serverUserName || serverUserColor) {
+          if (serverUserAccount || serverUserName || serverUserColor) {
             const currentLocal = awareness.getLocalState() || {};
             const next = { ...currentLocal };
             next.user = {
@@ -241,6 +257,10 @@ export function createIframeBridgeProvider(
                 | Record<string, unknown>
                 | undefined),
             };
+            if (serverUserAccount) {
+              (next.user as Record<string, unknown>).account =
+                serverUserAccount;
+            }
             if (serverUserName) {
               (next.user as Record<string, unknown>).name = serverUserName;
             }

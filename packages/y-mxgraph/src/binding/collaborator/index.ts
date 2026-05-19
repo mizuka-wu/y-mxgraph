@@ -10,6 +10,7 @@ import type { DrawioFile, MxGraph } from "../../types/drawio";
 
 export const DEFAULT_USER_NAME_KEY = "user.name";
 export const DEFAULT_USER_COLOR_KEY = "user.color";
+export const DEFAULT_USER_ACCOUNT_KEY = "user.account";
 
 type CursorState = {
   x: number;
@@ -29,6 +30,7 @@ export type RemoteCursor = {
   selectionState: SelectionState | null;
   userColor: string;
   userName: string;
+  userAccount?: string;
 };
 
 export function bindCollaborator(
@@ -36,7 +38,13 @@ export function bindCollaborator(
   options: {
     awareness: Awareness;
     graph?: MxGraph;
-    cursor?: boolean | { userNameKey?: string; userColorKey?: string };
+    cursor?:
+      | boolean
+      | {
+          userNameKey?: string;
+          userColorKey?: string;
+          userAccountKey?: string;
+        };
     mouseMoveThrottle?: number;
   },
 ) {
@@ -53,6 +61,10 @@ export function bindCollaborator(
     typeof cursorOption === "object" && cursorOption?.userColorKey
       ? cursorOption.userColorKey
       : DEFAULT_USER_COLOR_KEY;
+  const userAccountKey =
+    typeof cursorOption === "object" && cursorOption?.userAccountKey
+      ? cursorOption.userAccountKey
+      : DEFAULT_USER_ACCOUNT_KEY;
 
   let userName = getAwarenessStateValue<string>(awareness, userNameKey);
   if (!userName) {
@@ -64,6 +76,7 @@ export function bindCollaborator(
     userColor = generateColor(userName);
     setAwarenessStateValue(awareness, userColorKey, userColor);
   }
+  let userAccount = getAwarenessStateValue<string>(awareness, userAccountKey);
 
   const cleanupCursor = bindCursor(file, {
     awareness,
@@ -96,6 +109,11 @@ export function bindCollaborator(
           userColorKey,
         );
         if (newColor) userColor = newColor;
+        const newAccount = getAwarenessStateValue<string>(
+          awareness,
+          userAccountKey,
+        );
+        if (newAccount != null) userAccount = newAccount;
       }
 
       const remotes = new Map<number, RemoteCursor>();
@@ -110,6 +128,11 @@ export function bindCollaborator(
         const color =
           getAwarenessStateValue<string>(awareness, userColorKey, clientId) ||
           "#000000";
+        const account = getAwarenessStateValue<string>(
+          awareness,
+          userAccountKey,
+          clientId,
+        );
 
         remotes.set(clientId, {
           clientId,
@@ -125,6 +148,7 @@ export function bindCollaborator(
           ),
           userColor: color,
           userName: name,
+          userAccount: account || undefined,
         });
       }
 

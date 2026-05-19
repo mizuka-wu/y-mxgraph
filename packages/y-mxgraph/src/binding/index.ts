@@ -45,6 +45,7 @@ export interface BindDrawioFileOptions {
     | {
         userNameKey?: string;
         userColorKey?: string;
+        userAccountKey?: string;
       };
   /**
    * 初始内容对齐策略，默认 `replace`。详见 {@link InitialContentStrategy}。
@@ -378,7 +379,9 @@ export class Binding {
       // 注意：只有非本地 transaction 时才执行强制替换，避免本地初始化时自我覆盖
       if (this.shouldReplaceWhenDocHasData && !transaction.local) {
         const mxfileMap = doc.getMap(mxfileKey);
-        const diagramMap = mxfileMap.get(diagramKey) as Y.Map<Y.XmlElement> | undefined;
+        const diagramMap = mxfileMap.get(diagramKey) as
+          | Y.Map<Y.XmlElement>
+          | undefined;
         if (diagramMap && diagramMap.size > 0) {
           // doc 已有数据，执行强制替换
           const xml = ydoc2xml(doc);

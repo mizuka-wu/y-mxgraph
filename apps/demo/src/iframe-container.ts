@@ -16,10 +16,16 @@ const ui = {
   serverDelayInput: document.getElementById(
     "server-delay-input",
   ) as HTMLInputElement,
+  userAccountInput: document.getElementById(
+    "user-account-input",
+  ) as HTMLInputElement,
   userNameInput: document.getElementById("user-name-input") as HTMLInputElement,
   userColorInput: document.getElementById(
     "user-color-input",
   ) as HTMLInputElement,
+  awarenessSyncModeSelect: document.getElementById(
+    "awareness-sync-mode",
+  ) as HTMLSelectElement,
   collabDot: document.getElementById("collab-dot") as HTMLSpanElement,
   collabStatus: document.getElementById("collab-status") as HTMLSpanElement,
   peerCount: document.getElementById("peer-count") as HTMLSpanElement,
@@ -67,14 +73,18 @@ function updateCollabStatus(
 function getIframeSrc(
   version: string,
   customUrl?: string,
-  userName?: string,
+  account?: string,
+  name?: string,
   userColor?: string,
+  awarenessSyncMode?: string,
 ) {
   const params = new URLSearchParams();
   params.set("version", version);
   if (customUrl) params.set("customUrl", customUrl);
-  if (userName) params.set("userName", userName);
+  if (account) params.set("account", account);
+  if (name) params.set("name", name);
   if (userColor) params.set("userColor", userColor);
+  if (awarenessSyncMode) params.set("awarenessSyncMode", awarenessSyncMode);
   return `./index.html?${params.toString()}`;
 }
 
@@ -88,7 +98,11 @@ function updateUndoRedoButtons() {
   ui.redoBtn.disabled = !currentUndoManager.canRedo();
 }
 
-function initBridge(roomName: string, serverDelay: number = 0) {
+function initBridge(
+  roomName: string,
+  serverDelay: number = 0,
+  awarenessSyncMode: "binary" | "local-state" = "binary",
+) {
   // 清理旧的
   if (currentBridge) {
     currentBridge.destroy();
@@ -113,10 +127,11 @@ function initBridge(roomName: string, serverDelay: number = 0) {
   const awareness = provider.awareness;
 
   // 设置父容器 awareness user，确保 iframe 能从 server 同步到正确的用户信息
-  const parentUserName = ui.userNameInput.value.trim() || "User";
+  const parentAccount = ui.userAccountInput.value.trim() || "alice";
+  const parentName = ui.userNameInput.value.trim() || parentAccount;
   const parentUserColor = ui.userColorInput.value;
   awareness.setLocalState({
-    user: { name: parentUserName, color: parentUserColor },
+    user: { account: parentAccount, name: parentName, color: parentUserColor },
   });
 
   currentProvider = provider;
@@ -155,6 +170,7 @@ function initBridge(roomName: string, serverDelay: number = 0) {
 
     const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
       undoManager,
+      awarenessSyncMode,
     });
 
     currentBridge = bridgeServer;
@@ -202,22 +218,37 @@ function init() {
   const customUrl = urlParams.get("customUrl") || undefined;
   const roomName = urlParams.get("room") || DEFAULT_ROOM;
   const serverDelay = parseInt(urlParams.get("serverDelay") || "0", 10);
+  let awarenessSyncMode: "binary" | "local-state" =
+    urlParams.get("awarenessSyncMode") === "local-state"
+      ? "local-state"
+      : "binary";
 
   ui.versionSelect.value = version;
+  ui.awarenessSyncModeSelect.value = awarenessSyncMode;
   ui.customUrlGroup.style.display = version === "custom" ? "flex" : "none";
   if (customUrl) ui.customUrlInput.value = customUrl;
   ui.roomInput.value = roomName;
   ui.serverDelayInput.value = String(serverDelay);
 
-  const userName = urlParams.get("userName") || "User";
+  const account =
+    urlParams.get("account") || urlParams.get("userName") || "alice";
+  const name = urlParams.get("name") || account;
   const userColor = urlParams.get("userColor") || "#2563eb";
-  ui.userNameInput.value = userName;
+  ui.userAccountInput.value = account;
+  ui.userNameInput.value = name;
   ui.userColorInput.value = userColor;
 
   // 加载子 iframe
-  ui.iframe.src = getIframeSrc(version, customUrl, userName, userColor);
+  ui.iframe.src = getIframeSrc(
+    version,
+    customUrl,
+    account,
+    name,
+    userColor,
+    awarenessSyncMode,
+  );
 
-  initBridge(roomName, serverDelay);
+  initBridge(roomName, serverDelay, awarenessSyncMode);
 
   ui.undoBtn.addEventListener("click", () => {
     if (currentUndoManager && currentUndoManager.canUndo()) {
@@ -245,8 +276,12 @@ function init() {
       ui.iframe.src = getIframeSrc(
         v,
         undefined,
-        ui.userNameInput.value.trim() || "User",
+        ui.userAccountInput.value.trim() || "alice",
+        ui.userNameInput.value.trim() ||
+          ui.userAccountInput.value.trim() ||
+          "alice",
         ui.userColorInput.value,
+        awarenessSyncMode,
       );
     }
   });
@@ -262,8 +297,12 @@ function init() {
         ui.iframe.src = getIframeSrc(
           "custom",
           url,
-          ui.userNameInput.value.trim() || "User",
+          ui.userAccountInput.value.trim() || "alice",
+          ui.userNameInput.value.trim() ||
+            ui.userAccountInput.value.trim() ||
+            "alice",
           ui.userColorInput.value,
+          awarenessSyncMode,
         );
       }
     }
@@ -278,7 +317,7 @@ function init() {
       if (room === DEFAULT_ROOM) url.searchParams.delete("room");
       else url.searchParams.set("room", room);
       history.replaceState(null, "", url.toString());
-      initBridge(room, delay);
+      initBridge(room, delay, awarenessSyncMode);
     }
   });
 
@@ -295,19 +334,26 @@ function init() {
       ui.iframe.src = getIframeSrc(
         ui.versionSelect.value,
         ui.customUrlInput.value.trim() || undefined,
-        ui.userNameInput.value.trim() || "User",
+        ui.userAccountInput.value.trim() || "alice",
+        ui.userNameInput.value.trim() ||
+          ui.userAccountInput.value.trim() ||
+          "alice",
         ui.userColorInput.value,
+        awarenessSyncMode,
       );
-      initBridge(room, delay);
+      initBridge(room, delay, awarenessSyncMode);
     }
   });
 
   // 用户信息切换
-  function onUserChange() {
-    const userName = ui.userNameInput.value.trim() || "User";
+  function onUserInfoChange() {
+    const account = ui.userAccountInput.value.trim() || "alice";
+    const name = ui.userNameInput.value.trim() || account;
     const userColor = ui.userColorInput.value;
     const url = new URL(location.href);
-    url.searchParams.set("userName", userName);
+    url.searchParams.set("account", account);
+    if (name === account) url.searchParams.delete("name");
+    else url.searchParams.set("name", name);
     url.searchParams.set("userColor", userColor);
     history.replaceState(null, "", url.toString());
 
@@ -316,14 +362,44 @@ function init() {
     ui.iframe.src = getIframeSrc(
       ui.versionSelect.value,
       ui.customUrlInput.value.trim() || undefined,
-      userName,
+      account,
+      name,
       userColor,
+      awarenessSyncMode,
     );
-    initBridge(room, delay);
+    initBridge(room, delay, awarenessSyncMode);
   }
 
-  ui.userNameInput.addEventListener("change", onUserChange);
-  ui.userColorInput.addEventListener("change", onUserChange);
+  ui.userAccountInput.addEventListener("change", onUserInfoChange);
+  ui.userNameInput.addEventListener("change", onUserInfoChange);
+  ui.userColorInput.addEventListener("change", onUserInfoChange);
+
+  // Sync Mode 切换
+  ui.awarenessSyncModeSelect.addEventListener("change", () => {
+    awarenessSyncMode = ui.awarenessSyncModeSelect.value as
+      | "binary"
+      | "local-state";
+    const url = new URL(location.href);
+    if (awarenessSyncMode === "binary") {
+      url.searchParams.delete("awarenessSyncMode");
+    } else {
+      url.searchParams.set("awarenessSyncMode", awarenessSyncMode);
+    }
+    history.replaceState(null, "", url.toString());
+    const room = ui.roomInput.value.trim() || DEFAULT_ROOM;
+    const delay = parseInt(ui.serverDelayInput.value.trim() || "0", 10);
+    ui.iframe.src = getIframeSrc(
+      ui.versionSelect.value,
+      ui.customUrlInput.value.trim() || undefined,
+      ui.userAccountInput.value.trim() || "alice",
+      ui.userNameInput.value.trim() ||
+        ui.userAccountInput.value.trim() ||
+        "alice",
+      ui.userColorInput.value,
+      awarenessSyncMode,
+    );
+    initBridge(room, delay, awarenessSyncMode);
+  });
 
   // 暴露调试对象（getter 形式，始终返回当前值）
   const win = window as any;

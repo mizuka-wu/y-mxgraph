@@ -8,6 +8,7 @@ import { IFRAME_ORIGIN, BASELINE_ORIGIN } from "./origin.js";
 
 export interface IframeBridgeServerOptions {
   undoManager?: Y.UndoManager;
+  awarenessSyncMode?: "binary" | "local-state";
 }
 
 export interface IframeBridgeServer {
@@ -24,7 +25,7 @@ export function createIframeBridgeServer(
   awareness: Awareness,
   options?: IframeBridgeServerOptions,
 ): IframeBridgeServer {
-  const { undoManager } = options ?? {};
+  const { undoManager, awarenessSyncMode = "binary" } = options ?? {};
   let connected = false;
   let applyingIframeUpdate = false;
   const connectListeners = new Set<() => void>();
@@ -141,6 +142,10 @@ export function createIframeBridgeServer(
       const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
       Y.applyUpdate(ydoc, update, applyOrigin);
       // 源 iframe 已经持有此 update，无需回传
+    } else if (msgType === "awareness-local-state") {
+      applyingIframeUpdate = true;
+      awareness.setLocalState(event.data.state);
+      applyingIframeUpdate = false;
     } else if (msgType === "awareness-update") {
       // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传
       applyingIframeUpdate = true;
