@@ -85,9 +85,21 @@ export function bindCollaborator(
       updated: number[];
     }) => {
       const states = awareness.getStates();
+      const changedClientIds = new Set([...update.added, ...update.updated]);
+
+      // 如果本地 user state 被外部覆盖（如 iframe-bridge 同步），更新内部缓存
+      if (changedClientIds.has(awareness.clientID)) {
+        const newName = getAwarenessStateValue<string>(awareness, userNameKey);
+        if (newName) userName = newName;
+        const newColor = getAwarenessStateValue<string>(
+          awareness,
+          userColorKey,
+        );
+        if (newColor) userColor = newColor;
+      }
+
       const remotes = new Map<number, RemoteCursor>();
 
-      const changedClientIds = new Set([...update.added, ...update.updated]);
       for (const [clientId] of states.entries()) {
         if (clientId === awareness.clientID) continue;
         if (!changedClientIds.has(clientId)) continue;

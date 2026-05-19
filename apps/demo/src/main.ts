@@ -172,6 +172,14 @@ async function initIframeChild() {
   // 2. draw.io 加载完成，创建 bridge provider
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
+
+  // 从 URL 参数读取初始 user 信息
+  const initUserName = urlParams.get("userName") || "User";
+  const initUserColor = urlParams.get("userColor") || "#2563eb";
+  awareness.setLocalState({
+    user: { name: initUserName, color: initUserColor },
+  });
+
   const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
   console.log(
     `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
@@ -235,6 +243,14 @@ function connectCollaboration() {
     onStatusChange: (status, text) => updateCollabStatus(ui, status, text),
     connectedText: t.collabConnected,
     reconnectingText: t.collabReconnecting,
+  });
+
+  // 设置初始 awareness user
+  const urlParams = new URLSearchParams(location.search);
+  const initUserName = urlParams.get("userName") || "User";
+  const initUserColor = urlParams.get("userColor") || "#2563eb";
+  collabState.provider!.awareness.setLocalState({
+    user: { name: initUserName, color: initUserColor },
   });
 
   // 绑定 draw.io（等待 Provider 初始同步）

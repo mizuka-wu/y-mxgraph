@@ -221,7 +221,54 @@ export function createIframeBridgeProvider(
       // - 其他 Webrtc peers 的 clientID
       applyingParentUpdate = true;
       applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
+
+      // 从 server 的 awareness state 中提取 user 信息并同步到本地
+      // 避免 binding 生成随机用户信息后通过 remap 覆盖父页面的真实用户
+      let localUserSynced = false;
+      if (serverClientId != null) {
+        const serverState = awareness.getStates().get(serverClientId);
+        if (serverState) {
+          const serverUserName = (serverState as { user?: { name?: unknown } })
+            .user?.name;
+          const serverUserColor = (
+            serverState as { user?: { color?: unknown } }
+          ).user?.color;
+          if (serverUserName || serverUserColor) {
+            const currentLocal = awareness.getLocalState() || {};
+            const next = { ...currentLocal };
+            next.user = {
+              ...((currentLocal as Record<string, unknown>).user as
+                | Record<string, unknown>
+                | undefined),
+            };
+            if (serverUserName) {
+              (next.user as Record<string, unknown>).name = serverUserName;
+            }
+            if (serverUserColor) {
+              (next.user as Record<string, unknown>).color = serverUserColor;
+            }
+            awareness.setLocalState(next);
+            localUserSynced = true;
+          }
+        }
+      }
+
       applyingParentUpdate = false;
+
+      // 如果同步了本地 user info，需要发送一次更新给父页面
+      // 恢复可能被随机值覆盖的 server user 信息
+      if (localUserSynced && serverClientId != null) {
+        const update = encodeAwarenessUpdate(awareness, [awareness.clientID]);
+        const remapped = remapClientIdInUpdate(
+          update,
+          awareness.clientID,
+          serverClientId,
+        );
+        window.parent.postMessage(
+          { type: "awareness-update", payload: Array.from(remapped) },
+          "*",
+        );
+      }
     } else if (type === "undo-state" && currentMxLike) {
       // 从 Server 同步真实的 undo/redo 状态
       const { undoStackSize, redoStackSize } = event.data;

@@ -16,6 +16,10 @@ const ui = {
   serverDelayInput: document.getElementById(
     "server-delay-input",
   ) as HTMLInputElement,
+  userNameInput: document.getElementById("user-name-input") as HTMLInputElement,
+  userColorInput: document.getElementById(
+    "user-color-input",
+  ) as HTMLInputElement,
   collabDot: document.getElementById("collab-dot") as HTMLSpanElement,
   collabStatus: document.getElementById("collab-status") as HTMLSpanElement,
   peerCount: document.getElementById("peer-count") as HTMLSpanElement,
@@ -60,10 +64,17 @@ function updateCollabStatus(
   else if (status === "loading") ui.collabDot.classList.add("loading");
 }
 
-function getIframeSrc(version: string, customUrl?: string) {
+function getIframeSrc(
+  version: string,
+  customUrl?: string,
+  userName?: string,
+  userColor?: string,
+) {
   const params = new URLSearchParams();
   params.set("version", version);
   if (customUrl) params.set("customUrl", customUrl);
+  if (userName) params.set("userName", userName);
+  if (userColor) params.set("userColor", userColor);
   return `./index.html?${params.toString()}`;
 }
 
@@ -100,6 +111,13 @@ function initBridge(roomName: string, serverDelay: number = 0) {
     signaling: SIGNALING_SERVERS,
   });
   const awareness = provider.awareness;
+
+  // 设置父容器 awareness user，确保 iframe 能从 server 同步到正确的用户信息
+  const parentUserName = ui.userNameInput.value.trim() || "User";
+  const parentUserColor = ui.userColorInput.value;
+  awareness.setLocalState({
+    user: { name: parentUserName, color: parentUserColor },
+  });
 
   currentProvider = provider;
 
@@ -191,8 +209,13 @@ function init() {
   ui.roomInput.value = roomName;
   ui.serverDelayInput.value = String(serverDelay);
 
+  const userName = urlParams.get("userName") || "User";
+  const userColor = urlParams.get("userColor") || "#2563eb";
+  ui.userNameInput.value = userName;
+  ui.userColorInput.value = userColor;
+
   // 加载子 iframe
-  ui.iframe.src = getIframeSrc(version, customUrl);
+  ui.iframe.src = getIframeSrc(version, customUrl, userName, userColor);
 
   initBridge(roomName, serverDelay);
 
@@ -219,7 +242,12 @@ function init() {
       else url.searchParams.set("version", v);
       history.replaceState(null, "", url.toString());
 
-      ui.iframe.src = getIframeSrc(v);
+      ui.iframe.src = getIframeSrc(
+        v,
+        undefined,
+        ui.userNameInput.value.trim() || "User",
+        ui.userColorInput.value,
+      );
     }
   });
 
@@ -231,7 +259,12 @@ function init() {
         const u = new URL(location.href);
         u.searchParams.set("customUrl", url);
         history.replaceState(null, "", u.toString());
-        ui.iframe.src = getIframeSrc("custom", url);
+        ui.iframe.src = getIframeSrc(
+          "custom",
+          url,
+          ui.userNameInput.value.trim() || "User",
+          ui.userColorInput.value,
+        );
       }
     }
   });
@@ -262,10 +295,35 @@ function init() {
       ui.iframe.src = getIframeSrc(
         ui.versionSelect.value,
         ui.customUrlInput.value.trim() || undefined,
+        ui.userNameInput.value.trim() || "User",
+        ui.userColorInput.value,
       );
       initBridge(room, delay);
     }
   });
+
+  // 用户信息切换
+  function onUserChange() {
+    const userName = ui.userNameInput.value.trim() || "User";
+    const userColor = ui.userColorInput.value;
+    const url = new URL(location.href);
+    url.searchParams.set("userName", userName);
+    url.searchParams.set("userColor", userColor);
+    history.replaceState(null, "", url.toString());
+
+    const room = ui.roomInput.value.trim() || DEFAULT_ROOM;
+    const delay = parseInt(ui.serverDelayInput.value.trim() || "0", 10);
+    ui.iframe.src = getIframeSrc(
+      ui.versionSelect.value,
+      ui.customUrlInput.value.trim() || undefined,
+      userName,
+      userColor,
+    );
+    initBridge(room, delay);
+  }
+
+  ui.userNameInput.addEventListener("change", onUserChange);
+  ui.userColorInput.addEventListener("change", onUserChange);
 
   // 暴露调试对象（getter 形式，始终返回当前值）
   const win = window as any;
