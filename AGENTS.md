@@ -93,10 +93,17 @@ Y.Doc
 ## iframe-bridge Package (`packages/iframe-bridge`)
 
 Two roles:
+
 - **Server** (parent page): manages network provider (y-webrtc/y-websocket), syncs Y.Doc + Awareness to iframes via postMessage
 - **Provider** (iframe child): local Y.Doc + Awareness, synced with server via postMessage
 
 Exports: `createIframeBridgeServer()`, `createIframeBridgeProvider()`
+
+### Awareness User Info
+
+- **父容器 awareness 为准**：iframe provider **不应**主动推送本地 awareness state 给 server，server 在 `awareness-sync` 时将父容器 awareness 推送给 iframe，iframe 接收后同步到本地
+- **`bindCollaborator`** (`packages/y-mxgraph/src/binding/collaborator/index.ts`) 监听本地 awareness user 变化（如 iframe-bridge 同步），更新内部缓存的 `userName`/`userColor`，避免 binding 生成的随机值覆盖外部设置
+- **iframe demo 支持设置初始 awareness user**：`iframe.html` toolbar 提供 User Name 和 Color 输入框，值通过 URL 参数 `userName`/`userColor` 传给 iframe；`iframe-container.ts` 在创建 provider **立即**设置父容器 awareness user，确保 server 延迟创建时也能正确同步
 
 ## Testing
 
