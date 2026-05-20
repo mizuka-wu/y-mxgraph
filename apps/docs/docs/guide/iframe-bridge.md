@@ -169,7 +169,9 @@ const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
 });
 
-// 传入 bridge server，直接绑定 iframe
+// 传入 bridge server，直接绑定 iframe。
+// 如果 UndoManager 支持 addTrackedOrigin/removeTrackedOrigin，桥接会在创建/销毁时自动管理 IFRAME_ORIGIN。
+// 如果不支持，请继续在 trackedOrigins 中保留 IFRAME_ORIGIN。
 const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // 可以在父页面直接调用 undo/redo
@@ -181,7 +183,9 @@ document.getElementById('redo-btn')!.onclick = () => {
 };
 ```
 
-> **`trackedOrigins` 说明**：`Y.UndoManager` 默认只追踪 `LOCAL_ORIGIN` 的事务。在 iframe 场景下，来自 iframe 的更新以 `IFRAME_ORIGIN` 作为 origin 应用到 Server 的 Y.Doc，因此需要将 `IFRAME_ORIGIN` 也加入 `trackedOrigins`，否则 iframe 的编辑不会进入撤销栈。
+> **`trackedOrigins` 说明**：`Y.UndoManager` 默认只追踪 `LOCAL_ORIGIN` 的事务。在 iframe 场景下，来自 iframe 的更新以 `IFRAME_ORIGIN` 作为 origin 应用到 Server 的 Y.Doc。
+> 如果 UndoManager 支持 `addTrackedOrigin`/`removeTrackedOrigin`，`createIframeBridgeServer` 会在创建/销毁时自动管理 `IFRAME_ORIGIN`。
+> 否则仍需手动将 `IFRAME_ORIGIN` 加入 `trackedOrigins`，否则 iframe 的编辑不会进入撤销栈。
 
 ### Provider 端接管 draw.io UndoManager
 

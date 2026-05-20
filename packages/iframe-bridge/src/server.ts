@@ -30,6 +30,38 @@ export function createIframeBridgeServer(
   let applyingIframeUpdate = false;
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
+  let iframeOriginTracked = false;
+
+  function tryAddIframeOriginTracking() {
+    if (!undoManager) return;
+    try {
+      if (typeof (undoManager as any).addTrackedOrigin === "function") {
+        (undoManager as any).addTrackedOrigin(IFRAME_ORIGIN);
+        iframeOriginTracked = true;
+      }
+    } catch (error) {
+      console.warn(
+        "[iframe-bridge server] failed to add IFRAME_ORIGIN to UndoManager tracked origins:",
+        error,
+      );
+    }
+  }
+
+  function tryRemoveIframeOriginTracking() {
+    if (!undoManager || !iframeOriginTracked) return;
+    try {
+      if (typeof (undoManager as any).removeTrackedOrigin === "function") {
+        (undoManager as any).removeTrackedOrigin(IFRAME_ORIGIN);
+      }
+    } catch (error) {
+      console.warn(
+        "[iframe-bridge server] failed to remove IFRAME_ORIGIN from UndoManager tracked origins:",
+        error,
+      );
+    }
+  }
+
+  tryAddIframeOriginTracking();
 
   function setConnected(value: boolean) {
     if (connected === value) return;
@@ -212,6 +244,7 @@ export function createIframeBridgeServer(
         undoManager.off("stack-item-popped", onUndoPopped);
         undoManager.off("stack-cleared", onStackCleared);
         undoManager.off("stack-item-added", onStackItemAdded);
+        tryRemoveIframeOriginTracking();
       }
       connectListeners.clear();
       disconnectListeners.clear();

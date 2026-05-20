@@ -134,6 +134,9 @@ const undoManager = new Y.UndoManager(doc, {
 });
 
 // Create bridge server, bound directly to the target iframe
+// If the UndoManager implementation supports addTrackedOrigin/removeTrackedOrigin,
+// the bridge will automatically add/remove IFRAME_ORIGIN for you.
+// If not, keep IFRAME_ORIGIN in trackedOrigins manually.
 const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // Undo/redo from parent page

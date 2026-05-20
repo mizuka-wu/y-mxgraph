@@ -95,7 +95,9 @@ const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
 });
 
-// 创建 bridge server，直接绑定到目标 iframe
+// 创建 bridge server，直接绑定到目标 iframe。
+// 如果 UndoManager 支持 addTrackedOrigin/removeTrackedOrigin，桥接会自动管理 IFRAME_ORIGIN。
+// 如果不支持，请继续在 trackedOrigins 中保留 IFRAME_ORIGIN。
 const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // 从父页面执行撤销/重做

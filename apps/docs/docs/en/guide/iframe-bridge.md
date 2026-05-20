@@ -169,7 +169,10 @@ const undoManager = new Y.UndoManager(doc, {
   trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
 });
 
-// Pass to bridge server, binding directly to the iframe
+// Pass to bridge server, binding directly to the iframe.
+// If the UndoManager implementation supports addTrackedOrigin/removeTrackedOrigin,
+// the bridge will automatically manage IFRAME_ORIGIN on create/destroy.
+// If not, keep IFRAME_ORIGIN in trackedOrigins manually.
 const bridge = createIframeBridgeServer(iframeElement, doc, awareness, { undoManager });
 
 // Can call undo/redo directly on the parent page
@@ -181,7 +184,9 @@ document.getElementById('redo-btn')!.onclick = () => {
 };
 ```
 
-> **`trackedOrigins` note**: `Y.UndoManager` defaults to tracking only `LOCAL_ORIGIN` transactions. In the iframe scenario, updates from iframes are applied to the Server's Y.Doc with `IFRAME_ORIGIN` as the origin. You must add `IFRAME_ORIGIN` to `trackedOrigins`, otherwise iframe edits won't enter the undo stack.
+> **`trackedOrigins` note**: `Y.UndoManager` defaults to tracking only `LOCAL_ORIGIN` transactions. In the iframe scenario, updates from iframes are applied to the Server's Y.Doc with `IFRAME_ORIGIN` as the origin.
+> If the UndoManager implementation supports `addTrackedOrigin`/`removeTrackedOrigin`, `createIframeBridgeServer` automatically manages `IFRAME_ORIGIN` on start/stop.
+> Otherwise, add `IFRAME_ORIGIN` to `trackedOrigins` manually so iframe edits enter the undo stack.
 
 ### Provider-side UndoManager Takeover
 
