@@ -264,64 +264,40 @@ export function createIframeBridgeProvider(
         applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
       }
 
-      // 从 server 的 awareness state 中提取 user 信息并同步到本地
-      // 避免 binding 生成随机用户信息后通过 remap 覆盖父页面的真实用户
-      let localUserSynced = false;
-      if (serverId != null) {
+      // awareness-sync 时：以 server 的 user 为基准，iframe 补充缺失字段，然后推送完整 user 给 server
+      if (type === "awareness-sync" && serverId != null) {
         const serverState = awareness.getStates().get(localClientId);
-        if (serverState) {
-          const serverUserAccount = (
-            serverState as { user?: { account?: unknown } }
-          ).user?.account;
-          const serverUserName = (serverState as { user?: { name?: unknown } })
-            .user?.name;
-          const serverUserColor = (
-            serverState as { user?: { color?: unknown } }
-          ).user?.color;
-          if (serverUserAccount || serverUserName || serverUserColor) {
-            const currentLocal = awareness.getLocalState() || {};
-            const currentUser = ((currentLocal as Record<string, unknown>)
-              .user || {}) as Record<string, unknown>;
-            const nextUser: Record<string, unknown> = { ...currentUser };
-            if (serverUserAccount) {
-              nextUser.account = serverUserAccount;
-            }
-            if (serverUserName) {
-              nextUser.name = serverUserName;
-            }
-            if (serverUserColor) {
-              nextUser.color = serverUserColor;
-            }
-            const userChanged =
-              currentUser.account !== nextUser.account ||
-              currentUser.name !== nextUser.name ||
-              currentUser.color !== nextUser.color;
-            if (userChanged) {
-              awareness.setLocalState({
-                ...currentLocal,
-                user: nextUser,
-              });
-              localUserSynced = true;
-            }
-          }
+        const serverUser = (serverState as { user?: Record<string, unknown> } | undefined)?.user || {};
+        const currentLocal = awareness.getLocalState() || {};
+        const iframeUser = (currentLocal as { user?: Record<string, unknown> }).user || {};
+
+        // 以 server 为基准，iframe 只补充 server 缺失的字段
+        const mergedUser: Record<string, unknown> = {
+          name: serverUser.name !== undefined ? serverUser.name : iframeUser.name,
+          account: serverUser.account !== undefined ? serverUser.account : iframeUser.account,
+          color: serverUser.color !== undefined ? serverUser.color : iframeUser.color,
+        };
+
+        const userChanged =
+          iframeUser.name !== mergedUser.name ||
+          iframeUser.account !== mergedUser.account ||
+          iframeUser.color !== mergedUser.color;
+
+        if (userChanged) {
+          awareness.setLocalState({
+            ...currentLocal,
+            user: mergedUser,
+          });
+          // 推送完整的 user 给 server（补充了缺失字段）
+          const update = encodeAwarenessUpdate(awareness, [awareness.clientID]);
+          const remapped = remapClientIdInUpdate(update, awareness.clientID, serverId);
+          const message = { type: "awareness-update", payload: Array.from(remapped) };
+          logMessage("send", "awareness-update", message);
+          window.parent.postMessage(message, "*");
         }
       }
 
       applyingParentUpdate = false;
-
-      // 如果同步了本地 user info，需要发送一次更新给父页面
-      // 恢复可能被随机值覆盖的 server user 信息
-      if (localUserSynced && serverClientId != null) {
-        const update = encodeAwarenessUpdate(awareness, [awareness.clientID]);
-        const remapped = remapClientIdInUpdate(
-          update,
-          awareness.clientID,
-          serverClientId,
-        );
-        const message = { type: "awareness-update", payload: Array.from(remapped) };
-        logMessage("send", "awareness-update", message);
-        window.parent.postMessage(message, "*");
-      }
     } else if (type === "undo-state" && currentMxLike) {
       // 从 Server 同步真实的 undo/redo 状态
       const { undoStackSize, redoStackSize } = event.data;
