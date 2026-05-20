@@ -334,16 +334,3 @@ Creates the Provider-side bridge.
 
 - `takeoverUndoManager(file: DrawioFile) => () => void` — Takeover draw.io's `editor.undoManager`, returns cleanup function. See [Undo/Redo](#undoredo) section
 - `destroy()` — Clean up all listeners (including takeover'd UndoManager)
-
-## SharedWorker Mode
-
-In addition to iframe Bridge, the project also provides a SharedWorker mode for cross-tab synchronization. Comparison of the two modes:
-
-| Feature | iframe Bridge | SharedWorker |
-|---------|---------------|--------------|
-| Isolation level | iframe sandbox | Browser tabs |
-| Network connection | Server page | SharedWorker |
-| Use case | draw.io isolated deployment | Cross-tab collaboration |
-| Communication | postMessage | MessagePort |
-
-SharedWorker implementation is in `apps/demo/src/shared-worker.ts`.

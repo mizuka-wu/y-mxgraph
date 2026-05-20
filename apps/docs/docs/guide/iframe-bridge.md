@@ -335,16 +335,3 @@ window.addEventListener('message', (event) => {
 
 - `takeoverUndoManager(file: DrawioFile) => () => void` — 接管 draw.io 的 `editor.undoManager`，返回清理函数。详见 [Undo/Redo](#undoredo) 章节
 - `destroy()` — 清理所有监听器（包括接管的 UndoManager）
-
-## SharedWorker 模式
-
-除了 iframe Bridge，项目还提供了 SharedWorker 模式用于跨标签页同步。两种模式的对比：
-
-| 特性 | iframe Bridge | SharedWorker |
-|------|---------------|--------------|
-| 隔离级别 | iframe 沙盒 | 浏览器标签页 |
-| 网络连接 | Server 页面 | SharedWorker |
-| 适用场景 | draw.io 隔离部署 | 跨标签页协作 |
-| 通信方式 | postMessage | MessagePort |
-
-SharedWorker 实现见 `apps/demo/src/shared-worker.ts`。
