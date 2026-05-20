@@ -56,30 +56,10 @@ function updatePeerCount(count: number) {
   ui.peerCount.style.display = count > 0 ? "inline" : "none";
 }
 
-function updateCollabStatus(
-  status: "connected" | "disconnected" | "loading",
-  text: string,
-) {
-  // 兼容旧用法，直接设置文字
-  ui.collabStatus.textContent = text;
-  ui.collabDot.className = "status-dot";
-  if (status === "connected") ui.collabDot.classList.add("connected");
-  else if (status === "loading") ui.collabDot.classList.add("loading");
-}
-
-function getIframeSrc(
-  version: string,
-  customUrl?: string,
-  account?: string,
-  name?: string,
-  userColor?: string,
-) {
+function getIframeSrc(version: string, customUrl?: string) {
   const params = new URLSearchParams();
   params.set("version", version);
   if (customUrl) params.set("customUrl", customUrl);
-  if (account) params.set("account", account);
-  if (name) params.set("name", name);
-  if (userColor) params.set("userColor", userColor);
   return `./index.html?${params.toString()}`;
 }
 
@@ -93,10 +73,7 @@ function updateUndoRedoButtons() {
   ui.redoBtn.disabled = !currentUndoManager.canRedo();
 }
 
-function initBridge(
-  roomName: string,
-  serverDelay: number = 0
-) {
+function initBridge(roomName: string, serverDelay: number = 0) {
   // 清理旧的
   if (currentBridge) {
     currentBridge.destroy();
@@ -227,13 +204,7 @@ function init() {
   ui.userColorInput.value = userColor;
 
   // 加载子 iframe
-  ui.iframe.src = getIframeSrc(
-    version,
-    customUrl,
-    account,
-    name,
-    userColor,
-  );
+  ui.iframe.src = getIframeSrc(version, customUrl);
 
   initBridge(roomName, serverDelay);
 
@@ -260,15 +231,7 @@ function init() {
       else url.searchParams.set("version", v);
       history.replaceState(null, "", url.toString());
 
-      ui.iframe.src = getIframeSrc(
-        v,
-        undefined,
-        ui.userAccountInput.value.trim() || "alice",
-        ui.userNameInput.value.trim() ||
-          ui.userAccountInput.value.trim() ||
-          "alice",
-        ui.userColorInput.value,
-      );
+      ui.iframe.src = getIframeSrc(v, undefined);
     }
   });
 
@@ -280,15 +243,7 @@ function init() {
         const u = new URL(location.href);
         u.searchParams.set("customUrl", url);
         history.replaceState(null, "", u.toString());
-        ui.iframe.src = getIframeSrc(
-          "custom",
-          url,
-          ui.userAccountInput.value.trim() || "alice",
-          ui.userNameInput.value.trim() ||
-            ui.userAccountInput.value.trim() ||
-            "alice",
-          ui.userColorInput.value,
-        );
+        ui.iframe.src = getIframeSrc("custom", url);
       }
     }
   });
@@ -319,11 +274,6 @@ function init() {
       ui.iframe.src = getIframeSrc(
         ui.versionSelect.value,
         ui.customUrlInput.value.trim() || undefined,
-        ui.userAccountInput.value.trim() || "alice",
-        ui.userNameInput.value.trim() ||
-          ui.userAccountInput.value.trim() ||
-          "alice",
-        ui.userColorInput.value,
       );
       initBridge(room, delay);
     }
@@ -346,9 +296,6 @@ function init() {
     ui.iframe.src = getIframeSrc(
       ui.versionSelect.value,
       ui.customUrlInput.value.trim() || undefined,
-      account,
-      name,
-      userColor,
     );
     initBridge(room, delay);
   }
