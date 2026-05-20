@@ -27,7 +27,7 @@ export function createIframeBridgeServer(
 ): IframeBridgeServer {
   const { undoManager, debug = false } = options ?? {};
   const log = debug
-    ? (...args: unknown[]) => console.debug("[iframe-bridge server]", ...args)
+    ? (...args: unknown[]) => console.log("[iframe-bridge server]", ...args)
     : () => undefined;
 
   function formatPayload(payload: unknown) {
@@ -174,14 +174,30 @@ export function createIframeBridgeServer(
       // 在单独的 postMessage 中发送 serverClientId，方便 iframe 接收
       const cw = iframe.contentWindow;
       if (cw) {
+        const states = awareness.getStates();
+        const statesArray = Array.from(states.entries());
+        log("[DEBUG] server sending awareness-sync - detailed", {
+          serverClientId: awareness.clientID,
+          statesCount: states.size,
+          statesArray: statesArray.map(([id, state]) => ({
+            clientId: id,
+            user: (state as Record<string, unknown>)?.user,
+            hasUser: !!(state as Record<string, unknown>)?.user,
+          })),
+        });
         const message = {
           type: "awareness-sync",
           payload: Array.from(encodeAwarenessUpdate(
             awareness,
-            Array.from(awareness.getStates().keys()),
+            Array.from(states.keys()),
           )),
           serverClientId: awareness.clientID,
         };
+        log("[DEBUG] server sending awareness-sync", {
+          serverClientId: awareness.clientID,
+          states: Object.fromEntries(states),
+          payloadLength: message.payload.length,
+        });
         logMessage("send", "awareness-sync", message);
         cw.postMessage(message, "*");
       }
@@ -204,16 +220,37 @@ export function createIframeBridgeServer(
       Y.applyUpdate(ydoc, update, applyOrigin);
       // 源 iframe 已经持有此 update，无需回传
     } else if (msgType === "awareness-local-state") {
+      log("[DEBUG] server received awareness-local-state", {
+        currentState: awareness.getLocalState(),
+        receivedState: event.data.state,
+      });
       logMessage("recv", "awareness-local-state", payload);
       applyingIframeUpdate = true;
       awareness.setLocalState(event.data.state);
       applyingIframeUpdate = false;
+      log("[DEBUG] server after setLocalState", {
+        newState: awareness.getLocalState(),
+      });
     } else if (msgType === "awareness-update") {
       logMessage("recv", "awareness-update", payload);
       // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传
       applyingIframeUpdate = true;
       applyAwarenessUpdate(awareness, new Uint8Array(payload), IFRAME_ORIGIN);
       applyingIframeUpdate = false;
+    } else if (msgType === "set-local-fields") {
+      logMessage("recv", "set-local-fields", payload);
+      const { fields } = event.data;
+      if (fields && typeof fields === "object") {
+        applyingIframeUpdate = true;
+        const currentLocal = awareness.getLocalState() || {};
+        const currentUser = (currentLocal as { user?: Record<string, unknown> }).user || {};
+        const newUser = { ...currentUser, ...fields };
+        awareness.setLocalState({
+          ...currentLocal,
+          user: newUser,
+        });
+        applyingIframeUpdate = false;
+      }
     } else if (msgType === "undo" && undoManager) {
       undoManager.undo();
       postUndoStateToIframe();

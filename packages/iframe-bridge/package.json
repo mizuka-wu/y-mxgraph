@@ -24,6 +24,10 @@
       "types": "./src/server.ts"
     }
   },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "peerDependencies": {
     "y-protocols": "^1.0.0",
     "yjs": "^13.6.0"
@@ -31,6 +35,8 @@
   "devDependencies": {
     "@y-mxgraph/eslint-config": "workspace:*",
     "@y-mxgraph/typescript-config": "workspace:*",
-    "typescript": "~5.5.4"
+    "jsdom": "^25.0.1",
+    "typescript": "~5.5.4",
+    "vitest": "^2.1.9"
   }
 }

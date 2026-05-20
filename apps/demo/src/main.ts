@@ -181,7 +181,7 @@ async function initIframeChild() {
     user: { account: initAccount, name: initName, color: initUserColor },
   });
 
-  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
+  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness, { debug: true });
   console.log(
     `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
   );

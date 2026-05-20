@@ -141,6 +141,7 @@ function initBridge(roomName: string, serverDelay: number = 0) {
 
     const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
       undoManager,
+      debug: true,
     });
 
     currentBridge = bridgeServer;

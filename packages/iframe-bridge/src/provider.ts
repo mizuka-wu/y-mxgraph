@@ -51,6 +51,7 @@ export interface IframeBridgeProvider {
   onConnect: (fn: () => void) => () => void;
   onDisconnect: (fn: () => void) => () => void;
   on: (event: "connect" | "disconnect", fn: () => void) => () => void;
+  setLocalFields: (fields: Record<string, unknown>) => void;
   takeoverUndoManager: (file: DrawioFile) => () => void;
   destroy: () => void;
 }
@@ -144,7 +145,7 @@ export function createIframeBridgeProvider(
   const disconnectListeners = new Set<() => void>();
 
   const log = debug
-    ? (...args: unknown[]) => console.debug("[iframe-bridge provider]", ...args)
+    ? (...args: unknown[]) => console.log("[iframe-bridge provider]", ...args)
     : () => undefined;
 
   function formatPayload(payload: unknown) {
@@ -207,7 +208,15 @@ export function createIframeBridgeProvider(
     updated: number[];
     removed: number[];
   }) => {
-    if (applyingParentUpdate) return;
+    if (applyingParentUpdate) {
+      log("[DEBUG] onAwarenessUpdate: skipped (applyingParentUpdate)");
+      return;
+    }
+    // 未连接时不推送本地状态到 server，避免随机值覆盖 server 数据
+    if (!connected) {
+      log("[DEBUG] onAwarenessUpdate: skipped (not connected)");
+      return;
+    }
     const changes = [...added, ...updated, ...removed];
     if (changes.length === 0) return;
 
@@ -218,6 +227,12 @@ export function createIframeBridgeProvider(
     if (!localChanged) return;
 
     const state = awareness.getLocalState();
+    log("[DEBUG] onAwarenessUpdate: sending local state", {
+      localClientId,
+      state,
+      connected,
+      applyingParentUpdate,
+    });
     const message = { type: "awareness-local-state", state };
     logMessage("send", "awareness-local-state", state);
     window.parent.postMessage(message, "*");
@@ -252,6 +267,20 @@ export function createIframeBridgeProvider(
 
       const serverId = receivedServerId ?? serverClientId;
       const localClientId = awareness.clientID;
+      
+      log("[DEBUG] awareness-sync/update: received message", {
+        type,
+        serverId,
+        localClientId,
+        payloadLength: payload?.length,
+        payloadSample: payload?.slice(0, 20),
+      });
+      
+      log("[DEBUG] awareness-sync/update: before apply", {
+        currentState: awareness.getLocalState(),
+        currentStates: Object.fromEntries(awareness.getStates()),
+      });
+      
       applyingParentUpdate = true;
       if (serverId != null && serverId !== localClientId) {
         const remapped = remapClientIdInUpdate(
@@ -259,44 +288,46 @@ export function createIframeBridgeProvider(
           serverId,
           localClientId,
         );
-        applyAwarenessUpdate(awareness, remapped, null);
-      } else {
-        applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
-      }
-
-      // awareness-sync 时：以 server 的 user 为基准，iframe 补充缺失字段，然后推送完整 user 给 server
-      if (type === "awareness-sync" && serverId != null) {
-        const serverState = awareness.getStates().get(localClientId);
-        const serverUser = (serverState as { user?: Record<string, unknown> } | undefined)?.user || {};
-        const currentLocal = awareness.getLocalState() || {};
-        const iframeUser = (currentLocal as { user?: Record<string, unknown> }).user || {};
-
-        // 以 server 为基准，iframe 只补充 server 缺失的字段
-        const mergedUser: Record<string, unknown> = {
-          name: serverUser.name !== undefined ? serverUser.name : iframeUser.name,
-          account: serverUser.account !== undefined ? serverUser.account : iframeUser.account,
-          color: serverUser.color !== undefined ? serverUser.color : iframeUser.color,
-        };
-
-        const userChanged =
-          iframeUser.name !== mergedUser.name ||
-          iframeUser.account !== mergedUser.account ||
-          iframeUser.color !== mergedUser.color;
-
-        if (userChanged) {
-          awareness.setLocalState({
-            ...currentLocal,
-            user: mergedUser,
-          });
-          // 推送完整的 user 给 server（补充了缺失字段）
-          const update = encodeAwarenessUpdate(awareness, [awareness.clientID]);
-          const remapped = remapClientIdInUpdate(update, awareness.clientID, serverId);
-          const message = { type: "awareness-update", payload: Array.from(remapped) };
-          logMessage("send", "awareness-update", message);
-          window.parent.postMessage(message, "*");
+        log("[DEBUG] awareness-sync/update: applying remapped update", {
+          serverId,
+          localClientId,
+          remappedLength: remapped.length,
+          beforeState: awareness.getLocalState(),
+          beforeStates: Object.fromEntries(awareness.getStates()),
+        });
+        
+        // awareness-sync 时先清除本地状态的 meta，确保 server 的状态能覆盖
+        // 因为 bindCollaborator 可能已经设置了随机值，导致本地 clock 更大
+        if (type === "awareness-sync") {
+          log("[DEBUG] awareness-sync: clearing local meta before apply");
+          // 直接删除本地 clientID 的 meta，这样 applyAwarenessUpdate 会认为本地状态是全新的
+          (awareness as any).meta.delete(localClientId);
+          awareness.setLocalState(null);
         }
+        
+        applyAwarenessUpdate(awareness, remapped, null);
+        log("[DEBUG] awareness-sync/update: AFTER remapped apply", {
+          afterState: awareness.getLocalState(),
+          afterStates: Object.fromEntries(awareness.getStates()),
+        });
+      } else {
+        log("[DEBUG] awareness-sync/update: applying direct update", {
+          beforeState: awareness.getLocalState(),
+        });
+        applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
+        log("[DEBUG] awareness-sync/update: AFTER direct apply", {
+          afterState: awareness.getLocalState(),
+        });
       }
 
+      log("[DEBUG] awareness-sync/update: final state", {
+        type,
+        localState: awareness.getLocalState(),
+        allStates: Object.fromEntries(awareness.getStates()),
+      });
+
+      // awareness-sync 时直接接受 server 的值，不合并本地值
+      // 避免本地随机值覆盖 server 数据
       applyingParentUpdate = false;
     } else if (type === "undo-state" && currentMxLike) {
       // 从 Server 同步真实的 undo/redo 状态
@@ -370,6 +401,21 @@ export function createIframeBridgeProvider(
       } else {
         disconnectListeners.add(fn);
         return () => disconnectListeners.delete(fn);
+      }
+    },
+    setLocalFields(fields: Record<string, unknown>) {
+      const currentLocal = awareness.getLocalState() || {};
+      const currentUser = (currentLocal as { user?: Record<string, unknown> }).user || {};
+      const newUser = { ...currentUser, ...fields };
+      awareness.setLocalState({
+        ...currentLocal,
+        user: newUser,
+      });
+      // 未连接时只设置本地状态，连接后由 server 同步
+      if (connected) {
+        const message = { type: "set-local-fields", fields };
+        logMessage("send", "set-local-fields", fields);
+        window.parent.postMessage(message, "*");
       }
     },
     takeoverUndoManager(file: DrawioFile) {
