@@ -1,6 +1,6 @@
 {
   "name": "y-mxgraph",
-  "version": "0.6.14",
+  "version": "0.7.0",
   "type": "module",
   "description": "Yjs binding for draw.io (mxGraph) documents",
   "keywords": [
