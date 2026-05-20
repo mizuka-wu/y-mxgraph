@@ -307,7 +307,6 @@ window.addEventListener('message', (event) => {
 - `awareness: Awareness` — Server 的 Awareness 实例
 - `options?` — 可选配置
   - `undoManager?: Y.UndoManager` — 共享的 UndoManager 实例，传入后支持跨 iframe 撤销/重做
-  - `awarenessSyncMode?: "binary" \| "local-state"` — awareness 同步模式。默认 `"binary"`，iframe→server 发送 binary update 通过 `applyAwarenessUpdate` 应用； `"local-state"` 则发送原始 state 对象，由 Server 通过 `setLocalState` 应用。后者适合依赖 `setLocalState` 副作用的 `awarenessLike` 实现
 
 **返回**：`IframeBridgeServer`
 
@@ -324,7 +323,7 @@ window.addEventListener('message', (event) => {
 - `doc: Y.Doc` — 本地 Y.Doc 实例
 - `awareness: Awareness` — 本地 Awareness 实例
 - `options?` — 可选配置
-  - `awarenessSyncMode?: "binary" \| "local-state"` — 与 Server 端对应，默认 `"binary"`
+  - `awarenessSyncMode?: "binary" \| "local-state"` — awareness 同步模式。默认 `"binary"`，iframe→server 发送 binary update 通过 `applyAwarenessUpdate` 应用； `"local-state"` 则发送原始 state 对象，由 Server 通过 `setLocalState` 应用。
 
 **返回**：`IframeBridgeProvider`
 

@@ -308,7 +308,6 @@ Creates the Server-side bridge, bound directly to a single iframe.
 - `awareness: Awareness` — Server's Awareness instance
 - `options?` — Optional configuration
   - `undoManager?: Y.UndoManager` — Shared UndoManager instance, enables cross-iframe undo/redo
-  - `awarenessSyncMode?: "binary" \| "local-state"` — Awareness sync mode. Default `"binary"` sends binary updates from iframe→server via `applyAwarenessUpdate`; `"local-state"` sends raw state objects applied via `setLocalState`, suitable for `awarenessLike` implementations relying on `setLocalState` side effects
 
 **Methods**:
 
@@ -323,7 +322,7 @@ Creates the Provider-side bridge.
 - `doc: Y.Doc` — Local Y.Doc instance
 - `awareness: Awareness` — Local Awareness instance
 - `options?` — Optional configuration
-  - `awarenessSyncMode?: "binary" \| "local-state"` — Mirrors Server-side option, default `"binary"`
+  - `awarenessSyncMode?: "binary" \| "local-state"` — Awareness sync mode. Default `"binary"` sends binary updates from iframe→server via `applyAwarenessUpdate`; `"local-state"` sends raw state objects applied via `setLocalState`, suitable for `awarenessLike` implementations relying on `setLocalState` side effects
 
 **Returns**: `IframeBridgeProvider`
 

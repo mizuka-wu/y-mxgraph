@@ -8,7 +8,6 @@ import { IFRAME_ORIGIN, BASELINE_ORIGIN } from "./origin.js";
 
 export interface IframeBridgeServerOptions {
   undoManager?: Y.UndoManager;
-  awarenessSyncMode?: "binary" | "local-state";
 }
 
 export interface IframeBridgeServer {
@@ -25,7 +24,7 @@ export function createIframeBridgeServer(
   awareness: Awareness,
   options?: IframeBridgeServerOptions,
 ): IframeBridgeServer {
-  const { undoManager, awarenessSyncMode = "binary" } = options ?? {};
+  const { undoManager } = options ?? {};
   let connected = false;
   let applyingIframeUpdate = false;
   const connectListeners = new Set<() => void>();
