@@ -359,7 +359,7 @@ window.addEventListener('message', (event) => {
 
 当不传入外部 `awareness` 时，provider 内部创建的轻量级 awareness 实现。接口与 `y-protocols/awareness` 的 `Awareness` 兼容：
 
-- `clientID: number` — 本地客户端 ID
+- `clientID: number` — 等于 `serverClientId`（初始化前为临时随机 ID，收到 server 响应后自动切换）
 - `states: Map<number, Record<string, unknown>>` — 所有客户端状态
 - `getStates()` — 获取所有状态的副本
 - `getLocalState()` — 获取本地状态
@@ -367,4 +367,4 @@ window.addEventListener('message', (event) => {
 - `setLocalStateField(field, value)` — 设置本地状态的单个字段
 - `on("update", handler)` / `off("update", handler)` — 监听状态变化
 
-`setLocalState` 和 `setLocalStateField` 会自动发送 `awareness-local-state` 消息给父容器（50ms 节流），父容器应用后通过 `awareness-sync/update` 同步回来。
+`setLocalState` 和 `setLocalStateField` 会自动发送 `awareness-local-state` 消息给父容器（50ms 节流），父容器应用后通过 `awareness-sync/update` 同步回来。AwarenessLike 的 `clientID` 与 server 一致，父容器和 iframe 识别为同一个客户端。

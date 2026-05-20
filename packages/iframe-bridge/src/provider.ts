@@ -190,13 +190,17 @@ export function createIframeBridgeProvider(
   const useExternalAwareness = !!externalAwareness;
   let awareness: Awareness | AwarenessLike;
   const localStates = new Map<number, Record<string, unknown>>();
-  const localClientId = Math.floor(Math.random() * 2147483647) + 1;
+  let localClientId = Math.floor(Math.random() * 2147483647) + 1;
   const updateHandlers = new Set<(update: { added: number[]; updated: number[]; removed: number[] }) => void>();
 
   function createAwarenessLike(): AwarenessLike {
     let pendingState: Record<string, unknown> | null | undefined = undefined;
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const FLUSH_INTERVAL = 50;
+
+    function getEffectiveClientId() {
+      return serverClientId ?? localClientId;
+    }
 
     function scheduleFlush() {
       if (flushTimer) return;
@@ -211,7 +215,7 @@ export function createIframeBridgeProvider(
 
     return {
       get clientID() {
-        return localClientId;
+        return getEffectiveClientId();
       },
       get states() {
         return localStates;
@@ -220,26 +224,28 @@ export function createIframeBridgeProvider(
         return new Map(localStates);
       },
       getLocalState() {
-        return localStates.get(localClientId) ?? null;
+        return localStates.get(getEffectiveClientId()) ?? null;
       },
       setLocalState(state: Record<string, unknown> | null) {
+        const id = getEffectiveClientId();
         if (state === null) {
-          localStates.delete(localClientId);
+          localStates.delete(id);
         } else {
-          localStates.set(localClientId, state);
+          localStates.set(id, state);
         }
         pendingState = state;
         scheduleFlush();
-        const update = { added: state && !localStates.has(localClientId) ? [localClientId] : [], updated: state ? [localClientId] : [], removed: state === null ? [localClientId] : [] };
+        const update = { added: state && !localStates.has(id) ? [id] : [], updated: state ? [id] : [], removed: state === null ? [id] : [] };
         updateHandlers.forEach(handler => handler(update));
       },
       setLocalStateField(field: string, value: unknown) {
-        const current = localStates.get(localClientId) || {};
+        const id = getEffectiveClientId();
+        const current = localStates.get(id) || {};
         const newState = { ...current, [field]: value };
-        localStates.set(localClientId, newState);
+        localStates.set(id, newState);
         pendingState = newState;
         scheduleFlush();
-        const update = { added: [], updated: [localClientId], removed: [] };
+        const update = { added: [], updated: [id], removed: [] };
         updateHandlers.forEach(handler => handler(update));
       },
       on(event: "update", handler: (update: { added: number[]; updated: number[]; removed: number[] }) => void) {
@@ -363,24 +369,32 @@ export function createIframeBridgeProvider(
       }
     } else if (type === "awareness-sync" || type === "awareness-update") {
       logMessage("recv", type, payload);
+      const prevLocalId = localClientId;
       if (receivedServerId != null) {
         serverClientId = receivedServerId;
+        if (useExternalAwareness === false && receivedServerId != null && prevLocalId !== receivedServerId) {
+          const tempState = localStates.get(prevLocalId);
+          if (tempState) {
+            localStates.delete(prevLocalId);
+            localStates.set(receivedServerId, tempState);
+          }
+        }
       }
 
       if (useExternalAwareness) {
         const serverId = receivedServerId ?? serverClientId;
-        const localClientId = awareness.clientID;
+        const localId = awareness.clientID;
         
         applyingParentUpdate = true;
-        if (serverId != null && serverId !== localClientId) {
+        if (serverId != null && serverId !== localId) {
           const remapped = remapClientIdInUpdate(
             new Uint8Array(payload),
             serverId,
-            localClientId,
+            localId,
           );
           
           if (type === "awareness-sync") {
-            (awareness as Awareness).meta.delete(localClientId);
+            (awareness as Awareness).meta.delete(localId);
             awareness.setLocalState(null);
           }
           
@@ -394,12 +408,11 @@ export function createIframeBridgeProvider(
         applyingParentUpdate = true;
         const changedClientIds: number[] = [];
         for (const [id, state] of parsedStates) {
-          const mappedId = (serverClientId != null && id === serverClientId) ? localClientId : id;
-          const existed = localStates.has(mappedId);
-          const changed = !existed || JSON.stringify(localStates.get(mappedId)) !== JSON.stringify(state);
-          localStates.set(mappedId, state);
+          const existed = localStates.has(id);
+          const changed = !existed || JSON.stringify(localStates.get(id)) !== JSON.stringify(state);
+          localStates.set(id, state);
           if (changed) {
-            changedClientIds.push(mappedId);
+            changedClientIds.push(id);
           }
         }
         if (changedClientIds.length > 0) {

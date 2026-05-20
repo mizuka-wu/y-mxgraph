@@ -358,7 +358,7 @@ Creates the Provider-side bridge.
 
 Lightweight awareness implementation created internally when no external `awareness` is passed. Compatible with `y-protocols/awareness` `Awareness` interface:
 
-- `clientID: number` — Local client ID
+- `clientID: number` — Equals `serverClientId` (temporary random ID before initialization, auto-switches after server response)
 - `states: Map<number, Record<string, unknown>>` — All client states
 - `getStates()` — Get a copy of all states
 - `getLocalState()` — Get local state
@@ -366,4 +366,4 @@ Lightweight awareness implementation created internally when no external `awaren
 - `setLocalStateField(field, value)` — Set a single field on local state
 - `on("update", handler)` / `off("update", handler)` — Listen for state changes
 
-`setLocalState` and `setLocalStateField` automatically send `awareness-local-state` messages to the parent (50ms throttle). The parent applies the state and syncs back via `awareness-sync/update`.
+`setLocalState` and `setLocalStateField` automatically send `awareness-local-state` messages to the parent (50ms throttle). The parent applies the state and syncs back via `awareness-sync/update`. The AwarenessLike `clientID` matches the server, so the parent and iframe identify as the same client.
