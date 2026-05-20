@@ -5,6 +5,21 @@ import {
   encodeAwarenessUpdate,
 } from "y-protocols/awareness";
 
+/**
+ * Awareness-like 接口，只需要支持本地状态管理。
+ * 用于 iframe-bridge provider 不需要与父页面同步 awareness 的场景。
+ */
+export interface AwarenessLike {
+  readonly clientID: number;
+  readonly states: Map<number, Record<string, unknown>>;
+  getStates(): Map<number, Record<string, unknown>>;
+  getLocalState(): Record<string, unknown> | null;
+  setLocalState(state: Record<string, unknown> | null): void;
+  setLocalStateField(field: string, value: unknown): void;
+  on(event: "update", handler: (update: { added: number[]; updated: number[]; removed: number[] }) => void): void;
+  off(event: "update", handler: (update: { added: number[]; updated: number[]; removed: number[] }) => void): void;
+}
+
 type ListenerFn = (sender: unknown, evt?: unknown) => void;
 
 function createMxEventObject(name: string, props?: Record<string, unknown>) {
@@ -42,12 +57,14 @@ export interface DrawioFile {
 }
 
 export interface IframeBridgeProviderOptions {
+  awareness?: Awareness;
   debug?: boolean;
 }
 
 export interface IframeBridgeProvider {
   serverClientId: number | null;
   connected: boolean;
+  awareness: Awareness;
   onConnect: (fn: () => void) => () => void;
   onDisconnect: (fn: () => void) => () => void;
   on: (event: "connect" | "disconnect", fn: () => void) => () => void;
@@ -129,12 +146,34 @@ function remapClientIdInUpdate(
   return new Uint8Array(result);
 }
 
+function parseAwarenessPayload(data: Uint8Array): Map<number, Record<string, unknown>> {
+  const result = new Map<number, Record<string, unknown>>();
+  let pos = 0;
+  const [count, pos2] = readVarUint(data, pos);
+  pos = pos2;
+
+  for (let i = 0; i < count; i++) {
+    const [clientID, pos3] = readVarUint(data, pos);
+    pos = pos3;
+    const [clock, pos4] = readVarUint(data, pos);
+    pos = pos4;
+    const [stateStr, pos5] = readVarString(data, pos);
+    pos = pos5;
+
+    if (stateStr) {
+      try {
+        result.set(clientID, JSON.parse(stateStr));
+      } catch {}
+    }
+  }
+  return result;
+}
+
 export function createIframeBridgeProvider(
   ydoc: Y.Doc,
-  awareness: Awareness,
   options?: IframeBridgeProviderOptions,
 ): IframeBridgeProvider {
-  const { debug = false } = options ?? {};
+  const { awareness: externalAwareness, debug = false } = options ?? {};
   let applyingParentUpdate = false;
   let serverClientId: number | null = null;
   let currentCleanup: (() => void) | null = null;
@@ -147,6 +186,80 @@ export function createIframeBridgeProvider(
   const log = debug
     ? (...args: unknown[]) => console.log("[iframe-bridge provider]", ...args)
     : () => undefined;
+
+  const useExternalAwareness = !!externalAwareness;
+  let awareness: Awareness | AwarenessLike;
+  const localStates = new Map<number, Record<string, unknown>>();
+  const localClientId = Math.floor(Math.random() * 2147483647) + 1;
+  const updateHandlers = new Set<(update: { added: number[]; updated: number[]; removed: number[] }) => void>();
+
+  function createAwarenessLike(): AwarenessLike {
+    let pendingState: Record<string, unknown> | null | undefined = undefined;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const FLUSH_INTERVAL = 50;
+
+    function scheduleFlush() {
+      if (flushTimer) return;
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        if (pendingState !== undefined && connected) {
+          window.parent.postMessage({ type: "awareness-local-state", state: pendingState }, "*");
+          pendingState = undefined;
+        }
+      }, FLUSH_INTERVAL);
+    }
+
+    return {
+      get clientID() {
+        return localClientId;
+      },
+      get states() {
+        return localStates;
+      },
+      getStates() {
+        return new Map(localStates);
+      },
+      getLocalState() {
+        return localStates.get(localClientId) ?? null;
+      },
+      setLocalState(state: Record<string, unknown> | null) {
+        if (state === null) {
+          localStates.delete(localClientId);
+        } else {
+          localStates.set(localClientId, state);
+        }
+        pendingState = state;
+        scheduleFlush();
+        const update = { added: state && !localStates.has(localClientId) ? [localClientId] : [], updated: state ? [localClientId] : [], removed: state === null ? [localClientId] : [] };
+        updateHandlers.forEach(handler => handler(update));
+      },
+      setLocalStateField(field: string, value: unknown) {
+        const current = localStates.get(localClientId) || {};
+        const newState = { ...current, [field]: value };
+        localStates.set(localClientId, newState);
+        pendingState = newState;
+        scheduleFlush();
+        const update = { added: [], updated: [localClientId], removed: [] };
+        updateHandlers.forEach(handler => handler(update));
+      },
+      on(event: "update", handler: (update: { added: number[]; updated: number[]; removed: number[] }) => void) {
+        if (event === "update") {
+          updateHandlers.add(handler);
+        }
+      },
+      off(event: "update", handler: (update: { added: number[]; updated: number[]; removed: number[] }) => void) {
+        if (event === "update") {
+          updateHandlers.delete(handler);
+        }
+      },
+    };
+  }
+
+  if (externalAwareness) {
+    awareness = externalAwareness;
+  } else {
+    awareness = createAwarenessLike();
+  }
 
   function formatPayload(payload: unknown) {
     if (payload instanceof Uint8Array) {
@@ -209,30 +322,19 @@ export function createIframeBridgeProvider(
     removed: number[];
   }) => {
     if (applyingParentUpdate) {
-      log("[DEBUG] onAwarenessUpdate: skipped (applyingParentUpdate)");
       return;
     }
-    // 未连接时不推送本地状态到 server，避免随机值覆盖 server 数据
     if (!connected) {
-      log("[DEBUG] onAwarenessUpdate: skipped (not connected)");
       return;
     }
     const changes = [...added, ...updated, ...removed];
     if (changes.length === 0) return;
 
-    // 只同步本地 clientID 的状态给父页面
-    // 其他 peers 的更新由父页面的 WebRTC/WebSocket provider 负责广播
     const localClientId = awareness.clientID;
     const localChanged = changes.includes(localClientId);
     if (!localChanged) return;
 
     const state = awareness.getLocalState();
-    log("[DEBUG] onAwarenessUpdate: sending local state", {
-      localClientId,
-      state,
-      connected,
-      applyingParentUpdate,
-    });
     const message = { type: "awareness-local-state", state };
     logMessage("send", "awareness-local-state", state);
     window.parent.postMessage(message, "*");
@@ -265,70 +367,47 @@ export function createIframeBridgeProvider(
         serverClientId = receivedServerId;
       }
 
-      const serverId = receivedServerId ?? serverClientId;
-      const localClientId = awareness.clientID;
-      
-      log("[DEBUG] awareness-sync/update: received message", {
-        type,
-        serverId,
-        localClientId,
-        payloadLength: payload?.length,
-        payloadSample: payload?.slice(0, 20),
-      });
-      
-      log("[DEBUG] awareness-sync/update: before apply", {
-        currentState: awareness.getLocalState(),
-        currentStates: Object.fromEntries(awareness.getStates()),
-      });
-      
-      applyingParentUpdate = true;
-      if (serverId != null && serverId !== localClientId) {
-        const remapped = remapClientIdInUpdate(
-          new Uint8Array(payload),
-          serverId,
-          localClientId,
-        );
-        log("[DEBUG] awareness-sync/update: applying remapped update", {
-          serverId,
-          localClientId,
-          remappedLength: remapped.length,
-          beforeState: awareness.getLocalState(),
-          beforeStates: Object.fromEntries(awareness.getStates()),
-        });
+      if (useExternalAwareness) {
+        const serverId = receivedServerId ?? serverClientId;
+        const localClientId = awareness.clientID;
         
-        // awareness-sync 时先清除本地状态的 meta，确保 server 的状态能覆盖
-        // 因为 bindCollaborator 可能已经设置了随机值，导致本地 clock 更大
-        if (type === "awareness-sync") {
-          log("[DEBUG] awareness-sync: clearing local meta before apply");
-          // 直接删除本地 clientID 的 meta，这样 applyAwarenessUpdate 会认为本地状态是全新的
-          (awareness as any).meta.delete(localClientId);
-          awareness.setLocalState(null);
+        applyingParentUpdate = true;
+        if (serverId != null && serverId !== localClientId) {
+          const remapped = remapClientIdInUpdate(
+            new Uint8Array(payload),
+            serverId,
+            localClientId,
+          );
+          
+          if (type === "awareness-sync") {
+            (awareness as Awareness).meta.delete(localClientId);
+            awareness.setLocalState(null);
+          }
+          
+          applyAwarenessUpdate(awareness as Awareness, remapped, null);
+        } else {
+          applyAwarenessUpdate(awareness as Awareness, new Uint8Array(payload), null);
         }
-        
-        applyAwarenessUpdate(awareness, remapped, null);
-        log("[DEBUG] awareness-sync/update: AFTER remapped apply", {
-          afterState: awareness.getLocalState(),
-          afterStates: Object.fromEntries(awareness.getStates()),
-        });
+        applyingParentUpdate = false;
       } else {
-        log("[DEBUG] awareness-sync/update: applying direct update", {
-          beforeState: awareness.getLocalState(),
-        });
-        applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
-        log("[DEBUG] awareness-sync/update: AFTER direct apply", {
-          afterState: awareness.getLocalState(),
-        });
+        const parsedStates = parseAwarenessPayload(new Uint8Array(payload));
+        applyingParentUpdate = true;
+        const changedClientIds: number[] = [];
+        for (const [id, state] of parsedStates) {
+          const mappedId = (serverClientId != null && id === serverClientId) ? localClientId : id;
+          const existed = localStates.has(mappedId);
+          const changed = !existed || JSON.stringify(localStates.get(mappedId)) !== JSON.stringify(state);
+          localStates.set(mappedId, state);
+          if (changed) {
+            changedClientIds.push(mappedId);
+          }
+        }
+        if (changedClientIds.length > 0) {
+          const update = { added: [], updated: changedClientIds, removed: [] };
+          updateHandlers.forEach(handler => handler(update));
+        }
+        applyingParentUpdate = false;
       }
-
-      log("[DEBUG] awareness-sync/update: final state", {
-        type,
-        localState: awareness.getLocalState(),
-        allStates: Object.fromEntries(awareness.getStates()),
-      });
-
-      // awareness-sync 时直接接受 server 的值，不合并本地值
-      // 避免本地随机值覆盖 server 数据
-      applyingParentUpdate = false;
     } else if (type === "undo-state" && currentMxLike) {
       // 从 Server 同步真实的 undo/redo 状态
       const { undoStackSize, redoStackSize } = event.data;
@@ -386,6 +465,9 @@ export function createIframeBridgeProvider(
     get connected() {
       return connected;
     },
+    get awareness() {
+      return awareness as Awareness;
+    },
     onConnect(fn: () => void) {
       connectListeners.add(fn);
       return () => connectListeners.delete(fn);
@@ -412,7 +494,7 @@ export function createIframeBridgeProvider(
         user: newUser,
       });
       // 未连接时只设置本地状态，连接后由 server 同步
-      if (connected) {
+      if (useExternalAwareness && connected) {
         const message = { type: "set-local-fields", fields };
         logMessage("send", "set-local-fields", fields);
         window.parent.postMessage(message, "*");
@@ -515,7 +597,9 @@ export function createIframeBridgeProvider(
     },
     destroy: () => {
       ydoc.off("update", onYdocUpdate);
-      awareness.off("update", onAwarenessUpdate);
+      if (useExternalAwareness) {
+        (awareness as Awareness).off("update", onAwarenessUpdate);
+      }
       window.removeEventListener("message", onMessage);
       if (initRetryTimer) {
         clearInterval(initRetryTimer);

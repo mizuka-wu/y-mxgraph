@@ -95,13 +95,23 @@ Y.Doc
 Two roles:
 
 - **Server** (parent page): manages network provider (y-webrtc/y-websocket), syncs Y.Doc + Awareness to iframes via postMessage
-- **Provider** (iframe child): local Y.Doc + Awareness, synced with server via postMessage
+- **Provider** (iframe child): local Y.Doc + Awareness (or AwarenessLike), synced with server via postMessage
 
-Exports: `createIframeBridgeServer()`, `createIframeBridgeProvider()`
+Exports: `createIframeBridgeServer()`, `createIframeBridgeProvider()`, `AwarenessLike`
+
+### Provider API
+
+`createIframeBridgeProvider(doc, options?)` — `awareness` 从第二个参数移到 `options` 中，变为可选：
+
+- 不传 `awareness` → 内部创建 `AwarenessLike`，自动与父容器同步（通过 `awareness-local-state` 消息，50ms 节流）
+- 传入 `awareness` → 使用外部 Awareness 实例，保持原有 hack 同步逻辑
+
+Provider 返回 `bridge.awareness`，可直接传给 `Binding`。
 
 ### Awareness User Info
 
-- **父容器 awareness 为准**：iframe provider **不应**主动推送本地 awareness state 给 server，server 在 `awareness-sync` 时将父容器 awareness 推送给 iframe，iframe 接收后同步到本地
+- **AwarenessLike 模式**（不传 awareness）：provider 内部管理 awareness，`setLocalState`/`setLocalStateField` 自动发送给父容器；`awareness-sync` 时 remap server clientID 到本地 clientID，确保 `bindCollaborator` 能读取到 server 设置的 user 信息
+- **外部 Awareness 模式**（传入 awareness）：父容器 awareness 为准，iframe provider **不应**主动推送本地 awareness state 给 server，server 在 `awareness-sync` 时将父容器 awareness 推送给 iframe，iframe 接收后同步到本地
 - **`bindCollaborator`** (`packages/y-mxgraph/src/binding/collaborator/index.ts`) 监听本地 awareness user 变化（如 iframe-bridge 同步），更新内部缓存的 `userName`/`userColor`，避免 binding 生成的随机值覆盖外部设置
 - **iframe demo 支持设置初始 awareness user**：`iframe.html` toolbar 提供 User Name 和 Color 输入框，值通过 URL 参数 `userName`/`userColor` 传给 iframe；`iframe-container.ts` 在创建 provider **立即**设置父容器 awareness user，确保 server 延迟创建时也能正确同步
 

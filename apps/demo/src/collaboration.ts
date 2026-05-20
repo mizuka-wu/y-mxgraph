@@ -2,6 +2,7 @@ import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { type Awareness } from "y-protocols/awareness";
 import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
+import { type AwarenessLike } from "y-mxgraph/iframe-bridge/provider";
 import { SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 
 export interface CollabState {
@@ -53,7 +54,7 @@ export function createCollaboration(
 
 export function bindDrawioFile(
   doc: Y.Doc,
-  awareness: Awareness,
+  awareness: Awareness | AwarenessLike | null,
   provider: WebrtcProvider | null,
   onBind: (binding: Binding) => void,
   skipUndoManager = false,
@@ -76,11 +77,11 @@ export function bindDrawioFile(
     if (bindingCreated) return;
     bindingCreated = true;
 
-    const binding = new Binding(file, {
-      doc,
-      awareness,
-      undoManager,
-    });
+    const bindingOptions: any = { doc, undoManager };
+    if (awareness) {
+      bindingOptions.awareness = awareness;
+    }
+    const binding = new Binding(file, bindingOptions);
 
     app.refresh();
     window.dispatchEvent(new Event("resize"));

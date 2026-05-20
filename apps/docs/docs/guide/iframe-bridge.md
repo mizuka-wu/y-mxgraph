@@ -69,20 +69,35 @@ const bridge = createIframeBridgeServer(iframe, doc, provider.awareness);
 
 ```ts
 import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
-const awareness = new Awareness(doc);
 
-// 创建 bridge provider，自动请求初始同步
-const bridge = createIframeBridgeProvider(doc, awareness);
+// 创建 bridge provider，不传 awareness 时内部自动创建 AwarenessLike
+const bridge = createIframeBridgeProvider(doc);
+
+// awareness 由 provider 内部管理，可通过 bridge.awareness 访问
+console.log(bridge.awareness);
 
 // 可以访问 server 的 clientID
 console.log(bridge.serverClientId);
 
 // 清理
 // bridge.destroy();
+```
+
+如果需要使用外部 `Awareness` 实例（例如需要与父页面的 awareness 双向同步），可以通过 `options.awareness` 传入：
+
+```ts
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
+
+const doc = new Y.Doc();
+const awareness = new Awareness(doc);
+
+// 传入外部 awareness，provider 会与父页面进行 awareness 双向同步
+const bridge = createIframeBridgeProvider(doc, { awareness });
 ```
 
 ## 消息协议
@@ -94,8 +109,10 @@ Server 和 Provider 通过 `postMessage` 通信，支持以下消息类型：
 | Provider → Server | `init` | 无 | 请求全量同步 |
 | Server → Provider | `ydoc-sync` | `Uint8Array` | Y.Doc 全量状态 |
 | Server → Provider | `awareness-sync` | `Uint8Array` + `serverClientId` | Awareness 全量状态 |
-| 双向 | `ydoc-update` | `Uint8Array` | Y.Doc 增量更新 |
-| 双向 | `awareness-update` | `Uint8Array` | Awareness 增量更新 |
+| Bidirectional | `ydoc-update` | `Uint8Array` | Y.Doc 增量更新 |
+| Bidirectional | `awareness-update` | `Uint8Array` | Awareness 增量更新 |
+| Provider → Server | `awareness-local-state` | `state` | AwarenessLike 发送本地状态（50ms 节流） |
+| Provider → Server | `set-local-fields` | `fields` | 设置 awareness user 字段 |
 | Provider → Server | `ping` | 无 | 获取 serverClientId |
 | Server → Provider | `pong` | `serverClientId` | 响应 ping |
 | Provider → Server | `undo` | 无 | 请求撤销 |
@@ -192,17 +209,15 @@ document.getElementById('redo-btn')!.onclick = () => {
 
 ```ts
 import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
 import { Binding } from 'y-mxgraph';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
-const awareness = new Awareness(doc);
-const bridge = createIframeBridgeProvider(doc, awareness);
+const bridge = createIframeBridgeProvider(doc);
 
 App.main((app) => {
   const file = app.currentFile;
-  const binding = new Binding(file, { doc, awareness });
+  const binding = new Binding(file, { doc, awareness: bridge.awareness });
 
   // 接管 draw.io 的 UndoManager
   const restoreUndoManager = bridge.takeoverUndoManager(file);
@@ -260,18 +275,16 @@ const bridge2 = createIframeBridgeServer(
 
 ```ts
 import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
 import { Binding } from 'y-mxgraph';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
-const awareness = new Awareness(doc);
-const bridge = createIframeBridgeProvider(doc, awareness);
+const bridge = createIframeBridgeProvider(doc);
 
 // 加载 draw.io 后创建 Binding
 App.main((app) => {
   const file = app.currentFile;
-  const binding = new Binding(file, { doc, awareness });
+  const binding = new Binding(file, { doc, awareness: bridge.awareness });
 });
 ```
 
@@ -314,25 +327,44 @@ window.addEventListener('message', (event) => {
 
 - `destroy()` — 清理所有监听器（包括 UndoManager 事件监听）
 
-### `createIframeBridgeProvider(doc, awareness, options?)`
+### `createIframeBridgeProvider(doc, options?)`
 
 创建 Provider 端 bridge。
 
 **参数**：
 
 - `doc: Y.Doc` — 本地 Y.Doc 实例
-- `awareness: Awareness` — 本地 Awareness 实例
 - `options?` — 可选配置
+  - `awareness?: Awareness` — 外部 Awareness 实例。不传时内部自动创建 `AwarenessLike`，通过 `bridge.awareness` 访问
   - `debug?: boolean` — 启用 iframe-bridge 消息调试日志
-
 
 **返回**：`IframeBridgeProvider`
 
 **属性**：
 
+- `awareness: Awareness` — Awareness 实例（外部传入或内部创建的 AwarenessLike）
 - `serverClientId: number | null` — Server 的 clientID，初始化同步后可用
+- `connected: boolean` — 是否已连接到 Server
 
 **方法**：
 
+- `onConnect(fn: () => void) => () => void` — 监听连接事件，返回取消监听函数
+- `onDisconnect(fn: () => void) => () => void` — 监听断开事件，返回取消监听函数
+- `on(event, fn) => () => void` — 监听 `"connect"` 或 `"disconnect"` 事件
+- `setLocalFields(fields: Record<string, unknown>)` — 设置本地 awareness user 字段（合并到 `user` 对象下）
 - `takeoverUndoManager(file: DrawioFile) => () => void` — 接管 draw.io 的 `editor.undoManager`，返回清理函数。详见 [Undo/Redo](#undoredo) 章节
 - `destroy()` — 清理所有监听器（包括接管的 UndoManager）
+
+### `AwarenessLike`
+
+当不传入外部 `awareness` 时，provider 内部创建的轻量级 awareness 实现。接口与 `y-protocols/awareness` 的 `Awareness` 兼容：
+
+- `clientID: number` — 本地客户端 ID
+- `states: Map<number, Record<string, unknown>>` — 所有客户端状态
+- `getStates()` — 获取所有状态的副本
+- `getLocalState()` — 获取本地状态
+- `setLocalState(state)` — 设置本地状态，同时发送给父容器
+- `setLocalStateField(field, value)` — 设置本地状态的单个字段
+- `on("update", handler)` / `off("update", handler)` — 监听状态变化
+
+`setLocalState` 和 `setLocalStateField` 会自动发送 `awareness-local-state` 消息给父容器（50ms 节流），父容器应用后通过 `awareness-sync/update` 同步回来。

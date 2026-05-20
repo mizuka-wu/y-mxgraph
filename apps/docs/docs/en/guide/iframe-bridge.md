@@ -69,20 +69,35 @@ const bridge = createIframeBridgeServer(iframe, doc, provider.awareness);
 
 ```ts
 import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
-const awareness = new Awareness(doc);
 
-// Create bridge provider, automatically requests initial sync
-const bridge = createIframeBridgeProvider(doc, awareness);
+// Create bridge provider — when awareness is omitted, an internal AwarenessLike is created
+const bridge = createIframeBridgeProvider(doc);
+
+// Access the internal awareness via bridge.awareness
+console.log(bridge.awareness);
 
 // Access the server's clientID
 console.log(bridge.serverClientId);
 
 // Cleanup
 // bridge.destroy();
+```
+
+If you need to use an external `Awareness` instance (e.g. for bidirectional awareness sync with the parent), pass it via `options.awareness`:
+
+```ts
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
+
+const doc = new Y.Doc();
+const awareness = new Awareness(doc);
+
+// Pass external awareness for bidirectional sync with parent
+const bridge = createIframeBridgeProvider(doc, { awareness });
 ```
 
 ## Message Protocol
@@ -96,6 +111,8 @@ Server and Provider communicate via `postMessage` with the following message typ
 | Server → Provider | `awareness-sync` | `Uint8Array` + `serverClientId` | Full awareness state |
 | Bidirectional | `ydoc-update` | `Uint8Array` | Incremental Y.Doc update |
 | Bidirectional | `awareness-update` | `Uint8Array` | Incremental awareness update |
+| Provider → Server | `awareness-local-state` | `state` | AwarenessLike sends local state (50ms throttle) |
+| Provider → Server | `set-local-fields` | `fields` | Set awareness user fields |
 | Provider → Server | `ping` | none | Get serverClientId |
 | Server → Provider | `pong` | `serverClientId` | Response to ping |
 | Provider → Server | `undo` | none | Request undo |
@@ -193,17 +210,15 @@ Inside the iframe, call `bridge.takeoverUndoManager(file)` to replace draw.io's 
 
 ```ts
 import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
 import { Binding } from 'y-mxgraph';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
-const awareness = new Awareness(doc);
-const bridge = createIframeBridgeProvider(doc, awareness);
+const bridge = createIframeBridgeProvider(doc);
 
 App.main((app) => {
   const file = app.currentFile;
-  const binding = new Binding(file, { doc, awareness });
+  const binding = new Binding(file, { doc, awareness: bridge.awareness });
 
   // Takeover draw.io's UndoManager
   const restoreUndoManager = bridge.takeoverUndoManager(file);
@@ -261,18 +276,16 @@ const bridge2 = createIframeBridgeServer(
 
 ```ts
 import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
 import { Binding } from 'y-mxgraph';
 import { createIframeBridgeProvider } from 'y-mxgraph/iframe-bridge/provider';
 
 const doc = new Y.Doc();
-const awareness = new Awareness(doc);
-const bridge = createIframeBridgeProvider(doc, awareness);
+const bridge = createIframeBridgeProvider(doc);
 
 // After loading draw.io, create Binding
 App.main((app) => {
   const file = app.currentFile;
-  const binding = new Binding(file, { doc, awareness });
+  const binding = new Binding(file, { doc, awareness: bridge.awareness });
 });
 ```
 
@@ -313,25 +326,44 @@ Creates the Server-side bridge, bound directly to a single iframe.
 
 - `destroy()` — Clean up all listeners (including UndoManager event listeners)
 
-### `createIframeBridgeProvider(doc, awareness, options?)`
+### `createIframeBridgeProvider(doc, options?)`
 
 Creates the Provider-side bridge.
 
 **Parameters**:
 
 - `doc: Y.Doc` — Local Y.Doc instance
-- `awareness: Awareness` — Local Awareness instance
 - `options?` — Optional configuration
+  - `awareness?: Awareness` — External Awareness instance. When omitted, an internal `AwarenessLike` is created, accessible via `bridge.awareness`
   - `debug?: boolean` — Enable iframe-bridge debug logging for message send/receive
-
 
 **Returns**: `IframeBridgeProvider`
 
 **Properties**:
 
+- `awareness: Awareness` — Awareness instance (external or internal AwarenessLike)
 - `serverClientId: number | null` — Server's clientID, available after initial sync
+- `connected: boolean` — Whether connected to Server
 
 **Methods**:
 
+- `onConnect(fn: () => void) => () => void` — Listen for connect event, returns unsubscribe function
+- `onDisconnect(fn: () => void) => () => void` — Listen for disconnect event, returns unsubscribe function
+- `on(event, fn) => () => void` — Listen for `"connect"` or `"disconnect"` events
+- `setLocalFields(fields: Record<string, unknown>)` — Set local awareness user fields (merged into `user` object)
 - `takeoverUndoManager(file: DrawioFile) => () => void` — Takeover draw.io's `editor.undoManager`, returns cleanup function. See [Undo/Redo](#undoredo) section
 - `destroy()` — Clean up all listeners (including takeover'd UndoManager)
+
+### `AwarenessLike`
+
+Lightweight awareness implementation created internally when no external `awareness` is passed. Compatible with `y-protocols/awareness` `Awareness` interface:
+
+- `clientID: number` — Local client ID
+- `states: Map<number, Record<string, unknown>>` — All client states
+- `getStates()` — Get a copy of all states
+- `getLocalState()` — Get local state
+- `setLocalState(state)` — Set local state, also sends to parent
+- `setLocalStateField(field, value)` — Set a single field on local state
+- `on("update", handler)` / `off("update", handler)` — Listen for state changes
+
+`setLocalState` and `setLocalStateField` automatically send `awareness-local-state` messages to the parent (50ms throttle). The parent applies the state and syncs back via `awareness-sync/update`.

@@ -2,6 +2,7 @@ export { createIframeBridgeProvider } from "./provider.js";
 export type {
   IframeBridgeProvider,
   IframeBridgeProviderOptions,
+  AwarenessLike,
   DrawioEditor,
   DrawioFile,
 } from "./provider.js";

@@ -20,7 +20,6 @@ import {
   type Lang,
 } from "./ui.js";
 import * as Y from "yjs";
-import { Awareness } from "y-protocols/awareness";
 
 const isInIframe = window.parent !== window;
 
@@ -171,20 +170,24 @@ async function initIframeChild() {
 
   // 2. draw.io 加载完成，创建 bridge provider
   const ydoc = new Y.Doc();
-  const awareness = new Awareness(ydoc);
 
   // 从 URL 参数读取初始 user 信息
   const initAccount = urlParams.get("account") || urlParams.get("userName");
   const initName = urlParams.get("name") || initAccount;
   const initUserColor = urlParams.get("userColor");
-  awareness.setLocalState({
-    user: { account: initAccount, name: initName, color: initUserColor },
-  });
 
-  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness, { debug: true });
+  const bridgeProvider = createIframeBridgeProvider(ydoc, { debug: true });
   console.log(
     `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
   );
+
+  if (initAccount || initName || initUserColor) {
+    bridgeProvider.setLocalFields({
+      account: initAccount,
+      name: initName,
+      color: initUserColor,
+    });
+  }
 
   // 3. 根据 connect 状态决定是否显示编辑器并 bind
   const doBind = () => {
@@ -195,7 +198,7 @@ async function initIframeChild() {
     );
     bindDrawioFile(
       ydoc,
-      awareness,
+      bridgeProvider.awareness as any,
       null as any,
       (binding) => {
         console.log(`[iframe ${iframeId}] draw.io bound to ydoc`);
@@ -226,7 +229,6 @@ async function initIframeChild() {
   }
 
   (window as any).__iframeYdoc__ = ydoc;
-  (window as any).__iframeAwareness__ = awareness;
   (window as any).__iframeBridgeProvider__ = bridgeProvider;
 }
 
