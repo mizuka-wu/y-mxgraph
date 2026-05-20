@@ -200,20 +200,15 @@ export function createIframeBridgeProvider(
     const changes = [...added, ...updated, ...removed];
     if (changes.length === 0) return;
 
-    // 只发送本地 clientID 的更新给父页面
-    // 其他 peers 的更新通过父页面的 WebrtcProvider 同步，不应该从 iframe 回传
+    // 只同步本地 clientID 的状态给父页面
+    // 其他 peers 的更新由父页面的 WebRTC/WebSocket provider 负责广播
     const localClientId = awareness.clientID;
     const localChanged = changes.includes(localClientId);
     if (!localChanged) return;
 
-    const update = encodeAwarenessUpdate(awareness, [localClientId]);
-    const remapped =
-      serverClientId != null
-        ? remapClientIdInUpdate(update, localClientId, serverClientId)
-        : update;
-
-    const message = { type: "awareness-update", payload: Array.from(remapped) };
-    logMessage("send", "awareness-update", message);
+    const state = awareness.getLocalState();
+    const message = { type: "awareness-local-state", state };
+    logMessage("send", "awareness-local-state", state);
     window.parent.postMessage(message, "*");
   };
 

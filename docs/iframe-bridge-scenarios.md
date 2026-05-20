@@ -9,6 +9,10 @@ iframe-bridge 实现了标准的 server-client 协同模式：
 
 核心设计：**draw.io 编辑器先加载就绪，overlay 保持半透明 waiting 状态，等 connect 后才显示编辑器并 bind**。这让用户在等待 server 时能看到背后已加载的编辑器界面。
 
+### Awareness 同步说明
+
+iframe provider 的默认实现会将本地用户信息通过 `awareness.setLocalState()` 发送到父页面桥接层。父页面的 awareness 状态被视为权威来源，server 端会接收 `awareness-local-state` 消息并同步到 bridge awareness，再将更新下发给 iframe。这样可以保证 iframe 内部的用户元信息与父容器和网络 provider 之间保持一致。
+
 ---
 
 ## 连接时序与状态定义

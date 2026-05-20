@@ -199,6 +199,11 @@ export function createIframeBridgeServer(
       const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
       Y.applyUpdate(ydoc, update, applyOrigin);
       // 源 iframe 已经持有此 update，无需回传
+    } else if (msgType === "awareness-local-state") {
+      logMessage("recv", "awareness-local-state", payload);
+      applyingIframeUpdate = true;
+      awareness.setLocalState(event.data.state);
+      applyingIframeUpdate = false;
     } else if (msgType === "awareness-update") {
       logMessage("recv", "awareness-update", payload);
       // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传

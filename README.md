@@ -116,6 +116,8 @@ pnpm --filter @y-mxgraph/ws-demo dev     # Start client on port 5174
         └─────────────┘
 ```
 
+By default, the iframe provider keeps its local awareness state in sync with the parent bridge using `awareness.setLocalState()`. The parent page is treated as authoritative for user info, and the bridge forwards awareness updates between the iframe and the network provider.
+
 ```ts
 // Server (parent page)
 import * as Y from 'yjs';

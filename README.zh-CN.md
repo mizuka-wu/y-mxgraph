@@ -78,6 +78,8 @@ App.main((app) => {
         └─────────────┘
 ```
 
+默认情况下，iframe provider 会通过 `awareness.setLocalState()` 将本地 awareness state 同步到父容器桥接层。父页面的 awareness 信息被视为权威来源，桥接器会在 iframe 和网络 provider 之间转发 awareness 更新。
+
 ```ts
 // Server（父页面）
 import * as Y from 'yjs';
