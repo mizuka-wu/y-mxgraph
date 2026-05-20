@@ -93,12 +93,12 @@ function remapClientIdInUpdate(
   fromId: number,
   toId: number,
 ): Uint8Array {
-  const result: number[] = [];
+  const entries: Array<{ clientID: number; clock: number; state: string }> = [];
+  const seenClientIds = new Set<number>();
   let pos = 0;
 
   const [count, pos2] = readVarUint(update, pos);
   pos = pos2;
-  result.push(...writeVarUint(count));
 
   for (let i = 0; i < count; i++) {
     const [clientID, pos3] = readVarUint(update, pos);
@@ -109,9 +109,20 @@ function remapClientIdInUpdate(
     pos = pos5;
 
     const mappedId = clientID === fromId ? toId : clientID;
-    result.push(...writeVarUint(mappedId));
-    result.push(...writeVarUint(clock));
-    result.push(...writeVarString(state));
+    if (seenClientIds.has(mappedId)) {
+      continue;
+    }
+
+    seenClientIds.add(mappedId);
+    entries.push({ clientID: mappedId, clock, state });
+  }
+
+  const result: number[] = [];
+  result.push(...writeVarUint(entries.length));
+  for (const entry of entries) {
+    result.push(...writeVarUint(entry.clientID));
+    result.push(...writeVarUint(entry.clock));
+    result.push(...writeVarString(entry.state));
   }
 
   return new Uint8Array(result);
@@ -239,19 +250,25 @@ export function createIframeBridgeProvider(
         serverClientId = receivedServerId;
       }
 
-      // 直接使用 server 发送的原始 clientID，不做映射
-      // iframe 的 awareness 中会包含：
-      // - iframe 自身的 clientID (awareness.clientID)
-      // - server 的 clientID (serverClientId)
-      // - 其他 Webrtc peers 的 clientID
+      const serverId = receivedServerId ?? serverClientId;
+      const localClientId = awareness.clientID;
       applyingParentUpdate = true;
-      applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
+      if (serverId != null && serverId !== localClientId) {
+        const remapped = remapClientIdInUpdate(
+          new Uint8Array(payload),
+          serverId,
+          localClientId,
+        );
+        applyAwarenessUpdate(awareness, remapped, null);
+      } else {
+        applyAwarenessUpdate(awareness, new Uint8Array(payload), null);
+      }
 
       // 从 server 的 awareness state 中提取 user 信息并同步到本地
       // 避免 binding 生成随机用户信息后通过 remap 覆盖父页面的真实用户
       let localUserSynced = false;
-      if (serverClientId != null) {
-        const serverState = awareness.getStates().get(serverClientId);
+      if (serverId != null) {
+        const serverState = awareness.getStates().get(localClientId);
         if (serverState) {
           const serverUserAccount = (
             serverState as { user?: { account?: unknown } }

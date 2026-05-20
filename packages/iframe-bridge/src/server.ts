@@ -151,7 +151,11 @@ export function createIframeBridgeServer(
     // 但要注意：server 自身的 clientID 需要被 iframe 识别为 serverClientId
     const update = encodeAwarenessUpdate(awareness, changes);
     logMessage("send", "awareness-update", update);
-    postToIframe("awareness-update", update);
+    postObjectToIframe({
+      type: "awareness-update",
+      payload: Array.from(update),
+      serverClientId: awareness.clientID,
+    });
   };
 
   const onMessage = (event: MessageEvent) => {
