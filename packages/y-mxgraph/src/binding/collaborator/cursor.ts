@@ -8,7 +8,7 @@ import type { DrawioFile, MxGraph } from "../../types/drawio";
 
 export const CacheKey = "__remoteCursor__";
 
-function createCursorEl(color: string, username: string, userAccount?: string) {
+function createCursorEl(color: string, username: string) {
   const cursor = document.createElement("div");
   cursor.style.position = "absolute";
   cursor.style.opacity = "0.9";
@@ -33,7 +33,7 @@ function createCursorEl(color: string, username: string, userAccount?: string) {
   name.style.textOverflow = "ellipsis";
   name.style.whiteSpace = "nowrap";
 
-  name.innerText = userAccount ? `${username} (${userAccount})` : username;
+  name.innerText = username;
   cursor.appendChild(name);
   return cursor;
 }
@@ -178,7 +178,7 @@ export function renderRemoteCursors(
       }
 
       if (!el) {
-        el = createCursorEl(userColor, userName, userAccount);
+        el = createCursorEl(userColor, userName);
         ui.diagramContainer.appendChild(el);
         cache.set(clientId, el);
       }
