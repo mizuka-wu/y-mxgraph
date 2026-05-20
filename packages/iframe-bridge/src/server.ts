@@ -8,6 +8,7 @@ import { IFRAME_ORIGIN, BASELINE_ORIGIN } from "./origin.js";
 
 export interface IframeBridgeServerOptions {
   undoManager?: Y.UndoManager;
+  debug?: boolean;
 }
 
 export interface IframeBridgeServer {
@@ -24,7 +25,26 @@ export function createIframeBridgeServer(
   awareness: Awareness,
   options?: IframeBridgeServerOptions,
 ): IframeBridgeServer {
-  const { undoManager } = options ?? {};
+  const { undoManager, debug = false } = options ?? {};
+  const log = debug
+    ? (...args: unknown[]) => console.debug("[iframe-bridge server]", ...args)
+    : () => undefined;
+
+  function formatPayload(payload: unknown) {
+    if (payload instanceof Uint8Array) {
+      return { bytes: payload.byteLength };
+    }
+    if (Array.isArray(payload) && payload.every((item) => typeof item === "number")) {
+      return { bytes: payload.length };
+    }
+    return payload;
+  }
+
+  function logMessage(direction: "send" | "recv", type: string, payload?: unknown) {
+    if (!debug) return;
+    log(direction, type, formatPayload(payload));
+  }
+
   let connected = false;
   let applyingIframeUpdate = false;
   const connectListeners = new Set<() => void>();
@@ -74,13 +94,27 @@ export function createIframeBridgeServer(
 
   function postToIframe(type: string, payload?: Uint8Array) {
     const cw = iframe.contentWindow;
+    const message = { type, payload: payload ? Array.from(payload) : [] };
+    logMessage("send", type, payload);
     if (cw) {
-      cw.postMessage(
-        { type, payload: payload ? Array.from(payload) : [] },
-        "*",
-      );
+      cw.postMessage(message, "*");
     }
   }
+
+  function postObjectToIframe(message: Record<string, unknown>) {
+    const type = message.type as string;
+    logMessage("send", type, message);
+    const cw = iframe.contentWindow;
+    if (cw) {
+      cw.postMessage(message, "*");
+    }
+  }
+
+  const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
+    if (origin === IFRAME_ORIGIN) return;
+    logMessage("send", "ydoc-update", update);
+    postToIframe("ydoc-update", update);
+  };
 
   function postUndoStateToIframe() {
     if (!undoManager) return;
@@ -95,14 +129,10 @@ export function createIframeBridgeServer(
         undoStackSize: undoStack?.length ?? 0,
         redoStackSize: redoStack?.length ?? 0,
       };
+      logMessage("send", "undo-state", state);
       cw.postMessage(state, "*");
     }
   }
-
-  const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
-    if (origin === IFRAME_ORIGIN) return;
-    postToIframe("ydoc-update", update);
-  };
 
   const onAwarenessUpdate = ({
     added,
@@ -120,6 +150,7 @@ export function createIframeBridgeServer(
     // 把所有变化的 clientID 都发送给 iframe（包括其他 Webrtc peers 的光标更新）
     // 但要注意：server 自身的 clientID 需要被 iframe 识别为 serverClientId
     const update = encodeAwarenessUpdate(awareness, changes);
+    logMessage("send", "awareness-update", update);
     postToIframe("awareness-update", update);
   };
 
@@ -129,44 +160,39 @@ export function createIframeBridgeServer(
     const { type: msgType, payload } = event.data;
 
     if (msgType === "init") {
-      console.log(
-        `[iframe-bridge server] received init — connected=${connected}`,
-      );
+      logMessage("recv", "init", payload);
       if (!connected) {
         setConnected(true);
       }
       const docState = Y.encodeStateAsUpdate(ydoc);
-      console.log(
-        `[iframe-bridge server] sending ydoc-sync — docState bytes=${docState.length}`,
-      );
-      const awarenessState = encodeAwarenessUpdate(
-        awareness,
-        Array.from(awareness.getStates().keys()),
-      );
+      logMessage("send", "ydoc-sync", { bytes: docState.length });
       postToIframe("ydoc-sync", new Uint8Array(Array.from(docState)));
       // 在单独的 postMessage 中发送 serverClientId，方便 iframe 接收
       const cw = iframe.contentWindow;
       if (cw) {
-        cw.postMessage(
-          {
-            type: "awareness-sync",
-            payload: Array.from(awarenessState),
-            serverClientId: awareness.clientID,
-          },
-          "*",
-        );
+        const message = {
+          type: "awareness-sync",
+          payload: Array.from(encodeAwarenessUpdate(
+            awareness,
+            Array.from(awareness.getStates().keys()),
+          )),
+          serverClientId: awareness.clientID,
+        };
+        logMessage("send", "awareness-sync", message);
+        cw.postMessage(message, "*");
       }
       // 同步初始 undo 状态
       postUndoStateToIframe();
     } else if (msgType === "ping") {
+      logMessage("recv", "ping", payload);
       const cw = iframe.contentWindow;
       if (cw) {
-        cw.postMessage(
-          { type: "pong", serverClientId: awareness.clientID },
-          "*",
-        );
+        const message = { type: "pong", serverClientId: awareness.clientID };
+        logMessage("send", "pong", message);
+        cw.postMessage(message, "*");
       }
     } else if (msgType === "ydoc-update") {
+      logMessage("recv", "ydoc-update", payload);
       const update = new Uint8Array(payload);
       const isBaseline = event.data.isBaseline;
       // 基线数据使用 BASELINE_ORIGIN（不进入 undo 栈），编辑数据使用 IFRAME_ORIGIN
@@ -174,6 +200,7 @@ export function createIframeBridgeServer(
       Y.applyUpdate(ydoc, update, applyOrigin);
       // 源 iframe 已经持有此 update，无需回传
     } else if (msgType === "awareness-update") {
+      logMessage("recv", "awareness-update", payload);
       // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传
       applyingIframeUpdate = true;
       applyAwarenessUpdate(awareness, new Uint8Array(payload), IFRAME_ORIGIN);

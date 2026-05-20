@@ -307,6 +307,7 @@ Creates the Server-side bridge, bound directly to a single iframe.
 - `awareness: Awareness` — Server's Awareness instance
 - `options?` — Optional configuration
   - `undoManager?: Y.UndoManager` — Shared UndoManager instance, enables cross-iframe undo/redo
+  - `debug?: boolean` — Enable iframe-bridge debug logging for message send/receive
 
 **Methods**:
 
@@ -321,6 +322,7 @@ Creates the Provider-side bridge.
 - `doc: Y.Doc` — Local Y.Doc instance
 - `awareness: Awareness` — Local Awareness instance
 - `options?` — Optional configuration
+  - `debug?: boolean` — Enable iframe-bridge debug logging for message send/receive
 
 
 **Returns**: `IframeBridgeProvider`

@@ -306,6 +306,7 @@ window.addEventListener('message', (event) => {
 - `awareness: Awareness` — Server 的 Awareness 实例
 - `options?` — 可选配置
   - `undoManager?: Y.UndoManager` — 共享的 UndoManager 实例，传入后支持跨 iframe 撤销/重做
+  - `debug?: boolean` — 启用 iframe-bridge 消息调试日志
 
 **返回**：`IframeBridgeServer`
 
@@ -322,6 +323,7 @@ window.addEventListener('message', (event) => {
 - `doc: Y.Doc` — 本地 Y.Doc 实例
 - `awareness: Awareness` — 本地 Awareness 实例
 - `options?` — 可选配置
+  - `debug?: boolean` — 启用 iframe-bridge 消息调试日志
 
 
 **返回**：`IframeBridgeProvider`

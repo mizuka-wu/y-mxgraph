@@ -41,7 +41,9 @@ export interface DrawioFile {
   getUi(): { editor: DrawioEditor };
 }
 
-export interface IframeBridgeProviderOptions {}
+export interface IframeBridgeProviderOptions {
+  debug?: boolean;
+}
 
 export interface IframeBridgeProvider {
   serverClientId: number | null;
@@ -120,6 +122,7 @@ export function createIframeBridgeProvider(
   awareness: Awareness,
   options?: IframeBridgeProviderOptions,
 ): IframeBridgeProvider {
+  const { debug = false } = options ?? {};
   let applyingParentUpdate = false;
   let serverClientId: number | null = null;
   let currentCleanup: (() => void) | null = null;
@@ -128,6 +131,30 @@ export function createIframeBridgeProvider(
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
+
+  const log = debug
+    ? (...args: unknown[]) => console.debug("[iframe-bridge provider]", ...args)
+    : () => undefined;
+
+  function formatPayload(payload: unknown) {
+    if (payload instanceof Uint8Array) {
+      return { bytes: payload.byteLength };
+    }
+    if (Array.isArray(payload) && payload.every((item) => typeof item === "number")) {
+      return { bytes: payload.length };
+    }
+    return payload;
+  }
+
+  function logMessage(direction: "send" | "recv", type: string, payload?: unknown) {
+    if (!debug) return;
+    log(direction, type, formatPayload(payload));
+  }
+
+  function parentPostMessage(message: unknown) {
+    logMessage("send", (message as { type?: string }).type ?? "postMessage", message);
+    window.parent.postMessage(message, "*");
+  }
 
   function setConnected(value: boolean) {
     if (connected === value) return;
@@ -143,10 +170,10 @@ export function createIframeBridgeProvider(
     if (initRetryTimer) {
       clearInterval(initRetryTimer);
     }
-    window.parent.postMessage({ type: "init" }, "*");
+    parentPostMessage({ type: "init" });
     initRetryTimer = setInterval(() => {
       if (!connected) {
-        window.parent.postMessage({ type: "init" }, "*");
+        parentPostMessage({ type: "init" });
       }
     }, 1000);
   }
@@ -155,10 +182,9 @@ export function createIframeBridgeProvider(
     if (applyingParentUpdate) return;
     // 检测基线数据：origin 为 null 时是 xml2ydoc 首次初始化
     const isBaseline = origin === null || origin === undefined;
-    window.parent.postMessage(
-      { type: "ydoc-update", payload: Array.from(update), isBaseline },
-      "*",
-    );
+    const message = { type: "ydoc-update", payload: Array.from(update), isBaseline };
+    logMessage("send", "ydoc-update", message);
+    window.parent.postMessage(message, "*");
   };
 
   const onAwarenessUpdate = ({
@@ -186,16 +212,16 @@ export function createIframeBridgeProvider(
         ? remapClientIdInUpdate(update, localClientId, serverClientId)
         : update;
 
-    window.parent.postMessage(
-      { type: "awareness-update", payload: Array.from(remapped) },
-      "*",
-    );
+    const message = { type: "awareness-update", payload: Array.from(remapped) };
+    logMessage("send", "awareness-update", message);
+    window.parent.postMessage(message, "*");
   };
 
   const onMessage = (event: MessageEvent) => {
     if (event.source !== window.parent) return;
     const { type, payload, serverClientId: receivedServerId } = event.data;
 
+    logMessage("recv", type, payload);
     if (type === "pong" && receivedServerId != null) {
       serverClientId = receivedServerId;
       return;
@@ -213,6 +239,7 @@ export function createIframeBridgeProvider(
         }
       }
     } else if (type === "awareness-sync" || type === "awareness-update") {
+      logMessage("recv", type, payload);
       if (receivedServerId != null) {
         serverClientId = receivedServerId;
       }
@@ -279,10 +306,9 @@ export function createIframeBridgeProvider(
           awareness.clientID,
           serverClientId,
         );
-        window.parent.postMessage(
-          { type: "awareness-update", payload: Array.from(remapped) },
-          "*",
-        );
+        const message = { type: "awareness-update", payload: Array.from(remapped) };
+        logMessage("send", "awareness-update", message);
+        window.parent.postMessage(message, "*");
       }
     } else if (type === "undo-state" && currentMxLike) {
       // 从 Server 同步真实的 undo/redo 状态
