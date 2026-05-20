@@ -174,10 +174,9 @@ async function initIframeChild() {
   const awareness = new Awareness(ydoc);
 
   // 从 URL 参数读取初始 user 信息
-  const initAccount =
-    urlParams.get("account") || urlParams.get("userName") || "alice";
+  const initAccount = urlParams.get("account") || urlParams.get("userName");
   const initName = urlParams.get("name") || initAccount;
-  const initUserColor = urlParams.get("userColor") || "#2563eb";
+  const initUserColor = urlParams.get("userColor");
   awareness.setLocalState({
     user: { account: initAccount, name: initName, color: initUserColor },
   });
@@ -249,10 +248,9 @@ function connectCollaboration() {
 
   // 设置初始 awareness user
   const urlParams = new URLSearchParams(location.search);
-  const initAccount =
-    urlParams.get("account") || urlParams.get("userName") || "alice";
+  const initAccount = urlParams.get("account") || urlParams.get("userName");
   const initName = urlParams.get("name") || initAccount;
-  const initUserColor = urlParams.get("userColor") || "#2563eb";
+  const initUserColor = urlParams.get("userColor");
   collabState.provider!.awareness.setLocalState({
     user: { account: initAccount, name: initName, color: initUserColor },
   });

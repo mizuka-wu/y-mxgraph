@@ -98,7 +98,7 @@ function initBridge(roomName: string, serverDelay: number = 0) {
   const awareness = provider.awareness;
 
   // 设置父容器 awareness user，确保 iframe 能从 server 同步到正确的用户信息
-  const parentAccount = ui.userAccountInput.value.trim() || "alice";
+  const parentAccount = ui.userAccountInput.value.trim() || "";
   const parentName = ui.userNameInput.value.trim() || parentAccount;
   const parentUserColor = ui.userColorInput.value;
   awareness.setLocalState({
@@ -195,10 +195,9 @@ function init() {
   ui.roomInput.value = roomName;
   ui.serverDelayInput.value = String(serverDelay);
 
-  const account =
-    urlParams.get("account") || urlParams.get("userName") || "alice";
+  const account = urlParams.get("account") || urlParams.get("userName") || "";
   const name = urlParams.get("name") || account;
-  const userColor = urlParams.get("userColor") || "#2563eb";
+  const userColor = urlParams.get("userColor") || "";
   ui.userAccountInput.value = account;
   ui.userNameInput.value = name;
   ui.userColorInput.value = userColor;
@@ -281,7 +280,7 @@ function init() {
 
   // 用户信息切换
   function onUserInfoChange() {
-    const account = ui.userAccountInput.value.trim() || "alice";
+    const account = ui.userAccountInput.value.trim();
     const name = ui.userNameInput.value.trim() || account;
     const userColor = ui.userColorInput.value;
     const url = new URL(location.href);
