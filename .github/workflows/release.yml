@@ -33,3 +33,37 @@ jobs:
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Package dist
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cd packages/y-mxgraph/dist
+          zip -r "../y-mxgraph-${{ github.ref_name }}.zip" .
+
+      - name: Generate release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | grep "^v" | grep -v "${CURRENT_TAG}" | head -n 1)
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "## Changes since ${PREVIOUS_TAG}" > release-notes.md
+            echo "" >> release-notes.md
+            git log --pretty=format:"- %s (%h)" "${PREVIOUS_TAG}..${CURRENT_TAG}" >> release-notes.md
+            echo "" >> release-notes.md
+          else
+            echo "## Changes" > release-notes.md
+            echo "" >> release-notes.md
+            git log --pretty=format:"- %s (%h)" >> release-notes.md
+            echo "" >> release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Release ${{ github.ref_name }}" \
+            --notes-file release-notes.md \
+            "packages/y-mxgraph/y-mxgraph-${{ github.ref_name }}.zip"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
