@@ -251,24 +251,29 @@ export function createIframeBridgeProvider(
           ).user?.color;
           if (serverUserAccount || serverUserName || serverUserColor) {
             const currentLocal = awareness.getLocalState() || {};
-            const next = { ...currentLocal };
-            next.user = {
-              ...((currentLocal as Record<string, unknown>).user as
-                | Record<string, unknown>
-                | undefined),
-            };
+            const currentUser = ((currentLocal as Record<string, unknown>)
+              .user || {}) as Record<string, unknown>;
+            const nextUser: Record<string, unknown> = { ...currentUser };
             if (serverUserAccount) {
-              (next.user as Record<string, unknown>).account =
-                serverUserAccount;
+              nextUser.account = serverUserAccount;
             }
             if (serverUserName) {
-              (next.user as Record<string, unknown>).name = serverUserName;
+              nextUser.name = serverUserName;
             }
             if (serverUserColor) {
-              (next.user as Record<string, unknown>).color = serverUserColor;
+              nextUser.color = serverUserColor;
             }
-            awareness.setLocalState(next);
-            localUserSynced = true;
+            const userChanged =
+              currentUser.account !== nextUser.account ||
+              currentUser.name !== nextUser.name ||
+              currentUser.color !== nextUser.color;
+            if (userChanged) {
+              awareness.setLocalState({
+                ...currentLocal,
+                user: nextUser,
+              });
+              localUserSynced = true;
+            }
           }
         }
       }
