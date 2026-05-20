@@ -100,8 +100,7 @@ function updateUndoRedoButtons() {
 
 function initBridge(
   roomName: string,
-  serverDelay: number = 0,
-  awarenessSyncMode: "binary" | "local-state" = "binary",
+  serverDelay: number = 0
 ) {
   // 清理旧的
   if (currentBridge) {
@@ -170,7 +169,6 @@ function initBridge(
 
     const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
       undoManager,
-      awarenessSyncMode,
     });
 
     currentBridge = bridgeServer;
@@ -248,7 +246,7 @@ function init() {
     awarenessSyncMode,
   );
 
-  initBridge(roomName, serverDelay, awarenessSyncMode);
+  initBridge(roomName, serverDelay);
 
   ui.undoBtn.addEventListener("click", () => {
     if (currentUndoManager && currentUndoManager.canUndo()) {
@@ -317,7 +315,7 @@ function init() {
       if (room === DEFAULT_ROOM) url.searchParams.delete("room");
       else url.searchParams.set("room", room);
       history.replaceState(null, "", url.toString());
-      initBridge(room, delay, awarenessSyncMode);
+      initBridge(room, delay);
     }
   });
 
@@ -341,7 +339,7 @@ function init() {
         ui.userColorInput.value,
         awarenessSyncMode,
       );
-      initBridge(room, delay, awarenessSyncMode);
+      initBridge(room, delay);
     }
   });
 
@@ -367,7 +365,7 @@ function init() {
       userColor,
       awarenessSyncMode,
     );
-    initBridge(room, delay, awarenessSyncMode);
+    initBridge(room, delay);
   }
 
   ui.userAccountInput.addEventListener("change", onUserInfoChange);
@@ -398,7 +396,7 @@ function init() {
       ui.userColorInput.value,
       awarenessSyncMode,
     );
-    initBridge(room, delay, awarenessSyncMode);
+    initBridge(room, delay);
   });
 
   // 暴露调试对象（getter 形式，始终返回当前值）
