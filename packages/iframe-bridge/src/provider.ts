@@ -41,9 +41,7 @@ export interface DrawioFile {
   getUi(): { editor: DrawioEditor };
 }
 
-export interface IframeBridgeProviderOptions {
-  awarenessSyncMode?: "binary" | "local-state";
-}
+export interface IframeBridgeProviderOptions {}
 
 export interface IframeBridgeProvider {
   serverClientId: number | null;
@@ -122,7 +120,6 @@ export function createIframeBridgeProvider(
   awareness: Awareness,
   options?: IframeBridgeProviderOptions,
 ): IframeBridgeProvider {
-  const { awarenessSyncMode = "binary" } = options ?? {};
   let applyingParentUpdate = false;
   let serverClientId: number | null = null;
   let currentCleanup: (() => void) | null = null;
@@ -183,23 +180,16 @@ export function createIframeBridgeProvider(
     const localChanged = changes.includes(localClientId);
     if (!localChanged) return;
 
-    if (awarenessSyncMode === "local-state") {
-      window.parent.postMessage(
-        { type: "awareness-local-state", state: awareness.getLocalState() },
-        "*",
-      );
-    } else {
-      const update = encodeAwarenessUpdate(awareness, [localClientId]);
-      const remapped =
-        serverClientId != null
-          ? remapClientIdInUpdate(update, localClientId, serverClientId)
-          : update;
+    const update = encodeAwarenessUpdate(awareness, [localClientId]);
+    const remapped =
+      serverClientId != null
+        ? remapClientIdInUpdate(update, localClientId, serverClientId)
+        : update;
 
-      window.parent.postMessage(
-        { type: "awareness-update", payload: Array.from(remapped) },
-        "*",
-      );
-    }
+    window.parent.postMessage(
+      { type: "awareness-update", payload: Array.from(remapped) },
+      "*",
+    );
   };
 
   const onMessage = (event: MessageEvent) => {

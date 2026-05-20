@@ -182,13 +182,7 @@ async function initIframeChild() {
     user: { account: initAccount, name: initName, color: initUserColor },
   });
 
-  const awarenessSyncMode =
-    urlParams.get("awarenessSyncMode") === "local-state"
-      ? ("local-state" as const)
-      : ("binary" as const);
-  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness, {
-    awarenessSyncMode,
-  });
+  const bridgeProvider = createIframeBridgeProvider(ydoc, awareness);
   console.log(
     `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
   );

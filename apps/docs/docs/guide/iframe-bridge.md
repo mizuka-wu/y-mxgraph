@@ -95,7 +95,6 @@ Server 和 Provider 通过 `postMessage` 通信，支持以下消息类型：
 | Server → Provider | `ydoc-sync` | `Uint8Array` | Y.Doc 全量状态 |
 | Server → Provider | `awareness-sync` | `Uint8Array` + `serverClientId` | Awareness 全量状态 |
 | 双向 | `ydoc-update` | `Uint8Array` | Y.Doc 增量更新 |
-| Provider → Server | `awareness-local-state` | `object`（状态对象） | 本地 awareness state，Server 端通过 `setLocalState` 应用 |
 | 双向 | `awareness-update` | `Uint8Array` | Awareness 增量更新 |
 | Provider → Server | `ping` | 无 | 获取 serverClientId |
 | Server → Provider | `pong` | `serverClientId` | 响应 ping |
@@ -323,7 +322,7 @@ window.addEventListener('message', (event) => {
 - `doc: Y.Doc` — 本地 Y.Doc 实例
 - `awareness: Awareness` — 本地 Awareness 实例
 - `options?` — 可选配置
-  - `awarenessSyncMode?: "binary" \| "local-state"` — awareness 同步模式。默认 `"binary"`，iframe→server 发送 binary update 通过 `applyAwarenessUpdate` 应用； `"local-state"` 则发送原始 state 对象，由 Server 通过 `setLocalState` 应用。
+
 
 **返回**：`IframeBridgeProvider`
 

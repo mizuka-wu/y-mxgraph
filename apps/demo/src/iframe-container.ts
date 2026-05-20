@@ -23,9 +23,6 @@ const ui = {
   userColorInput: document.getElementById(
     "user-color-input",
   ) as HTMLInputElement,
-  awarenessSyncModeSelect: document.getElementById(
-    "awareness-sync-mode",
-  ) as HTMLSelectElement,
   collabDot: document.getElementById("collab-dot") as HTMLSpanElement,
   collabStatus: document.getElementById("collab-status") as HTMLSpanElement,
   peerCount: document.getElementById("peer-count") as HTMLSpanElement,
@@ -76,7 +73,6 @@ function getIframeSrc(
   account?: string,
   name?: string,
   userColor?: string,
-  awarenessSyncMode?: string,
 ) {
   const params = new URLSearchParams();
   params.set("version", version);
@@ -84,7 +80,6 @@ function getIframeSrc(
   if (account) params.set("account", account);
   if (name) params.set("name", name);
   if (userColor) params.set("userColor", userColor);
-  if (awarenessSyncMode) params.set("awarenessSyncMode", awarenessSyncMode);
   return `./index.html?${params.toString()}`;
 }
 
@@ -216,13 +211,8 @@ function init() {
   const customUrl = urlParams.get("customUrl") || undefined;
   const roomName = urlParams.get("room") || DEFAULT_ROOM;
   const serverDelay = parseInt(urlParams.get("serverDelay") || "0", 10);
-  let awarenessSyncMode: "binary" | "local-state" =
-    urlParams.get("awarenessSyncMode") === "local-state"
-      ? "local-state"
-      : "binary";
 
   ui.versionSelect.value = version;
-  ui.awarenessSyncModeSelect.value = awarenessSyncMode;
   ui.customUrlGroup.style.display = version === "custom" ? "flex" : "none";
   if (customUrl) ui.customUrlInput.value = customUrl;
   ui.roomInput.value = roomName;
@@ -243,7 +233,6 @@ function init() {
     account,
     name,
     userColor,
-    awarenessSyncMode,
   );
 
   initBridge(roomName, serverDelay);
@@ -279,7 +268,6 @@ function init() {
           ui.userAccountInput.value.trim() ||
           "alice",
         ui.userColorInput.value,
-        awarenessSyncMode,
       );
     }
   });
@@ -300,7 +288,6 @@ function init() {
             ui.userAccountInput.value.trim() ||
             "alice",
           ui.userColorInput.value,
-          awarenessSyncMode,
         );
       }
     }
@@ -337,7 +324,6 @@ function init() {
           ui.userAccountInput.value.trim() ||
           "alice",
         ui.userColorInput.value,
-        awarenessSyncMode,
       );
       initBridge(room, delay);
     }
@@ -363,7 +349,6 @@ function init() {
       account,
       name,
       userColor,
-      awarenessSyncMode,
     );
     initBridge(room, delay);
   }
@@ -371,33 +356,6 @@ function init() {
   ui.userAccountInput.addEventListener("change", onUserInfoChange);
   ui.userNameInput.addEventListener("change", onUserInfoChange);
   ui.userColorInput.addEventListener("change", onUserInfoChange);
-
-  // Sync Mode 切换
-  ui.awarenessSyncModeSelect.addEventListener("change", () => {
-    awarenessSyncMode = ui.awarenessSyncModeSelect.value as
-      | "binary"
-      | "local-state";
-    const url = new URL(location.href);
-    if (awarenessSyncMode === "binary") {
-      url.searchParams.delete("awarenessSyncMode");
-    } else {
-      url.searchParams.set("awarenessSyncMode", awarenessSyncMode);
-    }
-    history.replaceState(null, "", url.toString());
-    const room = ui.roomInput.value.trim() || DEFAULT_ROOM;
-    const delay = parseInt(ui.serverDelayInput.value.trim() || "0", 10);
-    ui.iframe.src = getIframeSrc(
-      ui.versionSelect.value,
-      ui.customUrlInput.value.trim() || undefined,
-      ui.userAccountInput.value.trim() || "alice",
-      ui.userNameInput.value.trim() ||
-        ui.userAccountInput.value.trim() ||
-        "alice",
-      ui.userColorInput.value,
-      awarenessSyncMode,
-    );
-    initBridge(room, delay);
-  });
 
   // 暴露调试对象（getter 形式，始终返回当前值）
   const win = window as any;

@@ -95,7 +95,6 @@ Server and Provider communicate via `postMessage` with the following message typ
 | Server → Provider | `ydoc-sync` | `Uint8Array` | Full Y.Doc state |
 | Server → Provider | `awareness-sync` | `Uint8Array` + `serverClientId` | Full awareness state |
 | Bidirectional | `ydoc-update` | `Uint8Array` | Incremental Y.Doc update |
-| Provider → Server | `awareness-local-state` | `object` (raw state) | Local awareness state, Server applies via `setLocalState` |
 | Bidirectional | `awareness-update` | `Uint8Array` | Incremental awareness update |
 | Provider → Server | `ping` | none | Get serverClientId |
 | Server → Provider | `pong` | `serverClientId` | Response to ping |
@@ -322,7 +321,7 @@ Creates the Provider-side bridge.
 - `doc: Y.Doc` — Local Y.Doc instance
 - `awareness: Awareness` — Local Awareness instance
 - `options?` — Optional configuration
-  - `awarenessSyncMode?: "binary" \| "local-state"` — Awareness sync mode. Default `"binary"` sends binary updates from iframe→server via `applyAwarenessUpdate`; `"local-state"` sends raw state objects applied via `setLocalState`, suitable for `awarenessLike` implementations relying on `setLocalState` side effects
+
 
 **Returns**: `IframeBridgeProvider`
 
