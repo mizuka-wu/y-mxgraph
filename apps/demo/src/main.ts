@@ -19,6 +19,7 @@ import {
   getI18n,
   type Lang,
 } from "./ui.js";
+import { setupImageHooks, preloadCache } from "./image-hook.js";
 import * as Y from "yjs";
 
 const isInIframe = window.parent !== window;
@@ -114,9 +115,9 @@ async function initDirect() {
         onLoading: () => updateDrawioStatus(ui, "loading", t.drawioLoading),
         onProgress: setStep,
         onReady: (v) => {
+          setupImageHooks();
           showReady(ui);
           updateDrawioStatus(ui, "ready", t.drawioLoaded(v));
-          // 加载完成后自动连接
           connectCollaboration();
         },
         onError: (msg) => {
@@ -154,6 +155,7 @@ async function initIframeChild() {
         onLoading: () => {},
         onProgress: () => {},
         onReady: () => {
+          setupImageHooks();
           console.log(`[iframe ${iframeId}] draw.io loaded — editor ready`);
         },
         onError: (msg) => {
@@ -203,6 +205,8 @@ async function initIframeChild() {
       (binding) => {
         console.log(`[iframe ${iframeId}] draw.io bound to ydoc`);
         bridgeProvider.takeoverUndoManager(binding.file);
+        const xml = binding.file.data;
+        if (xml) preloadCache(xml);
         // 重置 modified 状态，消除 "unsaved changes" 提示
         const ui = binding.file.getUi();
         ui.editor.setModified(false);
@@ -262,10 +266,12 @@ function connectCollaboration() {
     collabState.doc!,
     collabState.provider!.awareness,
     collabState.provider!,
-    (binding) => {
-      collabState.binding = binding;
-      Reflect.set(window, "__provider__", collabState.provider);
-    },
+      (binding) => {
+        collabState.binding = binding;
+        Reflect.set(window, "__provider__", collabState.provider);
+        const xml = binding.file.data;
+        if (xml) preloadCache(xml);
+      },
   );
 }
 
