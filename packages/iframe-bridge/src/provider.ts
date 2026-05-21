@@ -2,7 +2,6 @@ import * as Y from "yjs";
 import {
   Awareness,
   applyAwarenessUpdate,
-  encodeAwarenessUpdate,
 } from "y-protocols/awareness";
 
 /**
@@ -155,7 +154,7 @@ function parseAwarenessPayload(data: Uint8Array): Map<number, Record<string, unk
   for (let i = 0; i < count; i++) {
     const [clientID, pos3] = readVarUint(data, pos);
     pos = pos3;
-    const [clock, pos4] = readVarUint(data, pos);
+    const [, pos4] = readVarUint(data, pos);
     pos = pos4;
     const [stateStr, pos5] = readVarString(data, pos);
     pos = pos5;
@@ -163,7 +162,9 @@ function parseAwarenessPayload(data: Uint8Array): Map<number, Record<string, unk
     if (stateStr) {
       try {
         result.set(clientID, JSON.parse(stateStr));
-      } catch {}
+      } catch {
+        // no-op
+      }
     }
   }
   return result;
@@ -190,7 +191,7 @@ export function createIframeBridgeProvider(
   const useExternalAwareness = !!externalAwareness;
   let awareness: Awareness | AwarenessLike;
   const localStates = new Map<number, Record<string, unknown>>();
-  let localClientId = Math.floor(Math.random() * 2147483647) + 1;
+  const localClientId = Math.floor(Math.random() * 2147483647) + 1;
   const updateHandlers = new Set<(update: { added: number[]; updated: number[]; removed: number[] }) => void>();
 
   function createAwarenessLike(): AwarenessLike {
@@ -461,7 +462,11 @@ export function createIframeBridgeProvider(
   };
 
   ydoc.on("update", onYdocUpdate);
-  awareness.on("update", onAwarenessUpdate);
+  // 只有真正的 y-protocols Awareness 实例才有 .on() 方法
+  // AwarenessLike（内部创建的）通过 updateHandlers 管理回调
+  if (useExternalAwareness) {
+    (awareness as Awareness).on("update", onAwarenessUpdate);
+  }
   window.addEventListener("message", onMessage);
 
   startInitRetry();
@@ -506,8 +511,8 @@ export function createIframeBridgeProvider(
         ...currentLocal,
         user: newUser,
       });
-      // 未连接时只设置本地状态，连接后由 server 同步
-      if (useExternalAwareness && connected) {
+      // 通知父页面更新本地字段，父页面可选择是否处理
+      if (connected) {
         const message = { type: "set-local-fields", fields };
         logMessage("send", "set-local-fields", fields);
         window.parent.postMessage(message, "*");
@@ -594,7 +599,7 @@ export function createIframeBridgeProvider(
       });
 
       currentMxLike = mxLike;
-      editor.undoManager = mxLike as any;
+      editor.undoManager = mxLike as unknown as DrawioEditor["undoManager"];
       editor.undoListener = function () {};
 
       const cleanup = () => {
