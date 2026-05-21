@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "idb-keyval": "^6.2.2",
+    "localforage": "^1.10.0",
     "y-mxgraph": "workspace:*",
     "y-protocols": "^1.0.6",
     "y-webrtc": "^10.3.0",
