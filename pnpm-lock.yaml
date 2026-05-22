@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      localforage:
-        specifier: ^1.10.0
-        version: 1.10.0
     devDependencies:
       eslint:
         specifier: ^8.57.0
