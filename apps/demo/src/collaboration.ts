@@ -4,6 +4,11 @@ import { type Awareness } from "y-protocols/awareness";
 import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
 import { type AwarenessLike } from "y-mxgraph/iframe-bridge/provider";
 import { SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
+import {
+  transformImagePatch,
+  injectImageStorageHooks,
+  configureImageStorage,
+} from "./helpers/image-storage.js";
 
 export interface CollabState {
   provider: WebrtcProvider | null;
@@ -77,11 +82,19 @@ export function bindDrawioFile(
     if (bindingCreated) return;
     bindingCreated = true;
 
-    const bindingOptions: any = { doc, undoManager };
+    const bindingOptions: any = {
+      doc,
+      undoManager,
+      transformPatch: transformImagePatch,
+    };
     if (awareness) {
       bindingOptions.awareness = awareness;
     }
     const binding = new Binding(file, bindingOptions);
+
+    const graph = file.getUi().editor.graph;
+    configureImageStorage({ graph });
+    injectImageStorageHooks();
 
     app.refresh();
     window.dispatchEvent(new Event("resize"));

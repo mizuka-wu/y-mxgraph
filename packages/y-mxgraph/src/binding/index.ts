@@ -73,6 +73,16 @@ export interface BindDrawioFileOptions {
    * 若需要保留原生行为（如使用 File System Access API），设为 `false`。
    */
   disableBeforeUnload?: boolean;
+  /**
+   * 转换本地 patch，在同步到 Y.Doc 前修改或过滤变更。
+   *
+   * - 返回原始 patch 或 `undefined`：不做过滤，直接同步
+   * - 返回修改后的 `FilePatch`：使用修改后的 patch 同步
+   * - 返回 `null`：跳过本次同步，不写入 Y.Doc
+   *
+   * 适用于异步资源处理场景（如图片上传），可精确过滤包含中间态的 cell 变更。
+   */
+  transformPatch?: (patch: import("./patch").FilePatch) => import("./patch").FilePatch | null | undefined;
 }
 
 /**
@@ -279,6 +289,8 @@ export class Binding {
   private initialContentStrategy: InitialContentStrategy;
   /** draw.io UI 引用，用于重置状态和获取 currentFile */
   private ui: DrawioUi | null = null;
+  /** 转换本地 patch 的回调 */
+  private transformPatch?: (patch: import("./patch").FilePatch) => import("./patch").FilePatch | null | undefined;
 
   /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
   private get shouldReplaceWhenDocHasData(): boolean {
@@ -295,11 +307,13 @@ export class Binding {
       initialContent = "replace",
       applyFileData = defaultApplyFileData,
       disableBeforeUnload = true,
+      transformPatch,
     } = options;
 
     this.doc = doc;
     this.file = file;
     this.initialContentStrategy = initialContent;
+    this.transformPatch = transformPatch;
 
     const ui = file.getUi();
     const graph = ui.editor.graph;
@@ -348,6 +362,14 @@ export class Binding {
       // 没有实际本地变更时直接跳过
       if (patchKeys.length === 0) return;
 
+      // 转换检查：transformPatch 可修改或跳过 patch
+      let finalPatch = patch;
+      if (this.transformPatch) {
+        const result = this.transformPatch(patch);
+        if (result === null) return;
+        if (result !== undefined) finalPatch = result;
+      }
+
       // 第一次有实际本地编辑时才初始化 Y.Doc
       if (!this.docInitialized) {
         doc.transact(() => {
@@ -358,7 +380,7 @@ export class Binding {
       }
 
       file.setShadowPages(file.ui.clonePages(file.ui.pages));
-      applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
+      applyFilePatch(doc, finalPatch, { origin: LOCAL_ORIGIN });
       this.resetEditorStatus();
     };
     this.mxGraphModel.addListener("change", this.mxListener);
