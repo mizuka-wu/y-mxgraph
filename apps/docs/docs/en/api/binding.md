@@ -31,6 +31,7 @@ interface BindDrawioFileOptions {
   initialContent?: InitialContentStrategy; // optional — default 'replace'
   applyFileData?: (file, xml) => void;     // optional — custom file data apply
   disableBeforeUnload?: boolean;           // optional — default true
+  transformPatch?: (patch: FilePatch) => FilePatch | null | undefined; // optional — transform/filter local patches before syncing
 }
 ```
 
@@ -67,6 +68,36 @@ Whether to disable draw.io's `beforeunload` dialog. Default is `true`.
 After Yjs takes over persistence, draw.io's native save state is no longer meaningful. However, draw.io internally shows "All changes will be lost" or "Ensure your data has been saved" dialogs under certain conditions (e.g., LocalFile without fileHandle, non-empty diagram, etc.).
 
 Set to `true` (default) to completely disable these dialogs — suitable for pure Yjs collaboration scenarios. Set to `false` to preserve native behavior (e.g., when using File System Access API).
+
+#### `transformPatch`
+
+Optional callback to transform or filter local patches before syncing to Y.Doc. Useful for scenarios like external image storage.
+
+**Signature**: `(patch: FilePatch) => FilePatch | null | undefined`
+
+**Return value**:
+- `undefined` or original patch: no filtering, sync as-is
+- Modified `FilePatch`: use the modified patch for syncing
+- `null`: skip this sync entirely
+
+**Example — Image storage optimization**:
+
+```ts
+import { Binding } from 'y-mxgraph';
+
+// Extract base64 images to IndexedDB, sync only img:<uuid> references
+const binding = new Binding(file, {
+  doc,
+  transformPatch: (patch) => {
+    // Detect and remove base64 images from patch
+    // Upload images to storage asynchronously
+    // Return modified patch with img:<uuid> references
+    return transformedPatch;
+  },
+});
+```
+
+See [IMAGE-STORAGE.md](https://github.com/mizuka-wu/y-mxgraph/blob/main/apps/demo/src/helpers/IMAGE-STORAGE.md) for a complete implementation.
 
 ## Instance Properties
 

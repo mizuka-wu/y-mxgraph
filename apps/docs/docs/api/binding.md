@@ -31,6 +31,7 @@ interface BindDrawioFileOptions {
   initialContent?: InitialContentStrategy; // 可选，初始内容策略，默认 'replace'
   applyFileData?: (file, xml) => void;     // 可选，自定义 file 数据应用方式
   disableBeforeUnload?: boolean;           // 可选，禁用 beforeUnload 弹窗，默认 true
+  transformPatch?: (patch: FilePatch) => FilePatch | null | undefined; // 可选，转换/过滤本地 patch
 }
 ```
 
@@ -67,6 +68,36 @@ new Binding(file, {
 Yjs 接管持久化后，draw.io 的原生保存状态不再有意义。但 draw.io 内部会在特定条件下（如 LocalFile 无 fileHandle、图表非空等）弹出 "All changes will be lost" 或 "Ensure your data has been saved" 提示。
 
 设为 `true`（默认）可彻底禁用这些弹窗，适合纯 Yjs 协作场景。若需要保留原生行为（如使用 File System Access API），设为 `false`。
+
+#### `transformPatch`
+
+可选回调，在本地 patch 同步到 Y.Doc 前进行转换或过滤。适用于外部图片存储等场景。
+
+**签名**: `(patch: FilePatch) => FilePatch | null | undefined`
+
+**返回值**:
+- `undefined` 或原始 patch：不过滤，直接同步
+- 修改后的 `FilePatch`：使用修改后的 patch 同步
+- `null`：跳过本次同步
+
+**示例 — 图片存储优化**:
+
+```ts
+import { Binding } from 'y-mxgraph';
+
+// 将 base64 图片提取到 Y.Doc 外部存储，只同步 img:<uuid> 引用
+const binding = new Binding(file, {
+  doc,
+  transformPatch: (patch) => {
+    // 检测并移除 patch 中的 base64 图片
+    // 异步上传图片到存储
+    // 返回包含 img:<uuid> 引用的修改后 patch
+    return transformedPatch;
+  },
+});
+```
+
+详见 [IMAGE-STORAGE.md](https://github.com/mizuka-wu/y-mxgraph/blob/main/apps/demo/src/helpers/IMAGE-STORAGE.md) 完整实现。
 
 ## 实例属性
 
