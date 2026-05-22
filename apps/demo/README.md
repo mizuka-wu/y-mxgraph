@@ -26,6 +26,7 @@ pnpm --filter @y-mxgraph/demo dev
 - 多人实时协作编辑，同一房间内的操作实时同步
 - 加载过程分步进度显示
 - iframe 模式下父页集中管理 WebRTC 连接，iframe 内部通过 `postMessage` 同步 ydoc 和 awareness 状态
+- **图片存储优化**：base64 图片自动提取到 IndexedDB，Y.Doc 只同步 `img:<uuid>` 引用（详见 [IMAGE-STORAGE.md](./src/helpers/IMAGE-STORAGE.md)）
 
 ## URL 参数
 
@@ -44,7 +45,10 @@ src/
 ├── config.ts            # 常量：版本列表、信令服务器、默认房间、示例文件
 ├── drawio-loader.ts     # draw.io CDN 加载器
 ├── collaboration.ts     # Yjs 协作：创建连接、绑定 draw.io 文件
-└── ui.ts                # DOM 操作工具函数
+├── ui.ts                # DOM 操作工具函数
+└── helpers/
+    ├── image-storage.ts # 图片存储：base64 → IndexedDB，Y.Doc 同步 img:<uuid>
+    └── IMAGE-STORAGE.md # 图片存储模块文档
 ```
 
 ### `config.ts`
@@ -88,6 +92,22 @@ loadDrawioScript(version, {
 #### `bindDrawioFile(doc, awareness, onBind)`
 
 将 draw.io 文件绑定到 Y.Doc，实现双向同步。
+
+**图片存储集成：**
+
+创建 Binding 时配置 `transformPatch` 和图片存储钩子：
+
+```typescript
+import { transformImagePatch, configureImageStorage, injectImageStorageHooks } from "./helpers/image-storage.js";
+
+const binding = new Binding(file, {
+  doc,
+  transformPatch: transformImagePatch,  // 拦截 base64 图片
+});
+
+configureImageStorage({ graph });  // 配置 graph 引用
+injectImageStorageHooks();         // 注入渲染钩子
+```
 
 **同步策略（为什么需要等待）：**
 
