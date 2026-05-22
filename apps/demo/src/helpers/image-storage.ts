@@ -11,6 +11,7 @@ const imageStore = localforage.createInstance({
 
 const blobUrlCache = new Map<string, string>();
 const failedUploads = new Set<string>();
+const MAX_FAILED_UPLOADS = 100;
 
 type UploadImageFn = (base64: string) => Promise<string>;
 
@@ -34,7 +35,7 @@ function generateUUID(): string {
 function base64ToBlob(base64: string): Blob {
   const commaIndex = base64.indexOf(",");
   const header = base64.substring(0, commaIndex);
-  const data = base64.substring(commaIndex + 1);
+  const data = base64.substring(commaIndex + 1).replace(/\s/g, "");
   const mimeMatch = header.match(/:(.*?);/);
   const mime = mimeMatch?.[1] ?? "image/png";
   const binary = atob(data);
@@ -174,7 +175,6 @@ async function uploadAndApplyImage(
 
   try {
     const imageRef = await uploadImageFn(base64);
-
     await preloadImage(imageRef);
 
     if (graphRef) {
@@ -186,6 +186,7 @@ async function uploadAndApplyImage(
           /image=data:image\/[^;,]+(?:;base64)?,[A-Za-z0-9+/=]+/,
           `image=${imageRef}`,
         );
+        if (newStyle === currentStyle) return;
         model.beginUpdate();
         try {
           model.setStyle(cell, newStyle);
@@ -195,6 +196,10 @@ async function uploadAndApplyImage(
       }
     }
   } catch (err) {
+    if (failedUploads.size >= MAX_FAILED_UPLOADS) {
+      const first = failedUploads.values().next().value;
+      if (first) failedUploads.delete(first);
+    }
     failedUploads.add(base64);
     console.warn("[image-storage] Failed to upload image:", err);
   }

@@ -8,6 +8,7 @@ import {
   transformImagePatch,
   injectImageStorageHooks,
   configureImageStorage,
+  releaseAllBlobUrls,
 } from "./helpers/image-storage.js";
 
 export interface CollabState {
@@ -208,8 +209,11 @@ export function disconnectCollaboration(state: CollabState): void {
     state.doc = null;
   }
 
+  releaseAllBlobUrls();
+
   delete (window as any).__doc__;
   delete (window as any).__undoManager__;
   delete (window as any).__provider__;
   delete (window as any).__binding__;
+  delete (window as any).__app__;
 }
