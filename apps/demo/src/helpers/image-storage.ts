@@ -10,6 +10,7 @@ const imageStore = localforage.createInstance({
 });
 
 const blobUrlCache = new Map<string, string>();
+const failedUploads = new Set<string>();
 
 type UploadImageFn = (base64: string) => Promise<string>;
 
@@ -151,7 +152,11 @@ export function transformImagePatch(
     uploadAndApplyImage(cellId, base64);
   }
 
-  if (Object.keys(newUpdate).length === 0) return null;
+  const hasDiagramInsertOrRemove =
+    (patch.i && patch.i.length > 0) || (patch.r && patch.r.length > 0);
+  if (Object.keys(newUpdate).length === 0 && !hasDiagramInsertOrRemove) {
+    return null;
+  }
 
   const newPatch: FilePatch = {};
   if (patch.i) newPatch.i = patch.i;
@@ -165,10 +170,11 @@ async function uploadAndApplyImage(
   cellId: string,
   base64: string,
 ): Promise<void> {
+  if (failedUploads.has(base64)) return;
+
   try {
     const imageRef = await uploadImageFn(base64);
 
-    // 预加载到缓存，这样 rewriteImageSource 可以同步获取
     await preloadImage(imageRef);
 
     if (graphRef) {
@@ -189,6 +195,7 @@ async function uploadAndApplyImage(
       }
     }
   } catch (err) {
+    failedUploads.add(base64);
     console.warn("[image-storage] Failed to upload image:", err);
   }
 }
@@ -210,7 +217,9 @@ export function injectImageStorageHooks(): void {
     proto.rewriteImageSource = function (src: string) {
       if (isImageRef(src)) {
         const cached = getCachedBlobUrl(src);
-        return cached ?? "";
+        if (cached) return cached;
+        preloadImage(src).then(() => graphRef?.refresh());
+        return "";
       }
       return origRewrite.call(this, src);
     };
@@ -269,7 +278,7 @@ export function scanImageRefs(model: any): string[] {
     visited.add(cell.id);
 
     const style = cell.style || "";
-    const match = style.match(/image=(img:[a-f0-9-]+)/);
+    const match = style.match(/image=(img:[a-f0-9-]+)/i);
     if (match) {
       refs.push(match[1]);
     }
