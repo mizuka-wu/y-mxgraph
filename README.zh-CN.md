@@ -1,5 +1,7 @@
 # y-mxgraph
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mizuka-wu/y-mxgraph)
+
 [English](./README.md)
 
 Yjs 与 draw.io (mxGraph) 文档的双向绑定库，让 draw.io 支持实时多人协同编辑。
