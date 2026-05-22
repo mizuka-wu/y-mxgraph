@@ -9,6 +9,8 @@ import {
   injectImageStorageHooks,
   configureImageStorage,
   releaseAllBlobUrls,
+  scanImageRefs,
+  preloadAllImages,
 } from "./helpers/image-storage.js";
 
 export interface CollabState {
@@ -96,6 +98,27 @@ export function bindDrawioFile(
     const graph = file.getUi().editor.graph;
     configureImageStorage({ graph });
     injectImageStorageHooks();
+
+    // 初始预加载已有图片，远端同步到达后也会触发
+    const preloadImages = () => {
+      const refs = scanImageRefs(graph.model);
+      preloadAllImages(refs).then(() => graph.refresh());
+    };
+    setTimeout(preloadImages, 100);
+
+    // 监听远端数据到达，预加载图片
+    const onDocUpdate = (
+      update: Uint8Array,
+      origin: any,
+      d: Y.Doc,
+      tr: Y.Transaction,
+    ) => {
+      if (!tr.local) {
+        setTimeout(preloadImages, 0);
+      }
+    };
+    doc.on("update", onDocUpdate);
+    Reflect.set(window, "__imageDocUpdate__", onDocUpdate);
 
     app.refresh();
     window.dispatchEvent(new Event("resize"));
@@ -204,6 +227,13 @@ export function disconnectCollaboration(state: CollabState): void {
     state.provider.destroy();
     state.provider = null;
   }
+  const doc = state.doc;
+  const onDocUpdate = (window as any).__imageDocUpdate__;
+  if (onDocUpdate && doc) {
+    doc.off("update", onDocUpdate);
+  }
+  delete (window as any).__imageDocUpdate__;
+
   if (state.doc) {
     state.doc.destroy();
     state.doc = null;
