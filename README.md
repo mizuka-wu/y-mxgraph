@@ -1,5 +1,7 @@
 # y-mxgraph
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mizuka-wu/y-mxgraph)
+
 [中文文档](./README.zh-CN.md)
 
 Yjs binding for draw.io (mxGraph) documents, enabling real-time collaborative editing.
