@@ -79,6 +79,8 @@ pnpm --filter y-mxgraph test
 
 ## Demo
 
+<video src="https://raw.githubusercontent.com/mizuka-wu/y-mxgraph/main/demo.mp4" controls width="100%"></video>
+
 ```bash
 # Single-page mode (draw.io loaded directly in the current page)
 pnpm --filter @y-mxgraph/demo dev
@@ -293,6 +295,7 @@ pnpm --filter @y-mxgraph/ws-demo dev     # Start client on port 5174
 Creates a bridge server on the parent page.
 
 **Parameters:**
+
 - `iframe: HTMLIFrameElement` - Target iframe element
 - `ydoc: Y.Doc` - Shared Yjs document
 - `awareness: Awareness` - Awareness instance (usually from provider.awareness)
@@ -300,6 +303,7 @@ Creates a bridge server on the parent page.
 - `options.debug?: boolean` - Enable debug logging (default: false)
 
 **Returns:** `IframeBridgeServer` with:
+
 - `connected: boolean` - Current connection status
 - `onConnect(fn)` / `onDisconnect(fn)` - Connection lifecycle callbacks
 - `destroy()` - Cleanup all listeners
@@ -309,11 +313,13 @@ Creates a bridge server on the parent page.
 Creates a bridge provider inside the iframe.
 
 **Parameters:**
+
 - `ydoc: Y.Doc` - Local Yjs document
 - `options.awareness?: Awareness` - Optional external Awareness (creates internal AwarenessLike if omitted)
 - `options.debug?: boolean` - Enable debug logging (default: false)
 
 **Returns:** `IframeBridgeProvider` with:
+
 - `connected: boolean` - Connection status to parent
 - `awareness: Awareness` - Awareness instance (use for Binding)
 - `serverClientId: number | null` - Parent's client ID
