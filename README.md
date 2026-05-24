@@ -3,7 +3,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mizuka-wu/y-mxgraph)
 
 <video width="320" height="240" controls>
-    <source src="./demo.mp4" type="video/mp4">
+    <source src="https://github.com/mizuka-wu/y-mxgraph/blob/main/demo.mp4" type="video/mp4">
 </video>
 
 [中文文档](./README.zh-CN.md)
