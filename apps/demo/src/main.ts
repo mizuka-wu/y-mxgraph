@@ -6,6 +6,7 @@ import {
   type CollabState,
 } from "./collaboration.js";
 import { createIframeBridgeProvider } from "y-mxgraph/iframe-bridge/provider";
+import { xml2ydoc, ydoc2xml } from "y-mxgraph/transform";
 import {
   getUIElements,
   updateDrawioStatus,
@@ -268,5 +269,177 @@ function connectCollaboration() {
     },
   );
 }
+
+// === 导出 Y.Doc XML ===
+const btnExportXml = document.getElementById(
+  "btn-export-xml",
+) as HTMLButtonElement;
+const btnCompareXml = document.getElementById(
+  "btn-compare-xml",
+) as HTMLButtonElement;
+const xmlUploadInput = document.getElementById(
+  "xml-upload-input",
+) as HTMLInputElement;
+const comparePanel = document.getElementById("compare-panel") as HTMLDivElement;
+const comparePanelOverlay = document.getElementById(
+  "compare-panel-overlay",
+) as HTMLDivElement;
+const comparePanelClose = document.getElementById(
+  "compare-panel-close",
+) as HTMLButtonElement;
+const comparePanelBody = document.getElementById(
+  "compare-panel-body",
+) as HTMLDivElement;
+
+function getCurrentDoc(): Y.Doc | null {
+  return collabState.doc || (window as any).__doc__ || null;
+}
+
+function exportYdocXml() {
+  const doc = getCurrentDoc();
+  if (!doc) {
+    alert("Y.Doc 尚未初始化，请等待 draw.io 加载完成");
+    return;
+  }
+  const xml = ydoc2xml(doc, 2);
+  const blob = new Blob([xml], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ydoc-${Date.now()}.xml`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function xmlStats(xml: string) {
+  return {
+    mxCell: (xml.match(/<mxCell/g) || []).length,
+    mxGeometry: (xml.match(/<mxGeometry/g) || []).length,
+    mxPoint: (xml.match(/<mxPoint/g) || []).length,
+    length: xml.length,
+  };
+}
+
+function showComparePanel(html: string) {
+  comparePanelBody.innerHTML = html;
+  comparePanelOverlay.style.display = "block";
+  comparePanel.style.display = "flex";
+}
+
+function hideComparePanel() {
+  comparePanelOverlay.style.display = "none";
+  comparePanel.style.display = "none";
+}
+
+function compareUploadedXml(uploadedXml: string) {
+  const doc = getCurrentDoc();
+  if (!doc) {
+    alert("Y.Doc 尚未初始化，请等待 draw.io 加载完成");
+    return;
+  }
+
+  // 将上传的 XML 解析为新 doc 再序列化，确保是规范化后的格式
+  const tempDoc = new Y.Doc();
+  try {
+    xml2ydoc(uploadedXml, tempDoc);
+  } catch (e) {
+    alert("上传的 XML 解析失败: " + (e as Error).message);
+    return;
+  }
+  const normalized = ydoc2xml(tempDoc, 0);
+  const current = ydoc2xml(doc, 0);
+
+  const uploadedStats = xmlStats(uploadedXml);
+  const normalizedStats = xmlStats(normalized);
+  const currentStats = xmlStats(current);
+
+  const mismatchClass = (a: number, b: number) =>
+    a !== b ? 'class="diff-mismatch"' : "";
+
+  const rows = [
+    {
+      label: "mxCell",
+      uploaded: uploadedStats.mxCell,
+      normalized: normalizedStats.mxCell,
+      current: currentStats.mxCell,
+    },
+    {
+      label: "mxGeometry",
+      uploaded: uploadedStats.mxGeometry,
+      normalized: normalizedStats.mxGeometry,
+      current: currentStats.mxGeometry,
+    },
+    {
+      label: "mxPoint",
+      uploaded: uploadedStats.mxPoint,
+      normalized: normalizedStats.mxPoint,
+      current: currentStats.mxPoint,
+    },
+    {
+      label: "文本长度",
+      uploaded: uploadedStats.length,
+      normalized: normalizedStats.length,
+      current: currentStats.length,
+    },
+  ];
+
+  const tableRows = rows
+    .map((r) => {
+      const uploadMismatch = mismatchClass(r.uploaded, r.normalized);
+      const currentMismatch = mismatchClass(r.normalized, r.current);
+      return `<tr>
+        <td>${r.label}</td>
+        <td ${uploadMismatch}>${r.uploaded}</td>
+        <td ${uploadMismatch}>${r.normalized}</td>
+        <td ${currentMismatch}>${r.current}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const html = `
+    <p><strong>说明：</strong></p>
+    <ul>
+      <li><strong>原始上传</strong>：你上传的 XML 文件原始内容统计</li>
+      <li><strong>规范后</strong>：上传 XML 经 xml2ydoc → ydoc2xml 序列化后的统计（即经过库处理后的结果）</li>
+      <li><strong>当前 Y.Doc</strong>：当前页面 Y.Doc 序列化后的统计</li>
+    </ul>
+    <table>
+      <tr><th>指标</th><th>原始上传</th><th>规范后</th><th>当前 Y.Doc</th></tr>
+      ${tableRows}
+    </table>
+    <p>红色 = 数量不一致</p>
+  `;
+
+  showComparePanel(html);
+
+  // 同时输出到控制台
+  console.log("=== XML 对比 ===");
+  console.table({
+    原始上传: uploadedStats,
+    规范后: normalizedStats,
+    当前YDoc: currentStats,
+  });
+}
+
+btnExportXml.addEventListener("click", exportYdocXml);
+
+btnCompareXml.addEventListener("click", () => {
+  xmlUploadInput.click();
+});
+
+xmlUploadInput.addEventListener("change", (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const text = String(ev.target?.result || "");
+    compareUploadedXml(text);
+    xmlUploadInput.value = ""; // 允许再次选择同一文件
+  };
+  reader.readAsText(file);
+});
+
+comparePanelClose.addEventListener("click", hideComparePanel);
+comparePanelOverlay.addEventListener("click", hideComparePanel);
 
 window.addEventListener("DOMContentLoaded", init);

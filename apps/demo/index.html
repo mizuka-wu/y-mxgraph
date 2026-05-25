@@ -89,6 +89,112 @@
       flex-shrink: 0;
     }
 
+    /* ── 工具按钮 ── */
+    .tool-btn {
+      background: #e7f5ff;
+      color: #1971c2;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    .tool-btn:hover {
+      background: #d0ebff;
+    }
+
+    .tool-btn:disabled {
+      background: #e9ecef;
+      color: #adb5bd;
+      cursor: not-allowed;
+    }
+
+    /* ── 对比结果面板 ── */
+    #compare-panel {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 560px;
+      max-width: 90vw;
+      max-height: 80vh;
+      background: #ffffff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      display: none;
+      flex-direction: column;
+      z-index: 200;
+      overflow: hidden;
+    }
+
+    #compare-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #f1f3f5;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 14px;
+      font-weight: 600;
+      color: #495057;
+    }
+
+    #compare-panel-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      color: #868e96;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    #compare-panel-close:hover {
+      color: #495057;
+    }
+
+    #compare-panel-body {
+      padding: 16px;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      color: #495057;
+    }
+
+    #compare-panel-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+
+    #compare-panel-body th,
+    #compare-panel-body td {
+      border: 1px solid #dee2e6;
+      padding: 6px 10px;
+      text-align: left;
+    }
+
+    #compare-panel-body th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+
+    #compare-panel-body .diff-mismatch {
+      color: #e03131;
+      font-weight: 600;
+    }
+
+    #compare-panel-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.3);
+      display: none;
+      z-index: 199;
+    }
+
     /* ── 状态栏 ── */
     #status-bar {
       display: flex;
@@ -307,6 +413,14 @@
       <label id="label-room">Room:</label>
       <input type="text" id="room-input" value="y-mxgraph-demo" />
     </div>
+
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <button class="tool-btn" id="btn-export-xml" title="下载当前 Y.Doc 序列化后的 XML">导出 Y.Doc XML</button>
+      <button class="tool-btn" id="btn-compare-xml" title="上传 XML 并与当前 Y.Doc 对比统计信息">上传 XML 对比</button>
+      <input type="file" id="xml-upload-input" accept=".xml" style="display:none" />
+    </div>
   </div>
 
   <div id="status-bar">
@@ -343,6 +457,16 @@
     </div>
 
 
+  </div>
+
+  <!-- 对比结果面板 -->
+  <div id="compare-panel-overlay"></div>
+  <div id="compare-panel">
+    <div id="compare-panel-header">
+      <span>XML 对比结果</span>
+      <button id="compare-panel-close">&times;</button>
+    </div>
+    <div id="compare-panel-body"></div>
   </div>
 
   <script type="module" src="/src/main.ts"></script>

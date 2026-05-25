@@ -2,6 +2,7 @@ import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { type Awareness } from "y-protocols/awareness";
 import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
+import { ydoc2xml } from "y-mxgraph/transform";
 import { type AwarenessLike } from "y-mxgraph/iframe-bridge/provider";
 import { SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 import {
@@ -127,6 +128,29 @@ export function bindDrawioFile(
     Reflect.set(window, "__undoManager__", undoManager);
     Reflect.set(window, "__binding__", binding);
     Reflect.set(window, "__app__", app);
+
+    // 调试命令：对比 draw.io 原始 XML 与 doc 序列化后的 XML
+    Reflect.set(window, "__compareXml__", () => {
+      const original = file.getData ? file.getData() : "";
+      const serialized = ydoc2xml(doc);
+
+      const stats = (xml: string) => ({
+        mxCell: (xml.match(/<mxCell/g) || []).length,
+        mxGeometry: (xml.match(/<mxGeometry/g) || []).length,
+        mxPoint: (xml.match(/<mxPoint/g) || []).length,
+      });
+
+      console.log("=== draw.io 原始 XML (file.getData) ===");
+      console.log(original.slice(0, 2000));
+      console.log("=== doc 序列化 XML (ydoc2xml) ===");
+      console.log(serialized.slice(0, 2000));
+      console.table({
+        original: stats(original),
+        serialized: stats(serialized),
+      });
+
+      return { original, serialized };
+    });
 
     onBind(binding);
   };

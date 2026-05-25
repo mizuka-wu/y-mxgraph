@@ -98,4 +98,46 @@ describe("ydoc2xml", () => {
     expect(xml2).toContain('id="0"');
     expect(xml2).toContain('id="1"');
   });
+
+  it("mxGeometry 往返不丢失", () => {
+    const xml = `<mxGraphModel><root>
+      <mxCell id="0" />
+      <mxCell id="1" parent="0" />
+      <mxCell id="cell1" vertex="1" parent="1">
+        <mxGeometry x="10" y="20" width="100" height="80" as="geometry" />
+      </mxCell>
+    </root></mxGraphModel>`;
+
+    const doc = new Y.Doc();
+    xml2ydoc(xml, doc);
+    const out = ydoc2xml(doc);
+
+    expect(out).toContain("mxGeometry");
+    expect(out).toContain('x="10"');
+    expect(out).toContain('y="20"');
+    expect(out).toContain('width="100"');
+    expect(out).toContain('height="80"');
+    expect(out).toContain('as="geometry"');
+  });
+
+  it("带 mxPoint 子元素的 mxGeometry 往返不丢失", () => {
+    const xml = `<mxGraphModel><root>
+      <mxCell id="0" />
+      <mxCell id="1" parent="0" />
+      <mxCell id="edge1" edge="1" parent="1" source="a" target="b">
+        <mxGeometry relative="1" as="geometry">
+          <mxPoint x="190" y="190" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </root></mxGraphModel>`;
+
+    const doc = new Y.Doc();
+    xml2ydoc(xml, doc);
+    const out = ydoc2xml(doc);
+
+    expect(out).toContain("mxGeometry");
+    expect(out).toContain("mxPoint");
+    expect(out).toContain('as="targetPoint"');
+    expect(out).toContain('x="190"');
+  });
 });
