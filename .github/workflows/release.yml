@@ -60,15 +60,23 @@ jobs:
           if [ -z "$release_notes" ]; then
             release_notes="⚠️ 自动生成 release notes 失败（多为首次发布、只有一个 tag 或仓库未完整同步 tag），请手动查看提交历史。"
           fi
-          set -e
-          gh release create "${{ github.ref_name }}" \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "$release_notes" \
-            "packages/y-mxgraph/y-mxgraph-${{ github.ref_name }}.zip" || \
-          gh release edit "${{ github.ref_name }}" \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "$release_notes" \
-            "packages/y-mxgraph/y-mxgraph-${{ github.ref_name }}.zip"
+          
+          # Check if release exists
+          if gh release view "${{ github.ref_name }}" 2>/dev/null; then
+            # Release exists, update notes and upload asset
+            gh release edit "${{ github.ref_name }}" \
+              --title "Release ${{ github.ref_name }}" \
+              --notes "$release_notes"
+            gh release upload "${{ github.ref_name }}" \
+              "packages/y-mxgraph/y-mxgraph-${{ github.ref_name }}.zip" \
+              --clobber
+          else
+            # Release doesn't exist, create it with asset
+            gh release create "${{ github.ref_name }}" \
+              --title "Release ${{ github.ref_name }}" \
+              --notes "$release_notes" \
+              "packages/y-mxgraph/y-mxgraph-${{ github.ref_name }}.zip"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
