@@ -41,7 +41,6 @@ jobs:
         uses: requarks/changelog-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref_name }}
           writeToFile: false
         continue-on-error: true
 
