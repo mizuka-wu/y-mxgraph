@@ -35,23 +35,37 @@ jobs:
           cd packages/y-mxgraph/dist
           zip -r "../y-mxgraph-${{ github.ref_name }}.zip" .
 
+      # 查找前一个tag并生成release notes
+      - name: Get previous tag
+        id: previoustag
+        run: |
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${GITHUB_REF_NAME}$" | head -n 1 || true)
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
       - name: Generate release notes
         if: startsWith(github.ref, 'refs/tags/')
         id: changelog
         uses: requarks/changelog-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fromTag: ${{ steps.previoustag.outputs.prev_tag }}
+          toTag: ${{ github.ref_name }}
           writeToFile: false
         continue-on-error: true
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           release_notes="${{ steps.changelog.outputs.changes }}"
           if [ -z "$release_notes" ]; then
             release_notes="⚠️ 自动生成 release notes 失败（多为首次发布、只有一个 tag 或仓库未完整同步 tag），请手动查看提交历史。"
           fi
+          set -e
           gh release create "${{ github.ref_name }}" \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "$release_notes" \
+            "packages/y-mxgraph/y-mxgraph-${{ github.ref_name }}.zip" || \
+          gh release edit "${{ github.ref_name }}" \
             --title "Release ${{ github.ref_name }}" \
             --notes "$release_notes" \
             "packages/y-mxgraph/y-mxgraph-${{ github.ref_name }}.zip"
