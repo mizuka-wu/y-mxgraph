@@ -11,11 +11,17 @@ import {
   diagramOrderKey,
 } from "../models/mxfile";
 import {
+  backgroundKey,
   mxCellOrderKey,
   key as mxGraphModelKey,
   type YMxGraphModel,
 } from "../models/mxGraphModel";
 import { key as mxCellKey } from "../models/mxCell";
+import {
+  applyViewPatch,
+  diffBackgroundViewPatch,
+  getBackground,
+} from "../models/view";
 import * as Y from "yjs";
 
 const DIFF_INSERT = "i";
@@ -26,6 +32,7 @@ type DocSnapshot = {
   diagramOrder: string[] | null;
   cellsOrder: Map<string, string[]>;
   cellAttrs: Map<string, Map<string, Record<string, string>>>;
+  diagramBackground: Map<string, string | undefined>;
 };
 const docSnapshots = new WeakMap<Y.Doc, DocSnapshot>();
 
@@ -81,6 +88,8 @@ export interface FilePatch {
     [key: string]: {
       name?: string;
       previous?: string;
+      /** draw.io page viewState（如 background），与 diffPages 格式一致 */
+      view?: Record<string, string>;
       cells?: {
         [DIFF_REMOVE]?: string[];
         [DIFF_INSERT]?: Record<string, string>[];
@@ -90,6 +99,39 @@ export interface FilePatch {
       };
     };
   };
+}
+
+function pruneEmptyPatch(patch: FilePatch): FilePatch {
+  if (!patch[DIFF_UPDATE]) return patch;
+  for (const id of Object.keys(patch[DIFF_UPDATE]!)) {
+    const u = patch[DIFF_UPDATE]![id]!;
+    const cells = u.cells;
+    if (cells?.[DIFF_UPDATE]) {
+      for (const cid of Object.keys(cells[DIFF_UPDATE]!)) {
+        if (Object.keys(cells[DIFF_UPDATE]![cid]!).length === 0) {
+          delete cells[DIFF_UPDATE]![cid];
+        }
+      }
+      if (Object.keys(cells[DIFF_UPDATE]!).length === 0) {
+        delete cells[DIFF_UPDATE];
+      }
+    }
+    if (
+      cells &&
+      !cells[DIFF_REMOVE]?.length &&
+      !cells[DIFF_INSERT]?.length &&
+      (!cells[DIFF_UPDATE] || Object.keys(cells[DIFF_UPDATE]).length === 0)
+    ) {
+      delete u.cells;
+    }
+    if (Object.keys(u).length === 0) {
+      delete patch[DIFF_UPDATE]![id];
+    }
+  }
+  if (Object.keys(patch[DIFF_UPDATE]!).length === 0) {
+    delete patch[DIFF_UPDATE];
+  }
+  return patch;
 }
 
 export function applyFilePatch(
@@ -220,6 +262,10 @@ export function applyFilePatch(
               "name",
               update.name || "",
             );
+          }
+
+          if (update.view && typeof update.view === "object") {
+            applyViewPatch(diagram, update.view);
           }
 
           if (update.cells) {
@@ -403,6 +449,7 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
       diagramOrder,
       cellsOrder: new Map<string, string[]>(),
       cellAttrs: new Map<string, Map<string, Record<string, string>>>(),
+      diagramBackground: new Map<string, string | undefined>(),
     };
 
     const diagrams: YDiagram[] = diagramOrder
@@ -434,6 +481,7 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
         snap.cellsOrder.set(did, []);
         snap.cellAttrs.set(did, new Map());
       }
+      snap.diagramBackground.set(did, getBackground(d));
     }
 
     docSnapshots.set(doc, snap);
@@ -466,12 +514,14 @@ export function generatePatch(
       diagramOrder: null,
       cellsOrder: new Map<string, string[]>(),
       cellAttrs: new Map<string, Map<string, Record<string, string>>>(),
+      diagramBackground: new Map<string, string | undefined>(),
     };
     docSnapshots.set(doc, snap);
   }
   const prevDiagramOrder = snap.diagramOrder;
   const prevCellsOrder = snap.cellsOrder;
   const prevCellsAttrs = snap.cellAttrs;
+  const prevDiagramBackground = snap.diagramBackground;
 
   const ensureUpdate = (diagramId: string) => {
     patch[DIFF_UPDATE] = patch[DIFF_UPDATE] || {};
@@ -494,9 +544,11 @@ export function generatePatch(
     .filter((d): d is YDiagram => !!d);
   const currCellsOrder = new Map<string, string[]>();
   const cellAttrMap = new Map<string, Map<string, Record<string, string>>>();
+  const currDiagramBackground = new Map<string, string | undefined>();
 
   for (const d of diagramsList) {
     const did = (d.get("id") as unknown as string) || "";
+    currDiagramBackground.set(did, getBackground(d));
     const attrs = new Map<string, Record<string, string>>();
     const gm = d.get(mxGraphModelKey) as YMxGraphModel | undefined;
     if (gm) {
@@ -633,11 +685,10 @@ export function generatePatch(
       const changed: Set<string> =
         (ev as unknown as { keysChanged?: Set<string> }).keysChanged ||
         new Set();
-      if (!changed || !changed.has("name")) continue;
+      if (!changed?.has("name")) continue;
       const did = (target.get("id") as unknown as string) || "";
       if (!did || insertedDiagramIdGlobal.has(did)) continue;
-      const u = ensureUpdate(did);
-      u.name = (target.get("name") as unknown as string) || "";
+      ensureUpdate(did).name = (target.get("name") as unknown as string) || "";
     }
   }
 
@@ -645,8 +696,28 @@ export function generatePatch(
     for (const d of diagramsList) {
       const did = (d.get("id") as unknown as string) || "";
       if (!did) continue;
-      const u = ensureUpdate(did);
-      u.name = (d.get("name") as unknown as string) || "";
+      ensureUpdate(did).name = (d.get("name") as unknown as string) || "";
+    }
+  }
+
+  for (const ev of events) {
+    const target = (ev as unknown as { target?: unknown }).target;
+    if (!(target instanceof Y.Map)) continue;
+    for (const d of diagramsList) {
+      const gm = d.get(mxGraphModelKey) as YMxGraphModel | undefined;
+      if (gm !== target) continue;
+      const changed: Set<string> =
+        (ev as unknown as { keysChanged?: Set<string> }).keysChanged ||
+        new Set();
+      if (!changed.has(backgroundKey)) continue;
+      const did = (d.get("id") as unknown as string) || "";
+      if (!did || insertedDiagramIdGlobal.has(did)) continue;
+      const viewDiff = diffBackgroundViewPatch(
+        prevDiagramBackground.get(did),
+        getBackground(d),
+      );
+      if (viewDiff) ensureUpdate(did).view = viewDiff;
+      break;
     }
   }
 
@@ -686,6 +757,15 @@ export function generatePatch(
   }
 
   if (prevDiagramOrder) {
+    for (const [did, currBg] of currDiagramBackground.entries()) {
+      if (insertedDiagramIdGlobal.has(did)) continue;
+      const viewDiff = diffBackgroundViewPatch(
+        prevDiagramBackground.get(did),
+        currBg,
+      );
+      if (viewDiff) ensureUpdate(did).view = viewDiff;
+    }
+
     for (const [did, currAttrsMap] of cellAttrMap.entries()) {
       const prevAttrsMap =
         prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
@@ -736,7 +816,11 @@ export function generatePatch(
   }
   snap.cellsOrder = newCellsOrder;
   snap.cellAttrs = newCellsAttrs;
+  snap.diagramBackground = new Map<string, string | undefined>();
+  for (const [did, bg] of currDiagramBackground.entries()) {
+    snap.diagramBackground.set(did, bg);
+  }
   docSnapshots.set(doc, snap);
 
-  return patch;
+  return pruneEmptyPatch(patch);
 }
