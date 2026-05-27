@@ -251,6 +251,8 @@ export function createIframeBridgeServer(
         });
         applyingIframeUpdate = false;
       }
+    } else if (msgType === "request-undo-state") {
+      postUndoStateToIframe();
     } else if (msgType === "undo" && undoManager) {
       undoManager.undo();
       postUndoStateToIframe();

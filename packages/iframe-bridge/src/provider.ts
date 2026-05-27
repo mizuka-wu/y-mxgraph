@@ -179,6 +179,10 @@ export function createIframeBridgeProvider(
   let serverClientId: number | null = null;
   let currentCleanup: (() => void) | null = null;
   let currentMxLike: MxLike | null = null;
+  let pendingUndoState: {
+    undoStackSize?: number;
+    redoStackSize?: number;
+  } | null = null;
   let connected = false;
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
   const connectListeners = new Set<() => void>();
@@ -347,6 +351,35 @@ export function createIframeBridgeProvider(
     window.parent.postMessage(message, "*");
   };
 
+  const syncUndoStateFromServer = (
+    mxLike: MxLike,
+    data: { undoStackSize?: number; redoStackSize?: number },
+  ) => {
+    const { undoStackSize, redoStackSize } = data;
+    const oldIndex = mxLike.indexOfNextAdd;
+    const newIndex = undoStackSize || 0;
+    const newTotal = (undoStackSize || 0) + (redoStackSize || 0);
+    applyingParentUpdate = true;
+    mxLike.history = new Array(newTotal).fill({});
+    mxLike.indexOfNextAdd = newIndex;
+    if (newTotal === 0) {
+      mxLike.fireEvent(createMxEventObject("clear"));
+    } else if (newIndex < oldIndex) {
+      mxLike.fireEvent(
+        createMxEventObject("undo", { edit: { changes: [] } }),
+      );
+    } else if (newIndex > oldIndex) {
+      mxLike.fireEvent(
+        createMxEventObject("redo", { edit: { changes: [] } }),
+      );
+    } else {
+      mxLike.fireEvent(
+        createMxEventObject("add", { edit: { changes: [] } }),
+      );
+    }
+    applyingParentUpdate = false;
+  };
+
   const onMessage = (event: MessageEvent) => {
     if (event.source !== window.parent) return;
     const { type, payload, serverClientId: receivedServerId } = event.data;
@@ -422,39 +455,12 @@ export function createIframeBridgeProvider(
         }
         applyingParentUpdate = false;
       }
-    } else if (type === "undo-state" && currentMxLike) {
-      // 从 Server 同步真实的 undo/redo 状态
-      const { undoStackSize, redoStackSize } = event.data;
-
-      const oldIndex = currentMxLike.indexOfNextAdd;
-      const newIndex = undoStackSize || 0;
-      const newTotal = (undoStackSize || 0) + (redoStackSize || 0);
-
-      // 直接根据 server 状态重建本地状态
-      applyingParentUpdate = true;
-
-      // 重建 history 数组匹配 server 的总大小
-      currentMxLike.history = new Array(newTotal).fill({});
-      currentMxLike.indexOfNextAdd = newIndex;
-
-      // 触发对应事件通知 UI 更新
-      if (newTotal === 0) {
-        currentMxLike.fireEvent(createMxEventObject("clear"));
-      } else if (newIndex < oldIndex) {
-        currentMxLike.fireEvent(
-          createMxEventObject("undo", { edit: { changes: [] } }),
-        );
-      } else if (newIndex > oldIndex) {
-        currentMxLike.fireEvent(
-          createMxEventObject("redo", { edit: { changes: [] } }),
-        );
+    } else if (type === "undo-state") {
+      if (!currentMxLike) {
+        pendingUndoState = event.data;
       } else {
-        currentMxLike.fireEvent(
-          createMxEventObject("add", { edit: { changes: [] } }),
-        );
+        syncUndoStateFromServer(currentMxLike, event.data);
       }
-
-      applyingParentUpdate = false;
     } else if (type === "disconnect") {
       setConnected(false);
       startInitRetry();
@@ -525,6 +531,47 @@ export function createIframeBridgeProvider(
 
       const editor = file.getUi().editor;
       const originUndoManager = editor.undoManager;
+
+      // bindUndoManager 已安装：不替换 editor.undoManager，只委托 undo/redo
+      if (originUndoManager && "_y" in originUndoManager) {
+        const mxLike = originUndoManager as MxLike;
+        const origUndo = mxLike.undo.bind(mxLike);
+        const origRedo = mxLike.redo.bind(mxLike);
+        const origCanUndo = mxLike.canUndo.bind(mxLike);
+        const origCanRedo = mxLike.canRedo.bind(mxLike);
+        currentMxLike = mxLike;
+        mxLike.undo = () => {
+          if (!applyingParentUpdate) {
+            window.parent.postMessage({ type: "undo" }, "*");
+          } else {
+            origUndo();
+          }
+        };
+        mxLike.redo = () => {
+          if (!applyingParentUpdate) {
+            window.parent.postMessage({ type: "redo" }, "*");
+          } else {
+            origRedo();
+          }
+        };
+        mxLike.canUndo = () => mxLike.indexOfNextAdd > 0;
+        mxLike.canRedo = () => mxLike.indexOfNextAdd < mxLike.history.length;
+        if (pendingUndoState) {
+          syncUndoStateFromServer(mxLike, pendingUndoState);
+          pendingUndoState = null;
+        }
+        window.parent.postMessage({ type: "request-undo-state" }, "*");
+        const cleanup = () => {
+          mxLike.undo = origUndo;
+          mxLike.redo = origRedo;
+          mxLike.canUndo = origCanUndo;
+          mxLike.canRedo = origCanRedo;
+          currentMxLike = null;
+          pendingUndoState = null;
+        };
+        currentCleanup = cleanup;
+        return cleanup;
+      }
 
       const pairs: Array<[string, ListenerFn]> = [];
       const raw = Array.isArray(originUndoManager?.eventListeners)
@@ -602,12 +649,19 @@ export function createIframeBridgeProvider(
       editor.undoManager = mxLike as unknown as DrawioEditor["undoManager"];
       editor.undoListener = function () {};
 
+      if (pendingUndoState) {
+        syncUndoStateFromServer(mxLike, pendingUndoState);
+        pendingUndoState = null;
+      }
+      window.parent.postMessage({ type: "request-undo-state" }, "*");
+
       const cleanup = () => {
         editor.undoManager = originUndoManager;
         editor.undoListener = originUndoManager?.undoListener as
           | ((...args: unknown[]) => void)
           | undefined;
         currentMxLike = null;
+        pendingUndoState = null;
       };
 
       currentCleanup = cleanup;
