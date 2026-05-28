@@ -38,7 +38,7 @@ jobs:
       - name: Generate release notes
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          npx conventional-changelog -p angular -r 2 -o release-notes.md || \
+          npx -y conventional-changelog-cli -p angular -r 2 -o release-notes.md || \
           echo "⚠️ Failed to generate changelog, using fallback." > release-notes.md
 
       - name: Create or update GitHub Release
