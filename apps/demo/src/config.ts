@@ -23,3 +23,10 @@ export const SIGNALING_SERVERS = [];
  * 默认房间名称
  */
 export const DEFAULT_ROOM = "y-mxgraph-demo";
+
+/** iframe.html 工具栏默认用户信息（与 iframe.html input 默认值一致） */
+export const DEFAULT_IFRAME_USER = {
+  account: "alice",
+  name: "Alice",
+  color: "#2563eb",
+} as const;
