@@ -1,4 +1,4 @@
-import { DRAWIO_VERSIONS, DEFAULT_ROOM } from "./config.js";
+import { DRAWIO_VERSIONS, DEFAULT_ROOM, DEFAULT_IFRAME_USER } from "./config.js";
 import { loadDrawioScript } from "./drawio-loader.js";
 import {
   createCollaboration,
@@ -172,23 +172,24 @@ async function initIframeChild() {
   // 2. draw.io 加载完成，创建 bridge provider
   const ydoc = new Y.Doc();
 
-  // 从 URL 参数读取初始 user 信息
-  const initAccount = urlParams.get("account") || urlParams.get("userName");
-  const initName = urlParams.get("name") || initAccount;
-  const initUserColor = urlParams.get("userColor");
+  const initAccount =
+    urlParams.get("account") ||
+    urlParams.get("userName") ||
+    DEFAULT_IFRAME_USER.account;
+  const initName =
+    urlParams.get("name") || initAccount || DEFAULT_IFRAME_USER.name;
+  const initUserColor = urlParams.get("userColor") || DEFAULT_IFRAME_USER.color;
 
   const bridgeProvider = createIframeBridgeProvider(ydoc, { debug: true });
   console.log(
     `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
   );
 
-  if (initAccount || initName || initUserColor) {
-    bridgeProvider.setLocalFields({
-      account: initAccount,
-      name: initName,
-      color: initUserColor,
-    });
-  }
+  bridgeProvider.setLocalFields({
+    account: initAccount,
+    name: initName,
+    color: initUserColor,
+  });
 
   // 3. 根据 connect 状态决定是否显示编辑器并 bind
   const doBind = () => {
