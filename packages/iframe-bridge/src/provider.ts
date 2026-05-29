@@ -3,6 +3,30 @@ import {
   Awareness,
   applyAwarenessUpdate,
 } from "y-protocols/awareness";
+const IFRAME_BRIDGE_STATE_KEYS = new Set(["cursor", "selection"]);
+
+function isIframeBridgeStateKey(key: string): boolean {
+  return IFRAME_BRIDGE_STATE_KEYS.has(key);
+}
+
+function getAwarenessStateFieldChanges(
+  prev: Record<string, unknown> | null,
+  next: Record<string, unknown> | null,
+): Array<{ key: string; value: unknown }> {
+  const keys = new Set([
+    ...Object.keys(prev ?? {}),
+    ...Object.keys(next ?? {}),
+  ]);
+  const changes: Array<{ key: string; value: unknown }> = [];
+  for (const key of keys) {
+    const prevValue = prev?.[key];
+    const nextValue = next?.[key];
+    if (JSON.stringify(prevValue) !== JSON.stringify(nextValue)) {
+      changes.push({ key, value: nextValue });
+    }
+  }
+  return changes;
+}
 
 /**
  * Awareness-like 接口，只需要支持本地状态管理。
@@ -187,6 +211,7 @@ export function createIframeBridgeProvider(
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
+  let lastLocalAwarenessSnapshot: Record<string, unknown> | null = null;
 
   const log = debug
     ? (...args: unknown[]) => console.log("[iframe-bridge provider]", ...args)
@@ -199,23 +224,8 @@ export function createIframeBridgeProvider(
   const updateHandlers = new Set<(update: { added: number[]; updated: number[]; removed: number[] }) => void>();
 
   function createAwarenessLike(): AwarenessLike {
-    let pendingState: Record<string, unknown> | null | undefined = undefined;
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-    const FLUSH_INTERVAL = 50;
-
     function getEffectiveClientId() {
       return serverClientId ?? localClientId;
-    }
-
-    function scheduleFlush() {
-      if (flushTimer) return;
-      flushTimer = setTimeout(() => {
-        flushTimer = null;
-        if (pendingState !== undefined && connected) {
-          window.parent.postMessage({ type: "awareness-local-state", state: pendingState }, "*");
-          pendingState = undefined;
-        }
-      }, FLUSH_INTERVAL);
     }
 
     return {
@@ -238,8 +248,6 @@ export function createIframeBridgeProvider(
         } else {
           localStates.set(id, state);
         }
-        pendingState = state;
-        scheduleFlush();
         const update = { added: state && !localStates.has(id) ? [id] : [], updated: state ? [id] : [], removed: state === null ? [id] : [] };
         updateHandlers.forEach(handler => handler(update));
       },
@@ -248,8 +256,7 @@ export function createIframeBridgeProvider(
         const current = localStates.get(id) || {};
         const newState = { ...current, [field]: value };
         localStates.set(id, newState);
-        pendingState = newState;
-        scheduleFlush();
+        postSetLocalStateToParent(field, value);
         const update = { added: [], updated: [id], removed: [] };
         updateHandlers.forEach(handler => handler(update));
       },
@@ -287,6 +294,18 @@ export function createIframeBridgeProvider(
     log(direction, type, formatPayload(payload));
   }
 
+  function snapshotLocalAwarenessState() {
+    const state = awareness.getLocalState();
+    lastLocalAwarenessSnapshot = state ? { ...state } : null;
+  }
+
+  function postSetLocalStateToParent(key: string, value: unknown) {
+    if (!connected || !isIframeBridgeStateKey(key)) return;
+    const message = { type: "set-local-state", key, value };
+    logMessage("send", "set-local-state", message);
+    window.parent.postMessage(message, "*");
+  }
+
   function parentPostMessage(message: unknown) {
     logMessage("send", (message as { type?: string }).type ?? "postMessage", message);
     window.parent.postMessage(message, "*");
@@ -296,8 +315,10 @@ export function createIframeBridgeProvider(
     if (connected === value) return;
     connected = value;
     if (value) {
+      snapshotLocalAwarenessState();
       connectListeners.forEach((fn) => fn());
     } else {
+      lastLocalAwarenessSnapshot = null;
       disconnectListeners.forEach((fn) => fn());
     }
   }
@@ -345,10 +366,15 @@ export function createIframeBridgeProvider(
     const localChanged = changes.includes(localClientId);
     if (!localChanged) return;
 
-    const state = awareness.getLocalState();
-    const message = { type: "awareness-local-state", state };
-    logMessage("send", "awareness-local-state", state);
-    window.parent.postMessage(message, "*");
+    const nextState = awareness.getLocalState();
+    const fieldChanges = getAwarenessStateFieldChanges(
+      lastLocalAwarenessSnapshot,
+      nextState,
+    );
+    lastLocalAwarenessSnapshot = nextState ? { ...nextState } : null;
+    for (const { key, value } of fieldChanges) {
+      postSetLocalStateToParent(key, value);
+    }
   };
 
   const syncUndoStateFromServer = (
