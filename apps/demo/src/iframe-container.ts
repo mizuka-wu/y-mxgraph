@@ -3,7 +3,12 @@ import { WebrtcProvider } from "y-webrtc";
 import { createIframeBridgeServer } from "y-mxgraph/iframe-bridge/server";
 import { IFRAME_ORIGIN } from "y-mxgraph/iframe-bridge";
 import { LOCAL_ORIGIN } from "y-mxgraph";
-import { DRAWIO_VERSIONS, SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
+import {
+  DRAWIO_VERSIONS,
+  SIGNALING_SERVERS,
+  DEFAULT_ROOM,
+  DEFAULT_IFRAME_USER,
+} from "./config.js";
 
 // === UI 元素 ===
 const ui = {
@@ -60,6 +65,14 @@ function getIframeSrc(version: string, customUrl?: string) {
   const params = new URLSearchParams();
   params.set("version", version);
   if (customUrl) params.set("customUrl", customUrl);
+  const account =
+    ui.userAccountInput.value.trim() || DEFAULT_IFRAME_USER.account;
+  const name =
+    ui.userNameInput.value.trim() || account || DEFAULT_IFRAME_USER.name;
+  const userColor = ui.userColorInput.value || DEFAULT_IFRAME_USER.color;
+  params.set("account", account);
+  if (name !== account) params.set("name", name);
+  params.set("userColor", userColor);
   return `./index.html?${params.toString()}`;
 }
 
@@ -196,9 +209,12 @@ function init() {
   ui.roomInput.value = roomName;
   ui.serverDelayInput.value = String(serverDelay);
 
-  const account = urlParams.get("account") || urlParams.get("userName") || "";
-  const name = urlParams.get("name") || account;
-  const userColor = urlParams.get("userColor") || "";
+  const account =
+    urlParams.get("account") ||
+    urlParams.get("userName") ||
+    DEFAULT_IFRAME_USER.account;
+  const name = urlParams.get("name") || account || DEFAULT_IFRAME_USER.name;
+  const userColor = urlParams.get("userColor") || DEFAULT_IFRAME_USER.color;
   ui.userAccountInput.value = account;
   ui.userNameInput.value = name;
   ui.userColorInput.value = userColor;
