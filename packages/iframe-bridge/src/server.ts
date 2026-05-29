@@ -220,17 +220,19 @@ export function createIframeBridgeServer(
       Y.applyUpdate(ydoc, update, applyOrigin);
       // 源 iframe 已经持有此 update，无需回传
     } else if (msgType === "awareness-local-state") {
-      log("[DEBUG] server received awareness-local-state", {
-        currentState: awareness.getLocalState(),
-        receivedState: event.data.state,
-      });
-      logMessage("recv", "awareness-local-state", payload);
-      applyingIframeUpdate = true;
-      awareness.setLocalState(event.data.state);
-      applyingIframeUpdate = false;
-      log("[DEBUG] server after setLocalState", {
-        newState: awareness.getLocalState(),
-      });
+      // 保留消息类型兼容旧客户端，已不再采用
+      logMessage("recv", "awareness-local-state (ignored)", payload);
+    } else if (msgType === "set-local-state") {
+      const { key, value } = event.data as {
+        key?: string;
+        value?: unknown;
+      };
+      logMessage("recv", "set-local-state", { key, value });
+      if (typeof key === "string") {
+        applyingIframeUpdate = true;
+        awareness.setLocalStateField(key, value);
+        applyingIframeUpdate = false;
+      }
     } else if (msgType === "awareness-update") {
       logMessage("recv", "awareness-update", payload);
       // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传
