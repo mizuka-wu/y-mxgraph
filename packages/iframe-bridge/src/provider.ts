@@ -208,6 +208,10 @@ export function createIframeBridgeProvider(
     redoStackSize?: number;
   } | null = null;
   let connected = false;
+  const MAX_QUEUE_SIZE = 1000;
+  const pendingYdocUpdates: Uint8Array[] = [];
+  let seq = 0;
+  const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
@@ -316,6 +320,17 @@ export function createIframeBridgeProvider(
     connected = value;
     if (value) {
       snapshotLocalAwarenessState();
+      while (pendingYdocUpdates.length > 0) {
+        const update = pendingYdocUpdates.shift()!;
+        const seqNum = ++seq;
+        const message = { type: "ydoc-update", payload: Array.from(update), isBaseline: false, seq: seqNum };
+        window.parent.postMessage(message, "*");
+        unackedYdocUpdates.set(seqNum, { update, isBaseline: false });
+      }
+      for (const [savedSeq, { update, isBaseline }] of unackedYdocUpdates) {
+        const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: savedSeq };
+        window.parent.postMessage(message, "*");
+      }
       connectListeners.forEach((fn) => fn());
     } else {
       lastLocalAwarenessSnapshot = null;
@@ -326,6 +341,13 @@ export function createIframeBridgeProvider(
   function startInitRetry() {
     if (initRetryTimer) {
       clearInterval(initRetryTimer);
+    }
+    if (pendingYdocUpdates.length > 0) {
+      const updates = pendingYdocUpdates.splice(0);
+      parentPostMessage({
+        type: "ydoc-pending-updates",
+        payload: updates.map(u => Array.from(u)),
+      });
     }
     parentPostMessage({ type: "init" });
     initRetryTimer = setInterval(() => {
@@ -339,9 +361,19 @@ export function createIframeBridgeProvider(
     if (applyingParentUpdate) return;
     // 检测基线数据：origin 为 null 时是 xml2ydoc 首次初始化
     const isBaseline = origin === null || origin === undefined;
-    const message = { type: "ydoc-update", payload: Array.from(update), isBaseline };
+    if (!connected) {
+      if (pendingYdocUpdates.length >= MAX_QUEUE_SIZE) {
+        pendingYdocUpdates.shift();
+        console.warn("[iframe-bridge] queue full, dropping oldest update");
+      }
+      pendingYdocUpdates.push(update);
+      return;
+    }
+    const seqNum = ++seq;
+    const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
     logMessage("send", "ydoc-update", message);
     window.parent.postMessage(message, "*");
+    unackedYdocUpdates.set(seqNum, { update, isBaseline });
   };
 
   const onAwarenessUpdate = ({
@@ -411,6 +443,13 @@ export function createIframeBridgeProvider(
     const { type, payload, serverClientId: receivedServerId } = event.data;
 
     logMessage("recv", type, payload);
+    if (type === "ydoc-update-ack") {
+      const ackSeq = event.data.seq;
+      if (ackSeq != null) {
+        unackedYdocUpdates.delete(ackSeq);
+      }
+      return;
+    }
     if (type === "pong" && receivedServerId != null) {
       serverClientId = receivedServerId;
       return;
@@ -694,6 +733,10 @@ export function createIframeBridgeProvider(
       return cleanup;
     },
     destroy: () => {
+      while (pendingYdocUpdates.length > 0) {
+        const update = pendingYdocUpdates.shift()!;
+        window.parent.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline: false }, "*");
+      }
       ydoc.off("update", onYdocUpdate);
       if (useExternalAwareness) {
         (awareness as Awareness).off("update", onAwarenessUpdate);

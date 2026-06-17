@@ -50,6 +50,10 @@ export function createIframeBridgeServer(
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
   let iframeOriginTracked = false;
+  const MAX_QUEUE_SIZE = 1000;
+  const pendingUpdatesToIframe: Uint8Array[] = [];
+  let serverSeq = 0;
+  const unackedServerUpdates = new Map<number, Uint8Array>();
 
   function tryAddIframeOriginTracking() {
     if (!undoManager) return;
@@ -86,6 +90,16 @@ export function createIframeBridgeServer(
     if (connected === value) return;
     connected = value;
     if (value) {
+      while (pendingUpdatesToIframe.length > 0) {
+        const update = pendingUpdatesToIframe.shift()!;
+        postToIframe("ydoc-update", update);
+      }
+      for (const [savedSeq, update] of unackedServerUpdates) {
+        const cw = iframe.contentWindow;
+        if (cw) {
+          cw.postMessage({ type: "ydoc-update", payload: Array.from(update), seq: savedSeq }, "*");
+        }
+      }
       connectListeners.forEach((fn) => fn());
     } else {
       disconnectListeners.forEach((fn) => fn());
@@ -113,7 +127,21 @@ export function createIframeBridgeServer(
   const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === IFRAME_ORIGIN) return;
     logMessage("send", "ydoc-update", update);
-    postToIframe("ydoc-update", update);
+    if (!connected) {
+      if (pendingUpdatesToIframe.length >= MAX_QUEUE_SIZE) {
+        pendingUpdatesToIframe.shift();
+        console.warn("[iframe-bridge server] queue full, dropping oldest update");
+      }
+      pendingUpdatesToIframe.push(update);
+      return;
+    }
+    const seqNum = ++serverSeq;
+    const cw = iframe.contentWindow;
+    if (cw) {
+      const message = { type: "ydoc-update", payload: Array.from(update), seq: seqNum };
+      cw.postMessage(message, "*");
+    }
+    unackedServerUpdates.set(seqNum, update);
   };
 
   function postUndoStateToIframe() {
@@ -163,7 +191,19 @@ export function createIframeBridgeServer(
 
     const { type: msgType, payload } = event.data;
 
-    if (msgType === "init") {
+    if (msgType === "ydoc-pending-updates") {
+      logMessage("recv", "ydoc-pending-updates", payload);
+      if (Array.isArray(payload)) {
+        const updates: Uint8Array[] = [];
+        for (const arr of payload) {
+          updates.push(new Uint8Array(arr));
+        }
+        if (updates.length > 0) {
+          const merged = Y.mergeUpdates(updates);
+          Y.applyUpdate(ydoc, merged, IFRAME_ORIGIN);
+        }
+      }
+    } else if (msgType === "init") {
       logMessage("recv", "init", payload);
       if (!connected) {
         setConnected(true);
@@ -219,6 +259,18 @@ export function createIframeBridgeServer(
       const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
       Y.applyUpdate(ydoc, update, applyOrigin);
       // 源 iframe 已经持有此 update，无需回传
+      const inSeq = event.data.seq;
+      if (inSeq != null) {
+        const cw = iframe.contentWindow;
+        if (cw) {
+          cw.postMessage({ type: "ydoc-update-ack", seq: inSeq }, "*");
+        }
+      }
+    } else if (msgType === "ydoc-update-ack") {
+      const ackSeq = event.data.seq;
+      if (ackSeq != null) {
+        unackedServerUpdates.delete(ackSeq);
+      }
     } else if (msgType === "awareness-local-state") {
       // 保留消息类型兼容旧客户端，已不再采用
       logMessage("recv", "awareness-local-state (ignored)", payload);
@@ -307,6 +359,13 @@ export function createIframeBridgeServer(
       }
     },
     destroy: () => {
+      while (pendingUpdatesToIframe.length > 0) {
+        const update = pendingUpdatesToIframe.shift()!;
+        const cw = iframe.contentWindow;
+        if (cw) {
+          cw.postMessage({ type: "ydoc-update", payload: Array.from(update) }, "*");
+        }
+      }
       setConnected(false);
       postToIframe("disconnect");
       ydoc.off("update", onYdocUpdate);
