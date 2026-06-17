@@ -209,13 +209,12 @@ export function createIframeBridgeServer(
     if (msgType === "ydoc-pending-updates") {
       logMessage("recv", "ydoc-pending-updates", payload);
       if (Array.isArray(payload)) {
-        const updates: Uint8Array[] = [];
-        for (const arr of payload) {
-          updates.push(new Uint8Array(arr));
-        }
-        if (updates.length > 0) {
-          const merged = Y.mergeUpdates(updates);
-          Y.applyUpdate(ydoc, merged, IFRAME_ORIGIN);
+        for (const item of payload) {
+          const arr = item.update ?? item;
+          const isBaseline = item.isBaseline ?? false;
+          const update = new Uint8Array(arr);
+          const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
+          Y.applyUpdate(ydoc, update, applyOrigin);
         }
       }
     } else if (msgType === "init") {

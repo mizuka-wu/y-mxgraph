@@ -210,7 +210,7 @@ export function createIframeBridgeProvider(
   let connected = false;
   let forceFullSync = false;
   const MAX_QUEUE_SIZE = 1000;
-  const pendingYdocUpdates: Uint8Array[] = [];
+  const pendingYdocUpdates: Array<{update: Uint8Array, isBaseline: boolean}> = [];
   let seq = 0;
   const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
@@ -250,11 +250,14 @@ export function createIframeBridgeProvider(
         const id = getEffectiveClientId();
         if (state === null) {
           localStates.delete(id);
+          const update = { added: [], updated: [], removed: [id] };
+          updateHandlers.forEach(handler => handler(update));
         } else {
+          const existed = localStates.has(id);
           localStates.set(id, state);
+          const update = { added: !existed ? [id] : [], updated: [id], removed: [] };
+          updateHandlers.forEach(handler => handler(update));
         }
-        const update = { added: state && !localStates.has(id) ? [id] : [], updated: state ? [id] : [], removed: state === null ? [id] : [] };
-        updateHandlers.forEach(handler => handler(update));
       },
       setLocalStateField(field: string, value: unknown) {
         const id = getEffectiveClientId();
@@ -323,11 +326,11 @@ export function createIframeBridgeProvider(
       forceFullSync = false;
       snapshotLocalAwarenessState();
       while (pendingYdocUpdates.length > 0) {
-        const update = pendingYdocUpdates.shift()!;
+        const { update, isBaseline } = pendingYdocUpdates.shift()!;
         const seqNum = ++seq;
-        const message = { type: "ydoc-update", payload: Array.from(update), isBaseline: false, seq: seqNum };
+        const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
         window.parent.postMessage(message, "*");
-        unackedYdocUpdates.set(seqNum, { update, isBaseline: false });
+        unackedYdocUpdates.set(seqNum, { update, isBaseline });
       }
       for (const [savedSeq, { update, isBaseline }] of unackedYdocUpdates) {
         const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: savedSeq };
@@ -349,7 +352,7 @@ export function createIframeBridgeProvider(
       const updates = pendingYdocUpdates.splice(0);
       parentPostMessage({
         type: "ydoc-pending-updates",
-        payload: updates.map(u => Array.from(u)),
+        payload: updates.map(u => ({ update: Array.from(u.update), isBaseline: u.isBaseline })),
       });
     }
     parentPostMessage({ type: "init" });
@@ -370,7 +373,7 @@ export function createIframeBridgeProvider(
         pendingYdocUpdates.length = 0;
         console.warn("[iframe-bridge] queue full, forcing full sync on reconnect");
       }
-      pendingYdocUpdates.push(update);
+      pendingYdocUpdates.push({ update, isBaseline });
       return;
     }
     const seqNum = ++seq;
@@ -444,6 +447,7 @@ export function createIframeBridgeProvider(
 
   const onMessage = (event: MessageEvent) => {
     if (event.source !== window.parent) return;
+    if (!event.data || typeof event.data !== 'object') return;
     const { type, payload, serverClientId: receivedServerId } = event.data;
 
     logMessage("recv", type, payload);
@@ -510,6 +514,7 @@ export function createIframeBridgeProvider(
         const parsedStates = parseAwarenessPayload(new Uint8Array(payload));
         applyingParentUpdate = true;
         const changedClientIds: number[] = [];
+        const removedClientIds: number[] = [];
         for (const [id, state] of parsedStates) {
           const existed = localStates.has(id);
           const changed = !existed || JSON.stringify(localStates.get(id)) !== JSON.stringify(state);
@@ -518,8 +523,14 @@ export function createIframeBridgeProvider(
             changedClientIds.push(id);
           }
         }
-        if (changedClientIds.length > 0) {
-          const update = { added: [], updated: changedClientIds, removed: [] };
+        for (const [id] of localStates) {
+          if (!parsedStates.has(id)) {
+            localStates.delete(id);
+            removedClientIds.push(id);
+          }
+        }
+        if (changedClientIds.length > 0 || removedClientIds.length > 0) {
+          const update = { added: [], updated: changedClientIds, removed: removedClientIds };
           updateHandlers.forEach(handler => handler(update));
         }
         applyingParentUpdate = false;
@@ -738,9 +749,10 @@ export function createIframeBridgeProvider(
     },
     destroy: () => {
       while (pendingYdocUpdates.length > 0) {
-        const update = pendingYdocUpdates.shift()!;
-        window.parent.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline: false }, "*");
+        const { update, isBaseline } = pendingYdocUpdates.shift()!;
+        window.parent.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline }, "*");
       }
+      unackedYdocUpdates.clear();
       ydoc.off("update", onYdocUpdate);
       if (useExternalAwareness) {
         (awareness as Awareness).off("update", onAwarenessUpdate);
