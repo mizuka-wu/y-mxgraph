@@ -214,6 +214,11 @@ export function createIframeBridgeProvider(
   let seq = 0;
   const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
+  
+  // Legacy mode detection: old servers don't support ack
+  let serverSupportsAck = false;
+  let legacyMode = false;
+  let ackDetectionTimer: ReturnType<typeof setTimeout> | null = null;
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
   let lastLocalAwarenessSnapshot: Record<string, unknown> | null = null;
@@ -327,21 +332,44 @@ export function createIframeBridgeProvider(
       snapshotLocalAwarenessState();
       while (pendingYdocUpdates.length > 0) {
         const { update, isBaseline } = pendingYdocUpdates.shift()!;
-        const seqNum = ++seq;
-        const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
-        window.parent.postMessage(message, "*");
-        unackedYdocUpdates.set(seqNum, { update, isBaseline });
+        if (legacyMode) {
+          const message = { type: "ydoc-update", payload: Array.from(update), isBaseline };
+          window.parent.postMessage(message, "*");
+        } else {
+          const seqNum = ++seq;
+          const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
+          window.parent.postMessage(message, "*");
+          unackedYdocUpdates.set(seqNum, { update, isBaseline });
+        }
       }
-      for (const [savedSeq, { update, isBaseline }] of unackedYdocUpdates) {
-        const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: savedSeq };
-        window.parent.postMessage(message, "*");
+      if (!legacyMode) {
+        for (const [savedSeq, { update, isBaseline }] of unackedYdocUpdates) {
+          const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: savedSeq };
+          window.parent.postMessage(message, "*");
+        }
       }
       connectListeners.forEach((fn) => fn());
     } else {
       lastLocalAwarenessSnapshot = null;
-      unackedYdocUpdates.clear();
+      if (!legacyMode) {
+        unackedYdocUpdates.clear();
+      }
       disconnectListeners.forEach((fn) => fn());
     }
+  }
+
+  function startAckDetection() {
+    if (ackDetectionTimer) {
+      clearTimeout(ackDetectionTimer);
+    }
+    ackDetectionTimer = setTimeout(() => {
+      if (!serverSupportsAck) {
+        legacyMode = true;
+        unackedYdocUpdates.clear();
+        log("legacy mode detected: server does not support ack");
+      }
+      ackDetectionTimer = null;
+    }, 3000);
   }
 
   function startInitRetry() {
@@ -349,16 +377,26 @@ export function createIframeBridgeProvider(
       clearInterval(initRetryTimer);
     }
     if (!forceFullSync && pendingYdocUpdates.length > 0) {
-      const updates = pendingYdocUpdates.splice(0);
-      parentPostMessage({
-        type: "ydoc-pending-updates",
-        payload: updates.map(u => ({ update: Array.from(u.update), isBaseline: u.isBaseline })),
-      });
+      if (!legacyMode) {
+        const updates = pendingYdocUpdates.splice(0);
+        parentPostMessage({
+          type: "ydoc-pending-updates",
+          payload: updates.map(u => ({ update: Array.from(u.update), isBaseline: u.isBaseline })),
+        });
+      } else {
+        pendingYdocUpdates.length = 0;
+      }
     }
     parentPostMessage({ type: "init" });
+    if (!legacyMode) {
+      startAckDetection();
+    }
     initRetryTimer = setInterval(() => {
       if (!connected) {
         parentPostMessage({ type: "init" });
+        if (!legacyMode) {
+          startAckDetection();
+        }
       }
     }, 1000);
   }
@@ -376,11 +414,17 @@ export function createIframeBridgeProvider(
       pendingYdocUpdates.push({ update, isBaseline });
       return;
     }
-    const seqNum = ++seq;
-    const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
-    logMessage("send", "ydoc-update", message);
-    window.parent.postMessage(message, "*");
-    unackedYdocUpdates.set(seqNum, { update, isBaseline });
+    if (legacyMode) {
+      const message = { type: "ydoc-update", payload: Array.from(update), isBaseline };
+      logMessage("send", "ydoc-update", message);
+      window.parent.postMessage(message, "*");
+    } else {
+      const seqNum = ++seq;
+      const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
+      logMessage("send", "ydoc-update", message);
+      window.parent.postMessage(message, "*");
+      unackedYdocUpdates.set(seqNum, { update, isBaseline });
+    }
   };
 
   const onAwarenessUpdate = ({
@@ -452,6 +496,14 @@ export function createIframeBridgeProvider(
 
     logMessage("recv", type, payload);
     if (type === "ydoc-update-ack") {
+      if (!serverSupportsAck) {
+        serverSupportsAck = true;
+        if (ackDetectionTimer) {
+          clearTimeout(ackDetectionTimer);
+          ackDetectionTimer = null;
+        }
+        log("server supports ack, using new protocol");
+      }
       const ackSeq = event.data.seq;
       if (ackSeq != null) {
         unackedYdocUpdates.delete(ackSeq);
@@ -761,6 +813,10 @@ export function createIframeBridgeProvider(
       if (initRetryTimer) {
         clearInterval(initRetryTimer);
         initRetryTimer = null;
+      }
+      if (ackDetectionTimer) {
+        clearTimeout(ackDetectionTimer);
+        ackDetectionTimer = null;
       }
       connectListeners.clear();
       disconnectListeners.clear();
