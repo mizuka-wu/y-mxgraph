@@ -215,10 +215,9 @@ export function createIframeBridgeProvider(
   const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
   
-  // Legacy mode detection: old servers don't support ack
+  // Legacy mode detection: old servers don't send protocolVersion in pong
   let serverSupportsAck = false;
   let legacyMode = false;
-  let ackDetectionTimer: ReturnType<typeof setTimeout> | null = null;
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
   let lastLocalAwarenessSnapshot: Record<string, unknown> | null = null;
@@ -358,20 +357,6 @@ export function createIframeBridgeProvider(
     }
   }
 
-  function startAckDetection() {
-    if (ackDetectionTimer) {
-      clearTimeout(ackDetectionTimer);
-    }
-    ackDetectionTimer = setTimeout(() => {
-      if (!serverSupportsAck) {
-        legacyMode = true;
-        unackedYdocUpdates.clear();
-        log("legacy mode detected: server does not support ack");
-      }
-      ackDetectionTimer = null;
-    }, 3000);
-  }
-
   function startInitRetry() {
     if (initRetryTimer) {
       clearInterval(initRetryTimer);
@@ -391,15 +376,9 @@ export function createIframeBridgeProvider(
       }
     }
     parentPostMessage({ type: "init" });
-    if (!legacyMode) {
-      startAckDetection();
-    }
     initRetryTimer = setInterval(() => {
       if (!connected) {
         parentPostMessage({ type: "init" });
-        if (!legacyMode) {
-          startAckDetection();
-        }
       }
     }, 1000);
   }
@@ -498,23 +477,24 @@ export function createIframeBridgeProvider(
     const { type, payload, serverClientId: receivedServerId } = event.data;
 
     logMessage("recv", type, payload);
-    if (type === "ydoc-update-ack") {
-      if (!serverSupportsAck) {
+    if (type === "pong" && receivedServerId != null) {
+      serverClientId = receivedServerId;
+      // 版本号检测：新版 server 在 pong 里带 protocolVersion
+      if (event.data.protocolVersion >= 2) {
         serverSupportsAck = true;
-        if (ackDetectionTimer) {
-          clearTimeout(ackDetectionTimer);
-          ackDetectionTimer = null;
-        }
-        log("server supports ack, using new protocol");
+        log("server supports ack (protocol v" + event.data.protocolVersion + ")");
+      } else if (!serverSupportsAck) {
+        legacyMode = true;
+        unackedYdocUpdates.clear();
+        log("legacy mode detected: server has no protocolVersion");
       }
+      return;
+    }
+    if (type === "ydoc-update-ack") {
       const ackSeq = event.data.seq;
       if (ackSeq != null) {
         unackedYdocUpdates.delete(ackSeq);
       }
-      return;
-    }
-    if (type === "pong" && receivedServerId != null) {
-      serverClientId = receivedServerId;
       return;
     }
 
@@ -522,6 +502,13 @@ export function createIframeBridgeProvider(
       applyingParentUpdate = true;
       Y.applyUpdate(ydoc, new Uint8Array(payload));
       applyingParentUpdate = false;
+      // ydoc-sync 也可能带 protocolVersion（兜底检测，正常情况 pong 已检测）
+      if (type === "ydoc-sync" && event.data.protocolVersion != null) {
+        if (event.data.protocolVersion >= 2 && !serverSupportsAck) {
+          serverSupportsAck = true;
+          log("server supports ack (protocol v" + event.data.protocolVersion + ", via ydoc-sync)");
+        }
+      }
       if (type === "ydoc-sync" && !connected) {
         setConnected(true);
         if (initRetryTimer) {
@@ -816,10 +803,6 @@ export function createIframeBridgeProvider(
       if (initRetryTimer) {
         clearInterval(initRetryTimer);
         initRetryTimer = null;
-      }
-      if (ackDetectionTimer) {
-        clearTimeout(ackDetectionTimer);
-        ackDetectionTimer = null;
       }
       connectListeners.clear();
       disconnectListeners.clear();

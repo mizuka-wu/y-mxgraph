@@ -224,7 +224,7 @@ export function createIframeBridgeServer(
       }
       const docState = Y.encodeStateAsUpdate(ydoc);
       logMessage("send", "ydoc-sync", { bytes: docState.length });
-      postToIframe("ydoc-sync", new Uint8Array(Array.from(docState)));
+      postObjectToIframe({ type: "ydoc-sync", payload: Array.from(docState), protocolVersion: 2 });
       unackedServerUpdates.clear();
       // 在单独的 postMessage 中发送 serverClientId，方便 iframe 接收
       const cw = iframe.contentWindow;
@@ -262,7 +262,7 @@ export function createIframeBridgeServer(
       logMessage("recv", "ping", payload);
       const cw = iframe.contentWindow;
       if (cw) {
-        const message = { type: "pong", serverClientId: awareness.clientID };
+        const message = { type: "pong", serverClientId: awareness.clientID, protocolVersion: 2 };
         logMessage("send", "pong", message);
         cw.postMessage(message, "*");
       }
