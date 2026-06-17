@@ -54,7 +54,7 @@ export function createIframeBridgeServer(
   const MAX_QUEUE_SIZE = 1000;
   const pendingUpdatesToIframe: Array<{ update: Uint8Array; isBaseline: boolean }> = [];
   let serverSeq = 0;
-  const unackedServerUpdates = new Map<number, Uint8Array>();
+  const unackedServerUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
 
   function tryAddIframeOriginTracking() {
     if (!undoManager) return;
@@ -101,13 +101,13 @@ export function createIframeBridgeServer(
           const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
           cw.postMessage(message, "*");
         }
-        unackedServerUpdates.set(seqNum, update);
+        unackedServerUpdates.set(seqNum, { update, isBaseline });
       }
       if (!wasForceFullSync) {
-        for (const [savedSeq, update] of unackedServerUpdates) {
+        for (const [savedSeq, { update, isBaseline }] of unackedServerUpdates) {
           const cw = iframe.contentWindow;
           if (cw) {
-            cw.postMessage({ type: "ydoc-update", payload: Array.from(update), seq: savedSeq }, "*");
+            cw.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline, seq: savedSeq }, "*");
           }
         }
       }
@@ -156,7 +156,7 @@ export function createIframeBridgeServer(
       const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
       cw.postMessage(message, "*");
     }
-    unackedServerUpdates.set(seqNum, update);
+    unackedServerUpdates.set(seqNum, { update, isBaseline });
   };
 
   function postUndoStateToIframe() {
@@ -375,10 +375,10 @@ export function createIframeBridgeServer(
     },
     destroy: () => {
       while (pendingUpdatesToIframe.length > 0) {
-        const { update } = pendingUpdatesToIframe.shift()!;
+        const { update, isBaseline } = pendingUpdatesToIframe.shift()!;
         const cw = iframe.contentWindow;
         if (cw) {
-          cw.postMessage({ type: "ydoc-update", payload: Array.from(update) }, "*");
+          cw.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline }, "*");
         }
       }
       setConnected(false);
