@@ -208,6 +208,7 @@ export function createIframeBridgeProvider(
     redoStackSize?: number;
   } | null = null;
   let connected = false;
+  let forceFullSync = false;
   const MAX_QUEUE_SIZE = 1000;
   const pendingYdocUpdates: Uint8Array[] = [];
   let seq = 0;
@@ -319,6 +320,7 @@ export function createIframeBridgeProvider(
     if (connected === value) return;
     connected = value;
     if (value) {
+      forceFullSync = false;
       snapshotLocalAwarenessState();
       while (pendingYdocUpdates.length > 0) {
         const update = pendingYdocUpdates.shift()!;
@@ -334,6 +336,7 @@ export function createIframeBridgeProvider(
       connectListeners.forEach((fn) => fn());
     } else {
       lastLocalAwarenessSnapshot = null;
+      unackedYdocUpdates.clear();
       disconnectListeners.forEach((fn) => fn());
     }
   }
@@ -342,7 +345,7 @@ export function createIframeBridgeProvider(
     if (initRetryTimer) {
       clearInterval(initRetryTimer);
     }
-    if (pendingYdocUpdates.length > 0) {
+    if (!forceFullSync && pendingYdocUpdates.length > 0) {
       const updates = pendingYdocUpdates.splice(0);
       parentPostMessage({
         type: "ydoc-pending-updates",
@@ -363,8 +366,9 @@ export function createIframeBridgeProvider(
     const isBaseline = origin === null || origin === undefined;
     if (!connected) {
       if (pendingYdocUpdates.length >= MAX_QUEUE_SIZE) {
-        pendingYdocUpdates.shift();
-        console.warn("[iframe-bridge] queue full, dropping oldest update");
+        forceFullSync = true;
+        pendingYdocUpdates.length = 0;
+        console.warn("[iframe-bridge] queue full, forcing full sync on reconnect");
       }
       pendingYdocUpdates.push(update);
       return;

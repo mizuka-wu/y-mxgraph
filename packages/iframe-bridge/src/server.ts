@@ -46,12 +46,13 @@ export function createIframeBridgeServer(
   }
 
   let connected = false;
+  let forceFullSync = false;
   let applyingIframeUpdate = false;
   const connectListeners = new Set<() => void>();
   const disconnectListeners = new Set<() => void>();
   let iframeOriginTracked = false;
   const MAX_QUEUE_SIZE = 1000;
-  const pendingUpdatesToIframe: Uint8Array[] = [];
+  const pendingUpdatesToIframe: Array<{ update: Uint8Array; isBaseline: boolean }> = [];
   let serverSeq = 0;
   const unackedServerUpdates = new Map<number, Uint8Array>();
 
@@ -90,18 +91,29 @@ export function createIframeBridgeServer(
     if (connected === value) return;
     connected = value;
     if (value) {
+      const wasForceFullSync = forceFullSync;
+      forceFullSync = false;
       while (pendingUpdatesToIframe.length > 0) {
-        const update = pendingUpdatesToIframe.shift()!;
-        postToIframe("ydoc-update", update);
-      }
-      for (const [savedSeq, update] of unackedServerUpdates) {
+        const { update, isBaseline } = pendingUpdatesToIframe.shift()!;
+        const seqNum = ++serverSeq;
         const cw = iframe.contentWindow;
         if (cw) {
-          cw.postMessage({ type: "ydoc-update", payload: Array.from(update), seq: savedSeq }, "*");
+          const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
+          cw.postMessage(message, "*");
+        }
+        unackedServerUpdates.set(seqNum, update);
+      }
+      if (!wasForceFullSync) {
+        for (const [savedSeq, update] of unackedServerUpdates) {
+          const cw = iframe.contentWindow;
+          if (cw) {
+            cw.postMessage({ type: "ydoc-update", payload: Array.from(update), seq: savedSeq }, "*");
+          }
         }
       }
       connectListeners.forEach((fn) => fn());
     } else {
+      unackedServerUpdates.clear();
       disconnectListeners.forEach((fn) => fn());
     }
   }
@@ -126,19 +138,22 @@ export function createIframeBridgeServer(
 
   const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === IFRAME_ORIGIN) return;
+    // 检测基线数据：origin 为 null 时是 xml2ydoc 首次初始化
+    const isBaseline = origin === null || origin === undefined;
     logMessage("send", "ydoc-update", update);
     if (!connected) {
       if (pendingUpdatesToIframe.length >= MAX_QUEUE_SIZE) {
-        pendingUpdatesToIframe.shift();
-        console.warn("[iframe-bridge server] queue full, dropping oldest update");
+        forceFullSync = true;
+        pendingUpdatesToIframe.length = 0;
+        console.warn("[iframe-bridge server] queue full, forcing full sync on reconnect");
       }
-      pendingUpdatesToIframe.push(update);
+      pendingUpdatesToIframe.push({ update, isBaseline });
       return;
     }
     const seqNum = ++serverSeq;
     const cw = iframe.contentWindow;
     if (cw) {
-      const message = { type: "ydoc-update", payload: Array.from(update), seq: seqNum };
+      const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
       cw.postMessage(message, "*");
     }
     unackedServerUpdates.set(seqNum, update);
@@ -211,6 +226,7 @@ export function createIframeBridgeServer(
       const docState = Y.encodeStateAsUpdate(ydoc);
       logMessage("send", "ydoc-sync", { bytes: docState.length });
       postToIframe("ydoc-sync", new Uint8Array(Array.from(docState)));
+      unackedServerUpdates.clear();
       // 在单独的 postMessage 中发送 serverClientId，方便 iframe 接收
       const cw = iframe.contentWindow;
       if (cw) {
@@ -360,7 +376,7 @@ export function createIframeBridgeServer(
     },
     destroy: () => {
       while (pendingUpdatesToIframe.length > 0) {
-        const update = pendingUpdatesToIframe.shift()!;
+        const { update } = pendingUpdatesToIframe.shift()!;
         const cw = iframe.contentWindow;
         if (cw) {
           cw.postMessage({ type: "ydoc-update", payload: Array.from(update) }, "*");
