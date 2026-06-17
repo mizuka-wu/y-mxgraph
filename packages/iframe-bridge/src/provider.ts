@@ -482,7 +482,13 @@ export function createIframeBridgeProvider(
       // 版本号检测：新版 server 在 pong 里带 protocolVersion
       if (event.data.protocolVersion >= 2) {
         serverSupportsAck = true;
-        log("server supports ack (protocol v" + event.data.protocolVersion + ")");
+        if (legacyMode) {
+          // ydoc-sync 先到且无 protocolVersion 时误判了 legacy，纠正回来
+          legacyMode = false;
+          log("server supports ack (protocol v" + event.data.protocolVersion + ", corrected from legacy)");
+        } else {
+          log("server supports ack (protocol v" + event.data.protocolVersion + ")");
+        }
       } else if (!serverSupportsAck) {
         legacyMode = true;
         unackedYdocUpdates.clear();
@@ -508,6 +514,12 @@ export function createIframeBridgeProvider(
           serverSupportsAck = true;
           log("server supports ack (protocol v" + event.data.protocolVersion + ", via ydoc-sync)");
         }
+      } else if (type === "ydoc-sync" && !serverSupportsAck && !legacyMode) {
+        // ydoc-sync 无 protocolVersion 且 pong 还没来 → 先切 legacy
+        // 如果 pong 后来带 protocolVersion 会纠正回来
+        legacyMode = true;
+        unackedYdocUpdates.clear();
+        log("legacy mode tentative: ydoc-sync has no protocolVersion");
       }
       if (type === "ydoc-sync" && !connected) {
         setConnected(true);
