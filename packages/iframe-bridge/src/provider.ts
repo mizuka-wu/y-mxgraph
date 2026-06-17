@@ -384,6 +384,9 @@ export function createIframeBridgeProvider(
           payload: updates.map(u => ({ update: Array.from(u.update), isBaseline: u.isBaseline })),
         });
       } else {
+        for (const { update, isBaseline } of pendingYdocUpdates) {
+          parentPostMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline });
+        }
         pendingYdocUpdates.length = 0;
       }
     }
