@@ -322,6 +322,26 @@ export function createIframeBridgeServer(
       }
     } else if (msgType === "request-undo-state") {
       postUndoStateToIframe();
+    } else if (msgType === "consistency-check") {
+      // provider 请求一致性检查：比较 state vector
+      logMessage("recv", "consistency-check", payload);
+      const providerSV = new Uint8Array(event.data.stateVector || []);
+      const serverSV = Y.encodeStateVector(ydoc);
+      // 简单比较：如果 state vector 不同，发送 force-sync
+      const svMatch = providerSV.length === serverSV.length &&
+        providerSV.every((v: number, i: number) => v === serverSV[i]);
+      if (!svMatch) {
+        log("consistency mismatch detected, sending force-sync");
+        const cw = iframe.contentWindow;
+        if (cw) {
+          cw.postMessage({ type: "force-sync" }, "*");
+        }
+      }
+    } else if (msgType === "request-full-sync") {
+      // provider 请求完整同步
+      logMessage("recv", "request-full-sync", payload);
+      const docState = Y.encodeStateAsUpdate(ydoc);
+      postObjectToIframe({ type: "ydoc-sync", payload: Array.from(docState), protocolVersion: 2 });
     } else if (msgType === "undo" && undoManager) {
       undoManager.undo();
       postUndoStateToIframe();

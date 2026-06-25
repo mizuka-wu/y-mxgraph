@@ -59,12 +59,24 @@ export function serialize(map: YMxGraphModel) {
   const bg = map.get(backgroundKey) as string | undefined;
   const _attributes: Record<string, string> = {};
   if (bg) _attributes.background = bg;
+  const orderIds = cellsOrder.toArray();
+  const missingIds: string[] = [];
+  const filtered = orderIds.filter((id) => {
+    if (!cells.has(id)) {
+      missingIds.push(id);
+      return false;
+    }
+    return true;
+  });
+  if (missingIds.length) {
+    console.warn(
+      `[y-mxgraph] serialize: cellsOrder contains ids not present in mxCell map: ${missingIds.join(",")}`,
+    );
+  }
   return {
     _attributes,
     root: {
-      [mxCellKey]: cellsOrder
-        .toArray()
-        .map((id) => serializeMxCell(cells!.get(id) as Y.XmlElement)),
+      [mxCellKey]: filtered.map((id) => serializeMxCell(cells.get(id) as Y.XmlElement)),
     },
   };
 }
