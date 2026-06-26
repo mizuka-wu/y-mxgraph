@@ -278,75 +278,104 @@ export function applyFilePatch(
             const yMxGraphModel = diagram.get(mxGraphModelKey) as
               | YMxGraphModel
               | undefined;
-            if (!yMxGraphModel) return;
+            if (!yMxGraphModel) {
+              console.warn(
+                "[y-mxgraph] applyFilePatch: yMxGraphModel not found for diagram, skipping cells update",
+              );
+              return;
+            }
             const cellsMap = yMxGraphModel.get(mxCellKey) as
               | Y.Map<Y.XmlElement>
               | undefined;
             const orderArr = yMxGraphModel.get(mxCellOrderKey) as
               | Y.Array<string>
               | undefined;
-            if (!cellsMap || !orderArr) return;
-            ensureUniqueOrder(orderArr as Y.Array<string>);
+
+            // 降级处理：即使 cellsMap 或 orderArr 缺失，也尽可能处理可用的操作
+            if (!cellsMap && !orderArr) {
+              console.warn(
+                "[y-mxgraph] applyFilePatch: both cellsMap and orderArr missing, skipping cells update",
+              );
+              return;
+            }
+            if (orderArr) ensureUniqueOrder(orderArr);
 
             if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
-              const orderIds = orderArr.toArray();
-              const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
-                orderIds.indexOf(cid),
-              )
-                .filter((i) => i !== -1)
-                .sort((a, b) => b - a);
-              removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
-              update.cells[DIFF_REMOVE].forEach((cid) => cellsMap.delete(cid));
+              if (orderArr) {
+                const orderIds = orderArr.toArray();
+                const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
+                  orderIds.indexOf(cid),
+                )
+                  .filter((i) => i !== -1)
+                  .sort((a, b) => b - a);
+                removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
+              }
+              if (cellsMap) {
+                update.cells[DIFF_REMOVE].forEach((cid) => {
+                  if (cellsMap.has(cid)) {
+                    cellsMap.delete(cid);
+                  }
+                });
+              }
             }
 
             if (update.cells[DIFF_INSERT] && update.cells[DIFF_INSERT].length) {
               for (const item of update.cells[DIFF_INSERT]) {
                 const id = item["id"] as string | undefined;
                 if (!id) continue;
-                const xmlElement = new Y.XmlElement("mxCell");
-                Object.keys(item).forEach((key) => {
-                  if (key === "previous") return;
-                  xmlElement.setAttribute(key, item[key]);
-                });
-                cellsMap.set(id, xmlElement);
-                const previous = item["previous"] as string | undefined;
-                const parent = item["parent"] as string | undefined;
-                let anchorId: string | null | undefined = null;
-                let fallbackToEnd = true;
-                if (typeof previous !== "undefined") {
-                  if (previous === "") {
-                    // previous="" 明确表示插到最前面，不被 parent 覆盖
-                    anchorId = "";
-                    fallbackToEnd = false;
-                  } else {
-                    anchorId = previous;
+                if (cellsMap) {
+                  const xmlElement = new Y.XmlElement("mxCell");
+                  Object.keys(item).forEach((key) => {
+                    if (key === "previous") return;
+                    xmlElement.setAttribute(key, item[key]);
+                  });
+                  cellsMap.set(id, xmlElement);
+                }
+                if (orderArr) {
+                  const previous = item["previous"] as string | undefined;
+                  const parent = item["parent"] as string | undefined;
+                  let anchorId: string | null | undefined = null;
+                  let fallbackToEnd = true;
+                  if (typeof previous !== "undefined") {
+                    if (previous === "") {
+                      anchorId = "";
+                      fallbackToEnd = false;
+                    } else {
+                      anchorId = previous;
+                      fallbackToEnd = true;
+                    }
+                  } else if (parent) {
+                    anchorId = parent;
                     fallbackToEnd = true;
                   }
-                } else if (parent) {
-                  anchorId = parent;
-                  fallbackToEnd = true;
-                }
 
-                insertAfterUnique(
-                  orderArr as Y.Array<string>,
-                  id,
-                  anchorId,
-                  fallbackToEnd,
-                );
+                  insertAfterUnique(
+                    orderArr,
+                    id,
+                    anchorId,
+                    fallbackToEnd,
+                  );
+                }
               }
             }
 
             if (update.cells[DIFF_UPDATE]) {
-              Object.keys(update.cells[DIFF_UPDATE]).forEach((cid) => {
-                const updateObj = update.cells![DIFF_UPDATE]![cid];
-                const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
-                if (cell) {
-                  Object.keys(updateObj).forEach((k) => {
-                    if (k === "previous") return;
-                    cell.setAttribute(k, updateObj[k]);
-                  });
-                }
-              });
+              if (cellsMap) {
+                Object.keys(update.cells[DIFF_UPDATE]).forEach((cid) => {
+                  const updateObj = update.cells![DIFF_UPDATE]![cid];
+                  const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
+                  if (cell) {
+                    Object.keys(updateObj).forEach((k) => {
+                      if (k === "previous") return;
+                      cell.setAttribute(k, updateObj[k]);
+                    });
+                  } else {
+                    console.warn(
+                      `[y-mxgraph] applyFilePatch: cell ${cid} not found in cellsMap, skipping update`,
+                    );
+                  }
+                });
+              }
 
               Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
                 const updateObj = update.cells![DIFF_UPDATE]![cellId];
