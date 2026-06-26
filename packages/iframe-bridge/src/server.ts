@@ -56,6 +56,9 @@ export function createIframeBridgeServer(
   let serverSeq = 0;
   const unackedServerUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
 
+  // capabilities learned from the iframe (if any)
+  let iframeCapabilities: Record<string, unknown> | null = null;
+
   function tryAddIframeOriginTracking() {
     if (!undoManager) return;
     try {
@@ -111,6 +114,11 @@ export function createIframeBridgeServer(
           }
         }
       }
+
+      // send a capabilities request to the iframe so both sides can negotiate
+      // older providers will ignore unknown messages, so this is backwards compatible
+      postObjectToIframe({ type: "capabilities-request" });
+
       connectListeners.forEach((fn) => fn());
     } else {
       unackedServerUpdates.clear();
@@ -348,6 +356,15 @@ export function createIframeBridgeServer(
     } else if (msgType === "redo" && undoManager) {
       undoManager.redo();
       postUndoStateToIframe();
+    } else if (msgType === "capabilities-request") {
+      // provider 想协商能力集，回复 capabilities-reply
+      logMessage("recv", "capabilities-request", payload);
+      postObjectToIframe({ type: "capabilities-reply", capabilities: { consistency: true } });
+    } else if (msgType === "capabilities-reply") {
+      // provider 回复能力集，保存以便后续使用（可扩展）
+      logMessage("recv", "capabilities-reply", payload);
+      iframeCapabilities = event.data.capabilities ?? null;
+      log("[DEBUG] received iframe capabilities", iframeCapabilities);
     }
   };
 
