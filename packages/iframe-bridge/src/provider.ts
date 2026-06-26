@@ -3,6 +3,7 @@ import {
   Awareness,
   applyAwarenessUpdate,
 } from "y-protocols/awareness";
+import { IFRAME_ORIGIN, BASELINE_ORIGIN } from "./origin.js";
 const IFRAME_BRIDGE_STATE_KEYS = new Set(["cursor", "selection"]);
 
 function isIframeBridgeStateKey(key: string): boolean {
@@ -82,6 +83,8 @@ export interface DrawioFile {
 export interface IframeBridgeProviderOptions {
   awareness?: Awareness;
   debug?: boolean;
+  /** 一致性检查间隔（毫秒），0 或不传则禁用。定期比较 state vector，不一致时请求 full sync。 */
+  consistencyCheckInterval?: number;
 }
 
 export interface IframeBridgeProvider {
@@ -198,7 +201,7 @@ export function createIframeBridgeProvider(
   ydoc: Y.Doc,
   options?: IframeBridgeProviderOptions,
 ): IframeBridgeProvider {
-  const { awareness: externalAwareness, debug = false } = options ?? {};
+  const { awareness: externalAwareness, debug = false, consistencyCheckInterval = 0 } = options ?? {};
   let applyingParentUpdate = false;
   let serverClientId: number | null = null;
   let currentCleanup: (() => void) | null = null;
@@ -214,6 +217,7 @@ export function createIframeBridgeProvider(
   let seq = 0;
   const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
+  let consistencyTimer: ReturnType<typeof setInterval> | null = null;
   
   // Legacy mode detection: old servers don't send protocolVersion in pong
   let serverSupportsAck = false;
@@ -348,6 +352,8 @@ export function createIframeBridgeProvider(
         }
       }
       connectListeners.forEach((fn) => fn());
+      // 连接后启动一致性检查
+      startConsistencyCheck();
     } else {
       lastLocalAwarenessSnapshot = null;
       if (!legacyMode) {
@@ -381,6 +387,18 @@ export function createIframeBridgeProvider(
         parentPostMessage({ type: "init" });
       }
     }, 1000);
+  }
+
+  function startConsistencyCheck() {
+    if (consistencyTimer) clearInterval(consistencyTimer);
+    if (consistencyCheckInterval <= 0) return;
+    consistencyTimer = setInterval(() => {
+      if (!connected) return;
+      // 发送本地 state vector 给 server 比较
+      const sv = Y.encodeStateVector(ydoc);
+      parentPostMessage({ type: "consistency-check", stateVector: Array.from(sv) });
+      log("consistency-check sent");
+    }, consistencyCheckInterval);
   }
 
   const onYdocUpdate = (update: Uint8Array, origin: unknown) => {
@@ -506,7 +524,10 @@ export function createIframeBridgeProvider(
 
     if (type === "ydoc-sync" || type === "ydoc-update") {
       applyingParentUpdate = true;
-      Y.applyUpdate(ydoc, new Uint8Array(payload));
+      // 使用 origin 区分 baseline vs 编辑数据，server 端 UndoManager 可据此追踪
+      const isBaseline = (event.data && typeof event.data === "object" && event.data.isBaseline) ? true : false;
+      const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
+      Y.applyUpdate(ydoc, new Uint8Array(payload), applyOrigin);
       applyingParentUpdate = false;
       // ydoc-sync 也可能带 protocolVersion（兜底检测，正常情况 pong 已检测）
       if (type === "ydoc-sync" && event.data.protocolVersion != null) {
@@ -598,6 +619,11 @@ export function createIframeBridgeProvider(
     } else if (type === "disconnect") {
       setConnected(false);
       startInitRetry();
+    } else if (type === "force-sync") {
+      // server 检测到不一致，强制发送完整 state
+      log("received force-sync from server");
+      const fullState = Y.encodeStateAsUpdate(ydoc);
+      parentPostMessage({ type: "ydoc-pending-updates", payload: [{ update: Array.from(fullState), isBaseline: false }] });
     }
   };
 
@@ -815,6 +841,10 @@ export function createIframeBridgeProvider(
       if (initRetryTimer) {
         clearInterval(initRetryTimer);
         initRetryTimer = null;
+      }
+      if (consistencyTimer) {
+        clearInterval(consistencyTimer);
+        consistencyTimer = null;
       }
       connectListeners.clear();
       disconnectListeners.clear();

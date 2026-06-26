@@ -17,6 +17,8 @@ import {
 } from "../models/diagram";
 import { parse as parseXml } from "../helper/xml";
 import type { DrawioFile, DrawioUi, MxGraphModel } from "../types/drawio";
+import { ConsistencyChecker, type DriftEvent, type DriftHandler } from "./consistency";
+export type { DriftEvent, DriftHandler } from "./consistency";
 
 /**
  * 控制 Binding 构造时 file 与 Y.Doc 的初始内容对齐策略。
@@ -83,6 +85,15 @@ export interface BindDrawioFileOptions {
    * 适用于异步资源处理场景（如图片上传），可精确过滤包含中间态的 cell 变更。
    */
   transformPatch?: (patch: import("./patch").FilePatch) => import("./patch").FilePatch | null | undefined;
+  /**
+   * 一致性检查间隔（毫秒）。设为 0 或不传则禁用定期检查。
+   * 检测到 ydoc 与 file XML 不一致时会触发 drift 事件。
+   */
+  consistencyCheckInterval?: number;
+  /**
+   * drift 事件回调。当一致性检测发现 ydoc 与 file 不一致时触发。
+   */
+  onDrift?: DriftHandler;
 }
 
 /**
@@ -291,6 +302,10 @@ export class Binding {
   private ui: DrawioUi | null = null;
   /** 转换本地 patch 的回调 */
   private transformPatch?: (patch: import("./patch").FilePatch) => import("./patch").FilePatch | null | undefined;
+  /** 一致性检查器 */
+  private consistencyChecker?: ConsistencyChecker;
+  /** applyFileData 回调引用（forceSync 需要） */
+  private applyFileData: (file: DrawioFile, xml: string) => void;
 
   /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
   private get shouldReplaceWhenDocHasData(): boolean {
@@ -314,6 +329,7 @@ export class Binding {
     this.file = file;
     this.initialContentStrategy = initialContent;
     this.transformPatch = transformPatch;
+    this.applyFileData = applyFileData;
 
     const ui = file.getUi();
     const graph = ui.editor.graph;
@@ -456,6 +472,31 @@ export class Binding {
     if (undoManager) {
       this.cleanupUndoManager = bindUndoManager(doc, file, undoManager);
     }
+
+    // 一致性检查器
+    const {
+      consistencyCheckInterval,
+      onDrift,
+    } = options;
+    if (consistencyCheckInterval && consistencyCheckInterval > 0) {
+      this.consistencyChecker = new ConsistencyChecker(doc, () => file.data, {
+        source: "binding",
+      });
+      if (onDrift) {
+        this.consistencyChecker.onDrift(onDrift);
+      }
+      this.consistencyChecker.onDrift((event) => {
+        // 自动修复：超过最大次数后停止
+        if (this.consistencyChecker?.shouldStopAutoFix) {
+          console.warn(
+            `[y-mxgraph] 连续 ${event.details} 次 drift，停止自动 forceSync`,
+          );
+          return;
+        }
+        this.forceSync("ydoc-to-file");
+      });
+      this.consistencyChecker.start(consistencyCheckInterval);
+    }
   }
 
   /**
@@ -470,12 +511,52 @@ export class Binding {
   }
 
   /**
+   * 强制同步 ydoc 与 file，修复检测到的不一致。
+   *
+   * @param direction - 同步方向
+   *   - `ydoc-to-file`（默认）：用 ydoc 数据覆盖 file
+   *   - `file-to-ydoc`：用 file 数据覆盖 ydoc
+   */
+  forceSync(direction: "ydoc-to-file" | "file-to-ydoc" = "ydoc-to-file"): void {
+    if (direction === "ydoc-to-file") {
+      const xml = ydoc2xml(this.doc);
+      if (!xml || !xml.includes("<diagram")) return;
+      this.suppressLocalApply = true;
+      try {
+        this.applyFileData(this.file, xml);
+        this.file.setShadowPages(this.file.ui.clonePages(this.file.ui.pages));
+        initDocSnapshot(this.doc, false);
+        this.resetEditorStatus();
+      } finally {
+        this.suppressLocalApply = false;
+      }
+    } else {
+      this.doc.transact(() => {
+        xml2ydoc(this.file.data, this.doc);
+        initDocSnapshot(this.doc, false);
+      }, LOCAL_ORIGIN);
+    }
+    // forceSync 成功后重置 drift 计数
+    this.consistencyChecker?.resetDriftCount();
+  }
+
+  /**
+   * 手动触发一次一致性检查。
+   * @returns true = 一致，false = 存在 drift
+   */
+  checkConsistency(): boolean {
+    if (!this.consistencyChecker) return true;
+    return this.consistencyChecker.check();
+  }
+
+  /**
    * 销毁绑定，解除所有监听器
    * @param deep - 是否深度清理（包括 awareness/undoManager），默认 false
    */
   destroy(deep = false): void {
     this.mxGraphModel.removeListener("change", this.mxListener);
     this.doc.getMap(mxfileKey).unobserveDeep(this.docObserver);
+    this.consistencyChecker?.destroy();
     if (deep) {
       this.cleanupCollaborator?.();
       this.cleanupUndoManager?.();

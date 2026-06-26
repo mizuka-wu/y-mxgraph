@@ -43,7 +43,8 @@ function insertAfterUnique(
   fallbackToEnd = false,
 ) {
   const currentIds = orderArr.toArray();
-  let anchorPos = previous ? currentIds.indexOf(previous) : -1;
+  // previous 语义："" = 插到最前面，null/undefined = 未找到（走 fallback），string = 在该 id 之后
+  let anchorPos = previous != null ? currentIds.indexOf(previous) : -1;
   if (anchorPos === -1 && fallbackToEnd) anchorPos = currentIds.length - 1;
   let targetIndex = anchorPos + 1;
 
@@ -78,7 +79,8 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
 export interface DiagramInsert {
   data: string;
   id: string;
-  previous: string;
+  /** previous 语义："" = 最前面，null/undefined = 未找到，string = 在该 id 之后 */
+  previous?: string | null;
 }
 
 export interface FilePatch {
@@ -87,7 +89,8 @@ export interface FilePatch {
   [DIFF_UPDATE]?: {
     [key: string]: {
       name?: string;
-      previous?: string;
+      /** previous 语义："" = 最前面，null = 未找到，string = 在该 id 之后 */
+      previous?: string | null;
       /** draw.io page viewState（如 background），与 diffPages 格式一致 */
       view?: Record<string, string>;
       cells?: {
@@ -190,7 +193,8 @@ export function applyFilePatch(
         );
         return {
           id: item.id,
-          previous: item.previous || "",
+          // 保留空串语义（插到最前面）；undefined 时用 null 表示"未找到"
+          previous: item.previous === undefined ? null : item.previous,
           diagramElement,
           order,
         };
@@ -199,7 +203,7 @@ export function applyFilePatch(
       const byId = new Map(inserts.map((i) => [i.id, i] as const));
       const computeAnchor = (node: {
         id: string;
-        previous: string;
+        previous: string | null;
       }): {
         anchorId: string;
         depth: number;
@@ -245,7 +249,9 @@ export function applyFilePatch(
 
       for (const item of enriched) {
         diagramsMap.set(item.id, item.diagramElement);
-        insertAfterUnique(orderArr, item.id, item.anchorId || null);
+        // anchorId: "" = 插到最前面，null = 未找到（走 fallback），string = 在该 id 之后
+        const anchorArg = item.anchorId === "" ? "" : (item.anchorId ?? null);
+        insertAfterUnique(orderArr, item.id, anchorArg);
       }
     }
 
@@ -309,13 +315,9 @@ export function applyFilePatch(
                 let fallbackToEnd = true;
                 if (typeof previous !== "undefined") {
                   if (previous === "") {
-                    if (parent) {
-                      anchorId = parent;
-                      fallbackToEnd = true;
-                    } else {
-                      anchorId = null;
-                      fallbackToEnd = false;
-                    }
+                    // previous="" 明确表示插到最前面，不被 parent 覆盖
+                    anchorId = "";
+                    fallbackToEnd = false;
                   } else {
                     anchorId = previous;
                     fallbackToEnd = true;
@@ -363,16 +365,15 @@ export function applyFilePatch(
                 let fallbackToEnd = true;
 
                 if (hasPrev) {
+                  // prevVal may be "" (explicit front), null (not found), or an id
                   if (prevVal === "") {
-                    if (parentVal) {
-                      anchorId = parentVal;
-                      fallbackToEnd = true;
-                    } else {
-                      anchorId = null;
-                      fallbackToEnd = false;
-                    }
+                    anchorId = "";
+                    fallbackToEnd = false;
+                  } else if (prevVal === null || typeof prevVal === "undefined") {
+                    anchorId = null;
+                    fallbackToEnd = true;
                   } else {
-                    anchorId = prevVal;
+                    anchorId = prevVal as string;
                     fallbackToEnd = true;
                   }
                 } else if (parentVal) {
@@ -416,7 +417,10 @@ export function applyFilePatch(
           }
 
           if ("previous" in update) {
-            const previous = update.previous || null;
+            // 保留空串语义（插到最前面）；null 表示未找到
+            const previous = Object.prototype.hasOwnProperty.call(update, "previous")
+              ? (update.previous as string | null)
+              : null;
             const orderArr = mxfile.get(
               diagramOrderKey,
             ) as unknown as Y.Array<string>;
@@ -602,7 +606,8 @@ export function generatePatch(
 
     const prevNeighbor = (order: string[], id: string) => {
       const i = order.indexOf(id);
-      return i <= 0 ? "" : order[i - 1];
+      if (i === -1) return null; // 不在 order 中 → 未找到
+      return i === 0 ? "" : order[i - 1];
     };
     const common = currDiagramOrder.filter((id) => prevSet.has(id) && id);
     for (const id of common) {
@@ -657,7 +662,8 @@ export function generatePatch(
 
     const prevNeighbor = (order: string[], id: string) => {
       const i = order.indexOf(id);
-      return i <= 0 ? "" : order[i - 1];
+      if (i === -1) return null; // 不在 order 中 → 未找到
+      return i === 0 ? "" : order[i - 1];
     };
     const commonCells = currCells.filter((cid) => prevSet.has(cid) && cid);
     for (const cid of commonCells) {
