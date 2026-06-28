@@ -53,17 +53,10 @@ export class SyncChecker {
     const details: string[] = [];
 
     try {
-      console.log("[y-mxgraph/debug] 开始同步检查...");
-      
       const ydocXml = ydoc2xml(this.doc);
       const fileXml = this.getFileData();
 
-      console.log("[y-mxgraph/debug] 步骤1: 获取 XML 数据");
-      console.log("  YDoc XML 长度:", ydocXml.length);
-      console.log("  File XML 长度:", fileXml.length);
-
       if (!fileXml || fileXml.trim() === "") {
-        console.log("[y-mxgraph/debug] 步骤2: 文件为空，跳过检查");
         return {
           inSync: true,
           isDraft: false,
@@ -81,16 +74,11 @@ export class SyncChecker {
       const ydocCellCount = (ydocXml.match(/<mxCell /g) || []).length;
       const fileCellCount = (fileXml.match(/<mxCell /g) || []).length;
 
-      console.log("[y-mxgraph/debug] 步骤2: 统计数量");
-      console.log("  YDoc diagram:", ydocDiagramCount, "cell:", ydocCellCount);
-      console.log("  File diagram:", fileDiagramCount, "cell:", fileCellCount);
-
       const isDraft = ydocDiagramCount === 0 && ydocCellCount === 0;
       const diagramCountMatch = ydocDiagramCount === fileDiagramCount;
       const cellCountMatch = ydocCellCount === fileCellCount;
 
       if (isDraft) {
-        console.log("[y-mxgraph/debug] 步骤3: 草稿状态");
         details.push("YDoc 未编辑（草稿状态）");
         return {
           inSync: true,
@@ -114,44 +102,20 @@ export class SyncChecker {
 
       let cellOrderMatch = true;
       if (cellCountMatch && ydocCellCount > 0) {
-        console.log("[y-mxgraph/debug] 步骤3: 检查 cell 顺序");
         const ydocIds = this.extractCellIds(ydocXml);
         const fileIds = this.extractCellIds(fileXml);
-        
-        console.log("  YDoc cell IDs:", ydocIds);
-        console.log("  File cell IDs:", fileIds);
-        
         const orderSame = ydocIds.length === fileIds.length &&
           ydocIds.every((id, i) => id === fileIds[i]);
-        
         if (!orderSame) {
           cellOrderMatch = false;
           details.push(`元素顺序不一致`);
-          
-          console.log("[y-mxgraph/debug] 步骤4: 顺序不一致详情");
-          console.log("  YDoc order:", ydocIds);
-          console.log("  File order:", fileIds);
-          
-          // 找出具体哪些位置不同
-          for (let i = 0; i < Math.max(ydocIds.length, fileIds.length); i++) {
-            const ydocId = ydocIds[i] || '(missing)';
-            const fileId = fileIds[i] || '(missing)';
-            if (ydocId !== fileId) {
-              console.log(`  位置 ${i}: YDoc="${ydocId}" vs File="${fileId}"`);
-            }
-          }
-        } else {
-          console.log("[y-mxgraph/debug] 步骤4: 顺序一致");
         }
       }
 
       const inSync = diagramCountMatch && cellCountMatch && cellOrderMatch;
 
       if (inSync) {
-        console.log("[y-mxgraph/debug] 步骤5: 同步正常");
         details.push("同步正常");
-      } else {
-        console.warn("[y-mxgraph/debug] 步骤5: 同步漂移检测:", details);
       }
 
       return {
@@ -165,7 +129,6 @@ export class SyncChecker {
         details,
       };
     } catch (e) {
-      console.error("[y-mxgraph/debug] 检查出错:", e);
       return {
         inSync: false,
         isDraft: false,

@@ -447,11 +447,31 @@ export class Binding {
 
       const patch = generatePatch(events);
       if (Object.keys(patch).length === 0) return;
+      
+      console.log("[y-mxgraph] ===== 远端 patch 处理开始 =====");
+      console.log("[y-mxgraph] 1. 收到 events:", events.length, "个");
+      console.log("[y-mxgraph] 2. 生成 patch:", JSON.stringify(patch, null, 2));
+      
+      // 检查 patch 中是否有 reorder 信息
+      if (patch.u) {
+        for (const [did, update] of Object.entries(patch.u)) {
+          if (update.cells?.u) {
+            for (const [cid, cellUpdate] of Object.entries(update.cells.u)) {
+              if ('previous' in cellUpdate) {
+                console.log(`[y-mxgraph] 3. 检测到 reorder: diagram=${did}, cell=${cid}, previous=${cellUpdate.previous}`);
+              }
+            }
+          }
+        }
+      }
+      
       this.suppressLocalApply = true;
       try {
         file.patch([patch]);
         file.setShadowPages(file.ui.clonePages(file.ui.pages));
         this.resetEditorStatus();
+        console.log("[y-mxgraph] 4. patch 应用完成");
+        console.log("[y-mxgraph] ===== 远端 patch 处理完成 =====");
       } finally {
         this.suppressLocalApply = false;
       }
