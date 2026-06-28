@@ -24,7 +24,7 @@ const { setupWSConnection, setPersistence } =
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STORAGE_DIR = path.join(__dirname, "yjs-docs");
-const PORT = Number(process.env.PORT) || 1234;
+const PORT = Number(process.env.PORT) || 2345;
 const HOST = process.env.HOST || "localhost";
 
 // Ensure storage directory exists

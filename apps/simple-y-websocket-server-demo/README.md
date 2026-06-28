@@ -18,7 +18,7 @@ pnpm install
 pnpm --filter @y-mxgraph/ws-demo server
 ```
 
-服务器默认监听 `ws://localhost:1234`，文档数据持久化到 `yjs-docs/` 目录。
+服务器默认监听 `ws://localhost:2345`，文档数据持久化到 `yjs-docs/` 目录。
 
 ### 3. 启动客户端（另一个终端）
 
@@ -34,7 +34,7 @@ pnpm --filter @y-mxgraph/ws-demo dev
 ┌──────────┐     WebSocket     ┌───────────────────┐
 │ Client A ├───────────────────┤                   │
 └──────────┘                   │  y-websocket      │
-                               │  server (:1234)   │──── yjs-docs/
+                               │  server (:2345)   │──── yjs-docs/
 ┌──────────┐     WebSocket     │                   │     (文件系统持久化)
 │ Client B ├───────────────────┤                   │
 └──────────┘                   └───────────────────┘
@@ -60,13 +60,13 @@ pnpm --filter @y-mxgraph/ws-demo dev
 
 编辑 `src/config.ts` 可修改：
 
-- `WS_URL` — WebSocket 服务器地址（默认 `ws://localhost:1234`）
+- `WS_URL` — WebSocket 服务器地址（默认 `ws://localhost:2345`）
 - `DEFAULT_ROOM` — 默认房间名
 - `DRAWIO_VERSIONS` — draw.io 版本列表
 
 服务器端环境变量：
 
-- `PORT` — 服务器端口（默认 1234）
+- `PORT` — 服务器端口（默认 2345）
 - `HOST` — 监听地址（默认 localhost）
 
 ## URL 参数

@@ -17,7 +17,7 @@ export const DRAWIO_VERSIONS: Record<string, string> = {
 /**
  * y-websocket 服务器地址
  */
-export const WS_URL = "ws://localhost:1234";
+export const WS_URL = "ws://localhost:2345";
 
 /**
  * 默认房间名称
