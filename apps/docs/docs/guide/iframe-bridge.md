@@ -320,11 +320,21 @@ window.addEventListener('message', (event) => {
 - `options?` — 可选配置
   - `undoManager?: Y.UndoManager` — 共享的 UndoManager 实例，传入后支持跨 iframe 撤销/重做
   - `debug?: boolean` — 启用 iframe-bridge 消息调试日志
+  - `pendingTimeoutMs?: number` — pending update 超时检测间隔（ms），不传则不检测
+  - `onPendingTimeout?: (info: { pendingCount: number; oldestMs: number }) => void` — 超时回调
 
 **返回**：`IframeBridgeServer`
 
+**属性**：
+
+- `connected: boolean` — 是否已连接到 iframe
+
 **方法**：
 
+- `onConnect(fn: () => void) => () => void` — 监听连接事件
+- `onDisconnect(fn: () => void) => () => void` — 监听断开事件
+- `on(event, fn) => () => void` — 监听 `"connect"` 或 `"disconnect"` 事件
+- `forceSyncToClient()` — 强制同步 Server 的 YDoc 到 iframe（父 → 子）
 - `destroy()` — 清理所有监听器（包括 UndoManager 事件监听）
 
 ### `createIframeBridgeProvider(doc, options?)`
@@ -337,6 +347,9 @@ window.addEventListener('message', (event) => {
 - `options?` — 可选配置
   - `awareness?: Awareness` — 外部 Awareness 实例。不传时内部自动创建 `AwarenessLike`，通过 `bridge.awareness` 访问
   - `debug?: boolean` — 启用 iframe-bridge 消息调试日志
+  - `consistencyCheckInterval?: number` — 一致性检查间隔（ms），0 或不传则禁用
+  - `pendingTimeoutMs?: number` — pending update 超时检测间隔（ms），不传则不检测
+  - `onPendingTimeout?: (info: { pendingCount: number; oldestMs: number }) => void` — 超时回调
 
 **返回**：`IframeBridgeProvider`
 
@@ -353,6 +366,7 @@ window.addEventListener('message', (event) => {
 - `on(event, fn) => () => void` — 监听 `"connect"` 或 `"disconnect"` 事件
 - `setLocalFields(fields: Record<string, unknown>)` — 设置本地 awareness user 字段（合并到 `user` 对象下）
 - `takeoverUndoManager(file: DrawioFile) => () => void` — 接管 draw.io 的 `editor.undoManager`，返回清理函数。详见 [Undo/Redo](#undoredo) 章节
+- `forceSyncToServer()` — 强制同步 Provider 的 YDoc 到 Server（子 → 父）
 - `destroy()` — 清理所有监听器（包括接管的 UndoManager）
 
 ### `AwarenessLike`
