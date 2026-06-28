@@ -146,14 +146,10 @@ function initBridge(roomName: string, serverDelay: number = 0) {
   win.__doc__ = doc;
   win.__awareness__ = awareness;
 
-  // 安装 debug 工具（iframe-container 没有 file，使用 Y.Doc 序列化作为数据源）
+  // 安装 debug 工具（iframe-container 没有 file，使用空字符串作为数据源）
   const debugTools = installDebugTools(doc, () => {
-    // 返回空字符串，因为 iframe-container 没有直接访问 file 的方式
-    // debug 工具会检测到 YDoc 未编辑状态
     return "";
   }, {
-    autoStart: true,
-    autoCheckIntervalMs: 10000,
     windowKey: "__y_mxgraph_debug__",
   });
   currentDebugTools = debugTools;

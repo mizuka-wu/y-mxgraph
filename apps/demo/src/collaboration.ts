@@ -134,8 +134,6 @@ export function bindDrawioFile(
     const debugTools = installDebugTools(doc, () => {
       return app.getFileData();
     }, {
-      autoStart: true,
-      autoCheckIntervalMs: 10000,
       windowKey: "__y_mxgraph_debug__",
     });
     Reflect.set(window, "__debugTools__", debugTools);

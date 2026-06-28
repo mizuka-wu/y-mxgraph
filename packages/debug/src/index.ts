@@ -115,8 +115,6 @@ export function installDebugTools(
     maxUpdateHistory?: number;
     maxSyncHistory?: number;
     autoCleanupMs?: number;
-    autoStart?: boolean;
-    autoCheckIntervalMs?: number;
     windowKey?: string;
   } = {},
 ): DebugTools {
@@ -127,10 +125,6 @@ export function installDebugTools(
     (window as any)[windowKey] = tools;
     console.log(`[y-mxgraph/debug] 调试工具已安装到 window.${windowKey}`);
     console.log(`[y-mxgraph/debug] 用法: window.${windowKey}.checkNow()`);
-  }
-
-  if (options.autoStart) {
-    tools.startAutoCheck(options.autoCheckIntervalMs);
   }
 
   return tools;
