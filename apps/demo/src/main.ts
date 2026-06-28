@@ -180,7 +180,7 @@ async function initIframeChild() {
     urlParams.get("name") || initAccount || DEFAULT_IFRAME_USER.name;
   const initUserColor = urlParams.get("userColor") || DEFAULT_IFRAME_USER.color;
 
-  const bridgeProvider = createIframeBridgeProvider(ydoc, { debug: true });
+  const bridgeProvider = createIframeBridgeProvider(ydoc);
   console.log(
     `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
   );
