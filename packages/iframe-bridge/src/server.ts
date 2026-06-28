@@ -9,6 +9,10 @@ import { IFRAME_ORIGIN, BASELINE_ORIGIN } from "./origin.js";
 export interface IframeBridgeServerOptions {
   undoManager?: Y.UndoManager;
   debug?: boolean;
+  /** pending update 超时回调（ms），不传则不检测 */
+  pendingTimeoutMs?: number;
+  /** pending update 超时触发的回调 */
+  onPendingTimeout?: (info: { pendingCount: number; oldestMs: number }) => void;
 }
 
 export interface IframeBridgeServer {
@@ -16,6 +20,7 @@ export interface IframeBridgeServer {
   onConnect: (fn: () => void) => () => void;
   onDisconnect: (fn: () => void) => () => void;
   on: (event: "connect" | "disconnect", fn: () => void) => () => void;
+  forceSync: () => void;
   destroy: () => void;
 }
 
@@ -25,7 +30,7 @@ export function createIframeBridgeServer(
   awareness: Awareness,
   options?: IframeBridgeServerOptions,
 ): IframeBridgeServer {
-  const { undoManager, debug = false } = options ?? {};
+  const { undoManager, debug = false, pendingTimeoutMs, onPendingTimeout } = options ?? {};
   const log = debug
     ? (...args: unknown[]) => console.log("[iframe-bridge server]", ...args)
     : () => undefined;
@@ -54,7 +59,27 @@ export function createIframeBridgeServer(
   const MAX_QUEUE_SIZE = 1000;
   const pendingUpdatesToIframe: Array<{ update: Uint8Array; isBaseline: boolean }> = [];
   let serverSeq = 0;
-  const unackedServerUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
+  const unackedServerUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean; sentAt: number }>();
+  let pendingCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function schedulePendingCheck() {
+    if (pendingCheckTimer || !pendingTimeoutMs || !onPendingTimeout) return;
+    pendingCheckTimer = setTimeout(() => {
+      pendingCheckTimer = null;
+      const now = Date.now();
+      const unackedCount = unackedServerUpdates.size;
+      const pendingCount = pendingUpdatesToIframe.length;
+      if (unackedCount > 0 || pendingCount > 0) {
+        const oldest = unackedCount > 0
+          ? Math.min(...Array.from(unackedServerUpdates.values()).map((v) => v.sentAt))
+          : now;
+        onPendingTimeout({
+          pendingCount: unackedCount + pendingCount,
+          oldestMs: now - oldest,
+        });
+      }
+    }, pendingTimeoutMs);
+  }
 
   // capabilities learned from the iframe (if any)
   let iframeCapabilities: Record<string, unknown> | null = null;
@@ -104,7 +129,7 @@ export function createIframeBridgeServer(
           const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
           cw.postMessage(message, "*");
         }
-        unackedServerUpdates.set(seqNum, { update, isBaseline });
+        unackedServerUpdates.set(seqNum, { update, isBaseline, sentAt: Date.now() });
       }
       if (!wasForceFullSync) {
         for (const [savedSeq, { update, isBaseline }] of unackedServerUpdates) {
@@ -156,6 +181,7 @@ export function createIframeBridgeServer(
         console.warn("[iframe-bridge server] queue full, forcing full sync on reconnect");
       }
       pendingUpdatesToIframe.push({ update, isBaseline });
+      schedulePendingCheck();
       return;
     }
     const seqNum = ++serverSeq;
@@ -164,7 +190,8 @@ export function createIframeBridgeServer(
       const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
       cw.postMessage(message, "*");
     }
-    unackedServerUpdates.set(seqNum, { update, isBaseline });
+    unackedServerUpdates.set(seqNum, { update, isBaseline, sentAt: Date.now() });
+    schedulePendingCheck();
   };
 
   function postUndoStateToIframe() {
@@ -410,7 +437,23 @@ export function createIframeBridgeServer(
         return () => disconnectListeners.delete(fn);
       }
     },
+    forceSync() {
+      if (!connected) return;
+      const cw = iframe.contentWindow;
+      if (!cw) return;
+      const docState = Y.encodeStateAsUpdate(ydoc);
+      cw.postMessage({ type: "ydoc-sync", payload: Array.from(docState) }, "*");
+      unackedServerUpdates.clear();
+      if (pendingCheckTimer) {
+        clearTimeout(pendingCheckTimer);
+        pendingCheckTimer = null;
+      }
+    },
     destroy: () => {
+      if (pendingCheckTimer) {
+        clearTimeout(pendingCheckTimer);
+        pendingCheckTimer = null;
+      }
       while (pendingUpdatesToIframe.length > 0) {
         const { update, isBaseline } = pendingUpdatesToIframe.shift()!;
         const cw = iframe.contentWindow;

@@ -85,6 +85,10 @@ export interface IframeBridgeProviderOptions {
   debug?: boolean;
   /** 一致性检查间隔（毫秒），0 或不传则禁用。定期比较 state vector，不一致时请求 full sync。 */
   consistencyCheckInterval?: number;
+  /** pending update 超时回调（ms），不传则不检测 */
+  pendingTimeoutMs?: number;
+  /** pending update 超时触发的回调 */
+  onPendingTimeout?: (info: { pendingCount: number; oldestMs: number }) => void;
 }
 
 export interface IframeBridgeProvider {
@@ -96,6 +100,7 @@ export interface IframeBridgeProvider {
   on: (event: "connect" | "disconnect", fn: () => void) => () => void;
   setLocalFields: (fields: Record<string, unknown>) => void;
   takeoverUndoManager: (file: DrawioFile) => () => void;
+  requestFullSync: () => void;
   destroy: () => void;
 }
 
@@ -215,9 +220,31 @@ export function createIframeBridgeProvider(
   const MAX_QUEUE_SIZE = 1000;
   const pendingYdocUpdates: Array<{update: Uint8Array, isBaseline: boolean}> = [];
   let seq = 0;
-  const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean }>();
+  const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean; sentAt: number }>();
   let initRetryTimer: ReturnType<typeof setInterval> | null = null;
   let consistencyTimer: ReturnType<typeof setInterval> | null = null;
+  let pendingCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const { pendingTimeoutMs, onPendingTimeout } = options ?? {};
+
+  function schedulePendingCheck() {
+    if (pendingCheckTimer || !pendingTimeoutMs || !onPendingTimeout) return;
+    pendingCheckTimer = setTimeout(() => {
+      pendingCheckTimer = null;
+      const now = Date.now();
+      const unackedCount = unackedYdocUpdates.size;
+      const pendingCount = pendingYdocUpdates.length;
+      if (unackedCount > 0 || pendingCount > 0) {
+        const oldest = unackedCount > 0
+          ? Math.min(...Array.from(unackedYdocUpdates.values()).map((v) => v.sentAt))
+          : now;
+        onPendingTimeout({
+          pendingCount: unackedCount + pendingCount,
+          oldestMs: now - oldest,
+        });
+      }
+    }, pendingTimeoutMs);
+  }
   
   // Legacy mode detection: old servers don't send protocolVersion in pong
   let serverSupportsAck = false;
@@ -342,7 +369,7 @@ export function createIframeBridgeProvider(
           const seqNum = ++seq;
           const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
           window.parent.postMessage(message, "*");
-          unackedYdocUpdates.set(seqNum, { update, isBaseline });
+          unackedYdocUpdates.set(seqNum, { update, isBaseline, sentAt: Date.now() });
         }
       }
       if (!legacyMode) {
@@ -412,6 +439,7 @@ export function createIframeBridgeProvider(
         console.warn("[iframe-bridge] queue full, forcing full sync on reconnect");
       }
       pendingYdocUpdates.push({ update, isBaseline });
+      schedulePendingCheck();
       return;
     }
     if (legacyMode) {
@@ -423,7 +451,8 @@ export function createIframeBridgeProvider(
       const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
       logMessage("send", "ydoc-update", message);
       window.parent.postMessage(message, "*");
-      unackedYdocUpdates.set(seqNum, { update, isBaseline });
+      unackedYdocUpdates.set(seqNum, { update, isBaseline, sentAt: Date.now() });
+      schedulePendingCheck();
     }
   };
 
@@ -827,7 +856,21 @@ export function createIframeBridgeProvider(
       currentCleanup = cleanup;
       return cleanup;
     },
+    requestFullSync() {
+      if (!connected) return;
+      const fullState = Y.encodeStateAsUpdate(ydoc);
+      window.parent.postMessage({ type: "ydoc-pending-updates", payload: [{ update: Array.from(fullState), isBaseline: false }] }, "*");
+      unackedYdocUpdates.clear();
+      if (pendingCheckTimer) {
+        clearTimeout(pendingCheckTimer);
+        pendingCheckTimer = null;
+      }
+    },
     destroy: () => {
+      if (pendingCheckTimer) {
+        clearTimeout(pendingCheckTimer);
+        pendingCheckTimer = null;
+      }
       while (pendingYdocUpdates.length > 0) {
         const { update, isBaseline } = pendingYdocUpdates.shift()!;
         window.parent.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline }, "*");
