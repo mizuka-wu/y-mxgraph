@@ -38,6 +38,7 @@ export default defineConfig({
     alias: {
       "yjs": path.resolve(__dirname, "node_modules/yjs"),
       "y-protocols": path.resolve(__dirname, "node_modules/y-protocols"),
+      "stream": "stream-browserify",
     },
   },
   optimizeDeps: {
@@ -46,6 +47,7 @@ export default defineConfig({
       "y-protocols",
       "y-protocols/awareness",
       "y-webrtc",
+      "stream-browserify",
     ],
   },
   build: {
