@@ -378,6 +378,19 @@ export class Binding {
       // 没有实际本地变更时直接跳过
       if (patchKeys.length === 0) return;
 
+      // 检查是否有 reorder
+      if (patch.u) {
+        for (const [did, update] of Object.entries(patch.u)) {
+          if (update.cells?.u) {
+            for (const [cid, cellUpdate] of Object.entries(update.cells.u)) {
+              if ('previous' in cellUpdate) {
+                console.log(`[y-mxgraph] mxListener reorder: diagram=${did}, cell=${cid}, previous=${JSON.stringify(cellUpdate.previous)}`);
+              }
+            }
+          }
+        }
+      }
+
       // 转换检查：transformPatch 可修改或跳过 patch
       let finalPatch = patch;
       if (this.transformPatch) {
