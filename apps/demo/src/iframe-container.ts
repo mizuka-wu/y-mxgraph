@@ -170,7 +170,6 @@ function initBridge(roomName: string, serverDelay: number = 0) {
 
     const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
       undoManager,
-      debug: true,
       pendingTimeoutMs: 5000,
       onPendingTimeout: ({ pendingCount, oldestMs }) => {
         console.warn(`[iframe-container] pending timeout: ${pendingCount} updates, oldest ${oldestMs}ms`);
