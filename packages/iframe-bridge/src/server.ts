@@ -21,6 +21,10 @@ export interface IframeBridgeServer {
   onDisconnect: (fn: () => void) => () => void;
   on: (event: "connect" | "disconnect", fn: () => void) => () => void;
   forceSyncToClient: () => void;
+  /** 暂停消息处理（模拟丢失） */
+  pause: () => void;
+  /** 恢复消息处理 */
+  resume: () => void;
   destroy: () => void;
 }
 
@@ -407,9 +411,15 @@ export function createIframeBridgeServer(
     postUndoStateToIframe();
   };
 
+  let paused = false;
+  const wrappedOnMessage = (event: MessageEvent) => {
+    if (paused) return;
+    onMessage(event);
+  };
+
   ydoc.on("update", onYdocUpdate);
   awareness.on("update", onAwarenessUpdate);
-  window.addEventListener("message", onMessage);
+  window.addEventListener("message", wrappedOnMessage);
   if (undoManager) {
     undoManager.on("stack-item-popped", onUndoPopped);
     undoManager.on("stack-cleared", onStackCleared);
@@ -449,6 +459,12 @@ export function createIframeBridgeServer(
         pendingCheckTimer = null;
       }
     },
+    pause() {
+      paused = true;
+    },
+    resume() {
+      paused = false;
+    },
     destroy: () => {
       if (pendingCheckTimer) {
         clearTimeout(pendingCheckTimer);
@@ -465,7 +481,7 @@ export function createIframeBridgeServer(
       postToIframe("disconnect");
       ydoc.off("update", onYdocUpdate);
       awareness.off("update", onAwarenessUpdate);
-      window.removeEventListener("message", onMessage);
+      window.removeEventListener("message", wrappedOnMessage);
       if (undoManager) {
         undoManager.off("stack-item-popped", onUndoPopped);
         undoManager.off("stack-cleared", onStackCleared);

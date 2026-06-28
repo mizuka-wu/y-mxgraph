@@ -194,33 +194,8 @@ function initBridge(roomName: string, serverDelay: number = 0) {
     win.__undoManager__ = undoManager;
     win.__bridge__ = bridgeServer;
     win.__forceSyncToClient__ = () => bridgeServer.forceSyncToClient();
-
-    // 消息拦截器：模拟 postMessage 丢失
-    let originalPostMessage: Function | null = null;
-    let blocked = false;
-    win.__blockIframeMessages__ = () => {
-      const cw = ui.iframe.contentWindow;
-      if (!cw || originalPostMessage) return;
-      originalPostMessage = cw.postMessage.bind(cw);
-      (cw as any).postMessage = (...args: any[]) => {
-        if (blocked) {
-          console.log("[iframe-container] message blocked (simulated loss)");
-          return;
-        }
-        originalPostMessage!(...args);
-      };
-      blocked = true;
-      console.log("[iframe-container] iframe messages blocked");
-    };
-    win.__unblockIframeMessages__ = () => {
-      const cw = ui.iframe.contentWindow;
-      if (originalPostMessage && cw) {
-        (cw as any).postMessage = originalPostMessage;
-        originalPostMessage = null;
-      }
-      blocked = false;
-      console.log("[iframe-container] iframe messages unblocked");
-    };
+    win.__pauseBridge__ = () => bridgeServer.pause();
+    win.__resumeBridge__ = () => bridgeServer.resume();
   };
 
   if (serverDelay > 0) {
