@@ -99,6 +99,11 @@ export interface BindDrawioFileOptions {
    * drift 事件回调。当一致性检测发现 ydoc 与 file 不一致时触发。
    */
   onDrift?: DriftHandler;
+  /**
+   * patch 后检查顺序一致性，不一致时自动 forceSync。
+   * 默认 `false`。设为 `true` 可启用保底机制。
+   */
+  syncOnOrderMismatch?: boolean;
 }
 
 /**
@@ -313,6 +318,8 @@ export class Binding {
   private applyFileData: (file: DrawioFile, xml: string) => void;
   /** debounce 后的 forceSync，用于 patch 后保底 */
   private debouncedForceSync: ReturnType<typeof setTimeout> | null = null;
+  /** patch 后检查顺序一致性 */
+  private syncOnOrderMismatch: boolean;
 
   /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
   private get shouldReplaceWhenDocHasData(): boolean {
@@ -330,6 +337,7 @@ export class Binding {
       applyFileData = defaultApplyFileData,
       disableBeforeUnload = true,
       transformPatch,
+      syncOnOrderMismatch = false,
     } = options;
 
     this.doc = doc;
@@ -337,6 +345,7 @@ export class Binding {
     this.initialContentStrategy = initialContent;
     this.transformPatch = transformPatch;
     this.applyFileData = applyFileData;
+    this.syncOnOrderMismatch = syncOnOrderMismatch;
 
     const ui = file.getUi();
     const graph = ui.editor.graph;
@@ -385,20 +394,6 @@ export class Binding {
       // 没有实际本地变更时直接跳过
       if (patchKeys.length === 0) return;
 
-      // 检查是否有 reorder
-      if (patch.u) {
-        for (const [did, update] of Object.entries(patch.u)) {
-          if (update.cells?.u) {
-            for (const [cid, cellUpdate] of Object.entries(update.cells.u)) {
-              if ('previous' in cellUpdate) {
-                console.log(`[y-mxgraph] mxListener reorder: diagram=${did}, cell=${cid}, previous=${JSON.stringify(cellUpdate.previous)}`);
-              }
-            }
-          }
-        }
-      }
-
-      // 转换检查：transformPatch 可修改或跳过 patch
       let finalPatch = patch;
       if (this.transformPatch) {
         const result = this.transformPatch(patch);
@@ -468,26 +463,8 @@ export class Binding {
 
       const patch = generatePatch(events);
       const patchKeys = Object.keys(patch);
-      console.log("[y-mxgraph] docObserver: generatePatch 返回, keys:", patchKeys, patchKeys.length === 0 ? "(空, 跳过)" : "");
       if (patchKeys.length === 0) return;
-      
-      console.log("[y-mxgraph] ===== 远端 patch 处理开始 =====");
-      console.log("[y-mxgraph] 1. 收到 events:", events.length, "个");
-      console.log("[y-mxgraph] 2. 生成 patch:", JSON.stringify(patch, null, 2));
-      
-      // 检查 patch 中是否有 reorder 信息
-      if (patch.u) {
-        for (const [did, update] of Object.entries(patch.u)) {
-          if (update.cells?.u) {
-            for (const [cid, cellUpdate] of Object.entries(update.cells.u)) {
-              if ('previous' in cellUpdate) {
-                console.log(`[y-mxgraph] 3. 检测到 reorder: diagram=${did}, cell=${cid}, previous=${cellUpdate.previous}`);
-              }
-            }
-          }
-        }
-      }
-      
+
       this.suppressLocalApply = true;
       try {
         file.patch([patch]);
@@ -497,13 +474,12 @@ export class Binding {
         this.suppressLocalApply = false;
       }
 
-      // 保底：检查顺序是否一致，不一致则 debounce forceSync
-      if (patch.u && this.checkOrderMismatch(patch)) {
-        console.log("[y-mxgraph] 检测到顺序不一致，触发 debounce forceSync");
+      if (this.syncOnOrderMismatch && patch.u && this.checkOrderMismatch(patch)) {
+        console.warn("[y-mxgraph] order mismatch detected, debounced forceSync (file → ydoc)");
         if (this.debouncedForceSync) clearTimeout(this.debouncedForceSync);
         this.debouncedForceSync = setTimeout(() => {
           this.debouncedForceSync = null;
-          this.forceSync("ydoc-to-file");
+          this.forceSync("file-to-ydoc");
         }, 300);
       }
     };
