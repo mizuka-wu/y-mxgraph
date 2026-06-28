@@ -132,7 +132,7 @@ export function bindDrawioFile(
     Reflect.set(window, "__app__", app);
 
     const debugTools = installDebugTools(doc, () => {
-      return file.getData();
+      return app.getFileData();
     }, {
       autoStart: true,
       autoCheckIntervalMs: 10000,
