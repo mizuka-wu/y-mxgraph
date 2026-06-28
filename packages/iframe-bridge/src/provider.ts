@@ -100,7 +100,7 @@ export interface IframeBridgeProvider {
   on: (event: "connect" | "disconnect", fn: () => void) => () => void;
   setLocalFields: (fields: Record<string, unknown>) => void;
   takeoverUndoManager: (file: DrawioFile) => () => void;
-  requestFullSync: () => void;
+  forceSyncToServer: () => void;
   destroy: () => void;
 }
 
@@ -856,7 +856,7 @@ export function createIframeBridgeProvider(
       currentCleanup = cleanup;
       return cleanup;
     },
-    requestFullSync() {
+    forceSyncToServer() {
       if (!connected) return;
       const fullState = Y.encodeStateAsUpdate(ydoc);
       window.parent.postMessage({ type: "ydoc-pending-updates", payload: [{ update: Array.from(fullState), isBaseline: false }] }, "*");

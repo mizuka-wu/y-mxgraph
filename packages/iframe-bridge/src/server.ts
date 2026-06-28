@@ -20,7 +20,7 @@ export interface IframeBridgeServer {
   onConnect: (fn: () => void) => () => void;
   onDisconnect: (fn: () => void) => () => void;
   on: (event: "connect" | "disconnect", fn: () => void) => () => void;
-  forceSync: () => void;
+  forceSyncToClient: () => void;
   destroy: () => void;
 }
 
@@ -437,7 +437,7 @@ export function createIframeBridgeServer(
         return () => disconnectListeners.delete(fn);
       }
     },
-    forceSync() {
+    forceSyncToClient() {
       if (!connected) return;
       const cw = iframe.contentWindow;
       if (!cw) return;
