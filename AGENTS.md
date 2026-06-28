@@ -14,7 +14,7 @@ packages/
   eslint-config/      # Shared ESLint config (extends @typescript-eslint + prettier)
 apps/
   demo/                        # @y-mxgraph/demo — WebRTC demo (Playwright e2e tests here)
-  simple-y-websocket-server-demo/  # @y-mxgraph/ws-demo — WebSocket server demo (local dev only)
+  simple-y-websocket-server-demo/  # @y-mxgraph/websocket-demo — WebSocket server demo (local dev only)
   docs/                        # @y-mxgraph/docs — VitePress documentation site
 ```
 
@@ -46,8 +46,8 @@ pnpm --filter y-mxgraph lint
 pnpm --filter @y-mxgraph/demo dev
 
 # Run WebSocket demo (requires TWO terminals)
-pnpm --filter @y-mxgraph/ws-demo server  # Terminal 1: server on ws://localhost:1234
-pnpm --filter @y-mxgraph/ws-demo dev     # Terminal 2: client on http://localhost:5174
+pnpm --filter @y-mxgraph/websocket-demo server  # Terminal 1: server on ws://localhost:2345
+pnpm --filter @y-mxgraph/websocket-demo dev     # Terminal 2: client on http://localhost:5174
 
 # Run docs site
 pnpm --filter @y-mxgraph/docs dev
@@ -62,7 +62,7 @@ pnpm format
 
 ## Build Order Matters
 
-`y-mxgraph` must build before `demo`, `ws-demo`, or `docs` — they depend on workspace link. Turbo handles this via `"dependsOn": ["^build"]`, but if building manually, build `y-mxgraph` first.
+`y-mxgraph` must build before `demo`, `websocket-demo`, or `docs` — they depend on workspace link. Turbo handles this via `"dependsOn": ["^build"]`, but if building manually, build `y-mxgraph` first.
 
 ## Core Library Architecture (`packages/y-mxgraph`)
 

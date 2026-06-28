@@ -1,4 +1,4 @@
-# @y-mxgraph/ws-demo
+# @y-mxgraph/websocket-demo
 
 基于 y-websocket 的 y-mxgraph 协作演示，使用中心化 WebSocket 服务器 + 文件系统持久化。
 
@@ -15,7 +15,7 @@ pnpm install
 ### 2. 一键启动（推荐）
 
 ```bash
-pnpm --filter @y-mxgraph/ws-demo start
+pnpm --filter @y-mxgraph/websocket-demo start
 ```
 
 这会同时启动 WebSocket 服务器和客户端开发服务器。
@@ -27,13 +27,13 @@ pnpm --filter @y-mxgraph/ws-demo start
 **终端 1 - 启动 WebSocket 服务器：**
 
 ```bash
-pnpm --filter @y-mxgraph/ws-demo server
+pnpm --filter @y-mxgraph/websocket-demo server
 ```
 
 **终端 2 - 启动客户端：**
 
 ```bash
-pnpm --filter @y-mxgraph/ws-demo dev
+pnpm --filter @y-mxgraph/websocket-demo dev
 ```
 
 ## 工作原理
