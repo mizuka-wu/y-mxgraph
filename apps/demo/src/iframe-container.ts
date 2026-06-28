@@ -3,6 +3,7 @@ import { WebrtcProvider } from "y-webrtc";
 import { createIframeBridgeServer } from "y-mxgraph/iframe-bridge/server";
 import { IFRAME_ORIGIN } from "y-mxgraph/iframe-bridge";
 import { LOCAL_ORIGIN } from "y-mxgraph";
+import { installDebugTools, type DebugTools } from "@y-mxgraph/debug";
 import {
   DRAWIO_VERSIONS,
   SIGNALING_SERVERS,
@@ -40,6 +41,7 @@ const ui = {
 let currentProvider: WebrtcProvider | null = null;
 let currentBridge: ReturnType<typeof createIframeBridgeServer> | null = null;
 let currentUndoManager: Y.UndoManager | null = null;
+let currentDebugTools: DebugTools | null = null;
 
 let providerConnected = false;
 let bridgeConnected = false;
@@ -101,7 +103,12 @@ function initBridge(roomName: string, serverDelay: number = 0) {
     currentUndoManager.destroy();
     currentUndoManager = null;
   }
+  if (currentDebugTools) {
+    currentDebugTools.destroy();
+    currentDebugTools = null;
+  }
   delete (window as any).__undoManager__;
+  delete (window as any).__debugTools__;
 
   // 1. 先创建 Y.Doc + Provider（独立同步数据）
   const doc = new Y.Doc();
@@ -138,6 +145,19 @@ function initBridge(roomName: string, serverDelay: number = 0) {
   win.__provider__ = provider;
   win.__doc__ = doc;
   win.__awareness__ = awareness;
+
+  // 安装 debug 工具（iframe-container 没有 file，使用 Y.Doc 序列化作为数据源）
+  const debugTools = installDebugTools(doc, () => {
+    // 返回空字符串，因为 iframe-container 没有直接访问 file 的方式
+    // debug 工具会检测到 YDoc 未编辑状态
+    return "";
+  }, {
+    autoStart: true,
+    autoCheckIntervalMs: 10000,
+    windowKey: "__y_mxgraph_debug__",
+  });
+  currentDebugTools = debugTools;
+  win.__debugTools__ = debugTools;
 
   // 2. 创建 Server（可延迟，让 provider 有时间同步数据）
   const createServer = () => {
