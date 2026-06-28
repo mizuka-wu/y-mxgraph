@@ -63,9 +63,9 @@ export function createDebugTools(
     stopAutoCheck();
     autoCheckTimer = setInterval(() => {
       const result = checkNow();
-      if (!result.sync.status.inSync) {
-        console.warn("[y-mxgraph/debug] sync drift detected:", result.sync.status.details);
-      }
+    if (!result.sync.status.inSync) {
+      console.warn("[y-mxgraph/debug] 检测到同步漂移:", result.sync.status.details);
+    }
     }, intervalMs);
   };
 
@@ -110,8 +110,8 @@ export function installDebugTools(
   const windowKey = options.windowKey ?? "__y_mxgraph_debug__";
   if (typeof window !== "undefined") {
     (window as any)[windowKey] = tools;
-    console.log(`[y-mxgraph/debug] debug tools installed at window.${windowKey}`);
-    console.log(`[y-mxgraph/debug] usage: window.${windowKey}.checkNow()`);
+    console.log(`[y-mxgraph/debug] 调试工具已安装到 window.${windowKey}`);
+    console.log(`[y-mxgraph/debug] 用法: window.${windowKey}.checkNow()`);
   }
 
   if (options.autoStart) {

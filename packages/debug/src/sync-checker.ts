@@ -61,7 +61,7 @@ export class SyncChecker {
           fileXml,
           diagramCountMatch: true,
           cellCountMatch: true,
-          details: ["file is empty, skipping check"],
+          details: ["文件为空，跳过检查"],
         };
       }
 
@@ -70,7 +70,7 @@ export class SyncChecker {
       const diagramCountMatch = ydocDiagramCount === fileDiagramCount;
 
       if (!diagramCountMatch) {
-        details.push(`diagram count: ydoc=${ydocDiagramCount}, file=${fileDiagramCount}`);
+        details.push(`页面数量不一致：YDoc=${ydocDiagramCount}, 文件=${fileDiagramCount}`);
       }
 
       const ydocCellCount = (ydocXml.match(/<mxCell /g) || []).length;
@@ -78,13 +78,13 @@ export class SyncChecker {
       const cellCountMatch = ydocCellCount === fileCellCount;
 
       if (!cellCountMatch) {
-        details.push(`cell count: ydoc=${ydocCellCount}, file=${fileCellCount}`);
+        details.push(`元素数量不一致：YDoc=${ydocCellCount}, 文件=${fileCellCount}`);
       }
 
       const inSync = diagramCountMatch && cellCountMatch;
 
       if (inSync) {
-        details.push("in sync");
+        details.push("同步正常");
       }
 
       return {
@@ -102,7 +102,7 @@ export class SyncChecker {
         fileXml: null,
         diagramCountMatch: false,
         cellCountMatch: false,
-        details: [`error: ${e}`],
+        details: [`检查出错: ${e}`],
       };
     }
   }
