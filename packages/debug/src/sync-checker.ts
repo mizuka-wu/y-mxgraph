@@ -3,6 +3,8 @@ import { ydoc2xml } from "y-mxgraph";
 
 export interface SyncStatus {
   inSync: boolean;
+  /** YDoc 是否为空（未编辑状态） */
+  isDraft: boolean;
   ydocXml: string | null;
   fileXml: string | null;
   diagramCountMatch: boolean;
@@ -57,6 +59,7 @@ export class SyncChecker {
       if (!fileXml || fileXml.trim() === "") {
         return {
           inSync: true,
+          isDraft: false,
           ydocXml,
           fileXml,
           diagramCountMatch: true,
@@ -67,15 +70,29 @@ export class SyncChecker {
 
       const ydocDiagramCount = (ydocXml.match(/<diagram /g) || []).length;
       const fileDiagramCount = (fileXml.match(/<diagram /g) || []).length;
+      const ydocCellCount = (ydocXml.match(/<mxCell /g) || []).length;
+      const fileCellCount = (fileXml.match(/<mxCell /g) || []).length;
+
+      const isDraft = ydocDiagramCount === 0 && ydocCellCount === 0;
       const diagramCountMatch = ydocDiagramCount === fileDiagramCount;
+      const cellCountMatch = ydocCellCount === fileCellCount;
+
+      if (isDraft) {
+        details.push("YDoc 未编辑（草稿状态）");
+        return {
+          inSync: true,
+          isDraft,
+          ydocXml,
+          fileXml,
+          diagramCountMatch,
+          cellCountMatch,
+          details,
+        };
+      }
 
       if (!diagramCountMatch) {
         details.push(`页面数量不一致：YDoc=${ydocDiagramCount}, 文件=${fileDiagramCount}`);
       }
-
-      const ydocCellCount = (ydocXml.match(/<mxCell /g) || []).length;
-      const fileCellCount = (fileXml.match(/<mxCell /g) || []).length;
-      const cellCountMatch = ydocCellCount === fileCellCount;
 
       if (!cellCountMatch) {
         details.push(`元素数量不一致：YDoc=${ydocCellCount}, 文件=${fileCellCount}`);
@@ -89,6 +106,7 @@ export class SyncChecker {
 
       return {
         inSync,
+        isDraft,
         ydocXml,
         fileXml,
         diagramCountMatch,
@@ -98,6 +116,7 @@ export class SyncChecker {
     } catch (e) {
       return {
         inSync: false,
+        isDraft: false,
         ydocXml: null,
         fileXml: null,
         diagramCountMatch: false,

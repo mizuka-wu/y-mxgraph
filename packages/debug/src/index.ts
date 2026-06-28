@@ -65,6 +65,8 @@ export function createDebugTools(
       const result = checkNow();
     if (!result.sync.status.inSync) {
       console.warn("[y-mxgraph/debug] 检测到同步漂移:", result.sync.status.details);
+    } else if (result.sync.status.isDraft) {
+      console.log("[y-mxgraph/debug] YDoc 未编辑（草稿状态）");
     }
     }, intervalMs);
   };
