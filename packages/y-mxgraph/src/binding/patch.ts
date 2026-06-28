@@ -709,15 +709,23 @@ export function generatePatch(
 
     const prevNeighbor = (order: string[], id: string) => {
       const i = order.indexOf(id);
-      if (i === -1) return null; // 不在 order 中 → 未找到
+      if (i === -1) return null;
       return i === 0 ? "" : order[i - 1];
     };
     const commonCells = currCells.filter((cid) => prevSet.has(cid) && cid);
+    let reorderDetected = false;
     for (const cid of commonCells) {
       const prevP = prevNeighbor(prevCells, cid);
       const currP = prevNeighbor(currCells, cid);
       if (prevP !== currP) {
         if (prevP && removedCellSet.has(prevP)) continue;
+        if (!reorderDetected) {
+          console.log("[y-mxgraph] generatePatch: 检测到 cell reorder, diagram:", did);
+          console.log("  prevCells:", prevCells);
+          console.log("  currCells:", currCells);
+          reorderDetected = true;
+        }
+        console.log(`  cell ${cid}: prevP=${JSON.stringify(prevP)} → currP=${JSON.stringify(currP)}`);
         const cells = ensureCellSection(did);
         cells[DIFF_UPDATE] = cells[DIFF_UPDATE] || {};
         const cellUpdate = (cells[DIFF_UPDATE]![cid] =

@@ -446,7 +446,9 @@ export class Binding {
       }
 
       const patch = generatePatch(events);
-      if (Object.keys(patch).length === 0) return;
+      const patchKeys = Object.keys(patch);
+      console.log("[y-mxgraph] docObserver: generatePatch 返回, keys:", patchKeys, patchKeys.length === 0 ? "(空, 跳过)" : "");
+      if (patchKeys.length === 0) return;
       
       console.log("[y-mxgraph] ===== 远端 patch 处理开始 =====");
       console.log("[y-mxgraph] 1. 收到 events:", events.length, "个");
