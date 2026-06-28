@@ -25,7 +25,7 @@ import * as Y from "yjs";
 const isInIframe = window.parent !== window;
 
 // === 状态 ===
-let collabState: CollabState = { provider: null, doc: null, binding: null };
+let collabState: CollabState = { provider: null, doc: null, binding: null, debugTools: null };
 
 // === 语言 ===
 const langParam = new URLSearchParams(location.search).get("lang");
