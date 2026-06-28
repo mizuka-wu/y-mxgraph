@@ -145,41 +145,55 @@ export function applyFilePatch(
   doc.transact(() => {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     if (patch[DIFF_REMOVE]) {
-      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
-      const orderArr = mxfile.get(
-        diagramOrderKey,
-      ) as unknown as Y.Array<string>;
-      ensureUniqueOrder(orderArr);
-      const orderList = orderArr.toArray();
+      const diagramsMap = mxfile.get(diagramKey) as
+        | Y.Map<YDiagram>
+        | undefined;
+      const orderArr = mxfile.get(diagramOrderKey) as
+        | Y.Array<string>
+        | undefined;
+
+      if (orderArr) ensureUniqueOrder(orderArr);
 
       const removeIds = patch[DIFF_REMOVE];
       if (removeIds && removeIds.length) {
-        const indexList = removeIds
-          .map((id) => orderList.indexOf(id))
-          .filter((i) => i !== -1)
-          .sort((a, b) => b - a);
-
-        indexList.forEach((idx) => orderArr.delete(idx, 1));
-        removeIds.forEach((id) => diagramsMap.delete(id));
+        if (orderArr) {
+          const orderList = orderArr.toArray();
+          const indexList = removeIds
+            .map((id) => orderList.indexOf(id))
+            .filter((i) => i !== -1)
+            .sort((a, b) => b - a);
+          indexList.forEach((idx) => orderArr.delete(idx, 1));
+        }
+        if (diagramsMap) {
+          removeIds.forEach((id) => {
+            if (diagramsMap.has(id)) {
+              diagramsMap.delete(id);
+            }
+          });
+        }
       }
     }
 
     if (patch[DIFF_INSERT]) {
-      const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
-      const orderArr = mxfile.get(
-        diagramOrderKey,
-      ) as unknown as Y.Array<string>;
-      ensureUniqueOrder(orderArr);
-      
-      // 确保 diagramOrder 包含所有 diagram map 中的 IDs
-      const currentOrder = orderArr.toArray();
-      if (currentOrder.length === 0 && diagramsMap && diagramsMap.size > 0) {
-        const allIds = Array.from(diagramsMap.keys());
-        orderArr.push(allIds);
+      const diagramsMap = mxfile.get(diagramKey) as
+        | Y.Map<YDiagram>
+        | undefined;
+      const orderArr = mxfile.get(diagramOrderKey) as
+        | Y.Array<string>
+        | undefined;
+
+      if (orderArr) {
+        ensureUniqueOrder(orderArr);
+
+        const currentOrder = orderArr.toArray();
+        if (currentOrder.length === 0 && diagramsMap && diagramsMap.size > 0) {
+          const allIds = Array.from(diagramsMap.keys());
+          orderArr.push(allIds);
+        }
+        ensureUniqueOrder(orderArr);
       }
-      ensureUniqueOrder(orderArr);
-      
-      const existingIds = orderArr.toArray();
+
+      const existingIds = orderArr?.toArray() ?? [];
       const existingIndex = new Map<string, number>();
       existingIds.forEach((id, idx) => existingIndex.set(id, idx));
 
@@ -193,7 +207,6 @@ export function applyFilePatch(
         );
         return {
           id: item.id,
-          // 保留空串语义（插到最前面）；undefined 时用 null 表示"未找到"
           previous: item.previous === undefined ? null : item.previous,
           diagramElement,
           order,
@@ -248,19 +261,22 @@ export function applyFilePatch(
       });
 
       for (const item of enriched) {
-        diagramsMap.set(item.id, item.diagramElement);
-        // anchorId: "" = 插到最前面，null = 未找到（走 fallback），string = 在该 id 之后
-        const anchorArg = item.anchorId === "" ? "" : (item.anchorId ?? null);
-        insertAfterUnique(orderArr, item.id, anchorArg);
+        if (diagramsMap) {
+          diagramsMap.set(item.id, item.diagramElement);
+        }
+        if (orderArr) {
+          const anchorArg = item.anchorId === "" ? "" : (item.anchorId ?? null);
+          insertAfterUnique(orderArr, item.id, anchorArg);
+        }
       }
     }
 
     if (patch[DIFF_UPDATE]) {
       Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
-        const diagramsMap = mxfile.get(
-          diagramKey,
-        ) as unknown as Y.Map<YDiagram>;
-        const diagram = diagramsMap.get(id) as YDiagram | undefined;
+        const diagramsMap = mxfile.get(diagramKey) as
+          | Y.Map<YDiagram>
+          | undefined;
+        const diagram = diagramsMap?.get(id) as YDiagram | undefined;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
           if ("name" in update) {
@@ -377,84 +393,86 @@ export function applyFilePatch(
                 });
               }
 
-              Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
-                const updateObj = update.cells![DIFF_UPDATE]![cellId];
-                const hasPrev = "previous" in updateObj;
-                const hasParent = "parent" in updateObj;
-                if (!hasPrev && !hasParent) return;
+              if (cellsMap && orderArr) {
+                Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
+                  const updateObj = update.cells![DIFF_UPDATE]![cellId];
+                  const hasPrev = "previous" in updateObj;
+                  const hasParent = "parent" in updateObj;
+                  if (!hasPrev && !hasParent) return;
 
-                const prevVal = hasPrev
-                  ? (updateObj.previous as string)
-                  : undefined;
-                const parentVal = hasParent
-                  ? (updateObj.parent as string)
-                  : undefined;
+                  const prevVal = hasPrev
+                    ? (updateObj.previous as string)
+                    : undefined;
+                  const parentVal = hasParent
+                    ? (updateObj.parent as string)
+                    : undefined;
 
-                let anchorId: string | null | undefined = null;
-                let fallbackToEnd = true;
+                  let anchorId: string | null | undefined = null;
+                  let fallbackToEnd = true;
 
-                if (hasPrev) {
-                  // prevVal may be "" (explicit front), null (not found), or an id
-                  if (prevVal === "") {
-                    anchorId = "";
-                    fallbackToEnd = false;
-                  } else if (prevVal === null || typeof prevVal === "undefined") {
-                    anchorId = null;
-                    fallbackToEnd = true;
-                  } else {
-                    anchorId = prevVal as string;
+                  if (hasPrev) {
+                    if (prevVal === "") {
+                      anchorId = "";
+                      fallbackToEnd = false;
+                    } else if (prevVal === null || typeof prevVal === "undefined") {
+                      anchorId = null;
+                      fallbackToEnd = true;
+                    } else {
+                      anchorId = prevVal as string;
+                      fallbackToEnd = true;
+                    }
+                  } else if (parentVal) {
+                    anchorId = parentVal;
                     fallbackToEnd = true;
                   }
-                } else if (parentVal) {
-                  anchorId = parentVal;
-                  fallbackToEnd = true;
-                }
 
-                const currentIds = orderArr.toArray();
-                const currentIndex = currentIds.indexOf(cellId);
+                  const currentIds = orderArr.toArray();
+                  const currentIndex = currentIds.indexOf(cellId);
 
-                if (currentIndex === -1) {
-                  let newCell = cellsMap.get(cellId) as
-                    | Y.XmlElement
-                    | undefined;
-                  if (!newCell) {
-                    newCell = new Y.XmlElement("mxCell");
-                    newCell.setAttribute("id", cellId);
-                    Object.keys(updateObj).forEach((k) => {
-                      if (k === "previous") return;
-                      newCell!.setAttribute(k, updateObj[k] as string);
-                    });
-                    cellsMap.set(cellId, newCell);
+                  if (currentIndex === -1) {
+                    let newCell = cellsMap.get(cellId) as
+                      | Y.XmlElement
+                      | undefined;
+                    if (!newCell) {
+                      newCell = new Y.XmlElement("mxCell");
+                      newCell.setAttribute("id", cellId);
+                      Object.keys(updateObj).forEach((k) => {
+                        if (k === "previous") return;
+                        newCell!.setAttribute(k, updateObj[k] as string);
+                      });
+                      cellsMap.set(cellId, newCell);
+                    }
+                    insertAfterUnique(
+                      orderArr,
+                      cellId,
+                      anchorId,
+                      fallbackToEnd,
+                    );
+                    return;
                   }
+
                   insertAfterUnique(
-                    orderArr as Y.Array<string>,
+                    orderArr,
                     cellId,
                     anchorId,
                     fallbackToEnd,
                   );
-                  return;
-                }
-
-                insertAfterUnique(
-                  orderArr as Y.Array<string>,
-                  cellId,
-                  anchorId,
-                  fallbackToEnd,
-                );
-              });
+                });
+              }
             }
           }
 
           if ("previous" in update) {
-            // 保留空串语义（插到最前面）；null 表示未找到
             const previous = Object.prototype.hasOwnProperty.call(update, "previous")
               ? (update.previous as string | null)
               : null;
-            const orderArr = mxfile.get(
-              diagramOrderKey,
-            ) as unknown as Y.Array<string>;
-            ensureUniqueOrder(orderArr);
-            insertAfterUnique(orderArr, id, previous, false);
+            const orderArr = mxfile.get(diagramOrderKey) as
+              | Y.Array<string>
+              | undefined;
+            if (orderArr) {
+              ensureUniqueOrder(orderArr);
+              insertAfterUnique(orderArr, id, previous, false);
+            }
           }
         }
       });
@@ -486,7 +504,7 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
     };
 
     const diagrams: YDiagram[] = diagramOrder
-      .map((id) => diagramsMap.get(id) as YDiagram | undefined)
+      .map((id) => diagramsMap?.get(id) as YDiagram | undefined)
       .filter((d): d is YDiagram => !!d);
     for (const d of diagrams) {
       const did = (d.get("id") as unknown as string) || "";
@@ -573,7 +591,7 @@ export function generatePatch(
     ? orderIds 
     : (diagramsMap ? Array.from(diagramsMap.keys()) : []);
   const diagramsList = currDiagramOrder
-    .map((id) => diagramsMap.get(id) as YDiagram | undefined)
+    .map((id) => diagramsMap?.get(id) as YDiagram | undefined)
     .filter((d): d is YDiagram => !!d);
   const currCellsOrder = new Map<string, string[]>();
   const cellAttrMap = new Map<string, Map<string, Record<string, string>>>();
@@ -625,7 +643,7 @@ export function generatePatch(
       for (const id of inserted) {
         const index = currDiagramOrder.indexOf(id);
         const previous = index <= 0 ? "" : currDiagramOrder[index - 1];
-        const yDiagram = diagramsMap.get(id) as YDiagram | undefined;
+        const yDiagram = diagramsMap?.get(id) as YDiagram | undefined;
         if (!yDiagram) continue;
         const data = xmlSerializer({ diagram: serializeDiagram(yDiagram) });
         patch[DIFF_INSERT]!.push({ id, previous, data });

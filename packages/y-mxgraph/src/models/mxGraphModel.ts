@@ -54,8 +54,16 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
 }
 
 export function serialize(map: YMxGraphModel) {
-  const cells = getMap<Y.XmlElement>(map, mxCellKey)!;
-  const cellsOrder = getArray<string>(map, mxCellOrderKey)!;
+  const cells = getMap<Y.XmlElement>(map, mxCellKey);
+  const cellsOrder = getArray<string>(map, mxCellOrderKey);
+
+  if (!cells || !cellsOrder) {
+    return {
+      _attributes: {},
+      root: { [mxCellKey]: [] },
+    };
+  }
+
   const bg = map.get(backgroundKey) as string | undefined;
   const _attributes: Record<string, string> = {};
   if (bg) _attributes.background = bg;
