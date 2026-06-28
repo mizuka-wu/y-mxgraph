@@ -145,8 +145,6 @@ async function initIframeChild() {
   const loadingText = overlay.querySelector("p")!;
   const loadingSteps = document.getElementById("loading-steps");
 
-  console.log(`[iframe ${iframeId}] draw.io loading...`);
-
   // 1. 先加载 draw.io（不等待 server）
   try {
     await loadDrawioScript(
@@ -154,9 +152,7 @@ async function initIframeChild() {
       {
         onLoading: () => {},
         onProgress: () => {},
-        onReady: () => {
-          console.log(`[iframe ${iframeId}] draw.io loaded — editor ready`);
-        },
+        onReady: () => {},
         onError: (msg) => {
           console.error(`[iframe ${iframeId}]`, msg);
         },
@@ -181,9 +177,6 @@ async function initIframeChild() {
   const initUserColor = urlParams.get("userColor") || DEFAULT_IFRAME_USER.color;
 
   const bridgeProvider = createIframeBridgeProvider(ydoc);
-  console.log(
-    `[iframe ${iframeId}] bridgeProvider created — connected=${bridgeProvider.connected}`,
-  );
 
   bridgeProvider.setLocalFields({
     account: initAccount,
@@ -195,38 +188,28 @@ async function initIframeChild() {
   const doBind = () => {
     overlay.style.display = "none";
     container.style.removeProperty("display");
-    console.log(
-      `[iframe ${iframeId}] doBind — hiding overlay, binding draw.io`,
-    );
     bindDrawioFile(
       ydoc,
       bridgeProvider.awareness as any,
       null as any,
       (binding) => {
-        console.log(`[iframe ${iframeId}] draw.io bound to ydoc`);
         bridgeProvider.takeoverUndoManager(binding.file);
-        // 重置 modified 状态，消除 "unsaved changes" 提示
         const ui = binding.file.getUi();
         ui.editor.setModified(false);
         ui.editor.setStatus("");
         binding.file.setModified(false);
-        console.log(
-          `[iframe ${iframeId}] editor status reset — unsaved changes cleared`,
-        );
       },
       false,
     );
   };
 
   if (bridgeProvider.connected) {
-    console.log(`[iframe ${iframeId}] already connected — binding immediately`);
     doBind();
   } else {
     if (loadingSteps) loadingSteps.style.display = "none";
     loadingText.textContent =
       lang === "zh" ? "等待服务器连接..." : "Waiting for server...";
     overlay.style.background = "rgba(255, 255, 255, 0.5)";
-    console.log(`[iframe ${iframeId}] not connected — showing waiting overlay`);
     bridgeProvider.onConnect(doBind);
   }
 

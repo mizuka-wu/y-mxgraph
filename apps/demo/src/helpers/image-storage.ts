@@ -330,7 +330,6 @@ export function injectImageStorageHooks(): void {
       }
       return origRewrite.call(this, src);
     };
-    console.log(`[image-storage] Hooked ${name}.rewriteImageSource`);
   };
 
   applyRewriteHook(w.mxJsCanvas?.prototype, "mxJsCanvas");
@@ -383,7 +382,6 @@ export function injectImageStorageHooks(): void {
         clip,
       );
     };
-    console.log("[image-storage] Hooked mxSvgCanvas2D.image");
   }
 }
 

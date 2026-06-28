@@ -159,10 +159,6 @@ function initBridge(roomName: string, serverDelay: number = 0) {
   const createServer = () => {
     const mxfileMap = doc.getMap("mxfile");
     const diagramMap = mxfileMap.get("diagram") as any;
-    const hasData = diagramMap && diagramMap.size > 0;
-    console.log(
-      `[iframe-container] createServer — ydoc hasData=${hasData}, diagramMap size=${diagramMap?.size ?? 0}`,
-    );
 
     const undoManager = new Y.UndoManager(doc, {
       trackedOrigins: new Set([LOCAL_ORIGIN, IFRAME_ORIGIN]),
@@ -185,17 +181,11 @@ function initBridge(roomName: string, serverDelay: number = 0) {
     updateUndoRedoButtons();
 
     bridgeServer.onConnect(() => {
-      console.log(
-        `[iframe-container] server onConnect — iframe client connected`,
-      );
       bridgeConnected = true;
       renderStatus();
     });
 
     bridgeServer.onDisconnect(() => {
-      console.log(
-        `[iframe-container] server onDisconnect — iframe client disconnected`,
-      );
       bridgeConnected = false;
       renderStatus();
     });

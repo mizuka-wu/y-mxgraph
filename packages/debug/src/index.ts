@@ -123,8 +123,6 @@ export function installDebugTools(
   const windowKey = options.windowKey ?? "__y_mxgraph_debug__";
   if (typeof window !== "undefined") {
     (window as any)[windowKey] = tools;
-    console.log(`[y-mxgraph/debug] 调试工具已安装到 window.${windowKey}`);
-    console.log(`[y-mxgraph/debug] 用法: window.${windowKey}.checkNow()`);
   }
 
   return tools;
