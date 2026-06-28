@@ -132,8 +132,7 @@ export function bindDrawioFile(
     Reflect.set(window, "__app__", app);
 
     const debugTools = installDebugTools(doc, () => {
-      const graphXml = app.editor.getGraphXml();
-      return graphXml ? new XMLSerializer().serializeToString(graphXml) : "";
+      return file.getData();
     }, {
       autoStart: true,
       autoCheckIntervalMs: 10000,
