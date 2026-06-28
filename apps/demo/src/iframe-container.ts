@@ -171,6 +171,10 @@ function initBridge(roomName: string, serverDelay: number = 0) {
     const bridgeServer = createIframeBridgeServer(ui.iframe, doc, awareness, {
       undoManager,
       debug: true,
+      pendingTimeoutMs: 5000,
+      onPendingTimeout: ({ pendingCount, oldestMs }) => {
+        console.warn(`[iframe-container] pending timeout: ${pendingCount} updates, oldest ${oldestMs}ms`);
+      },
     });
 
     currentBridge = bridgeServer;
@@ -200,6 +204,7 @@ function initBridge(roomName: string, serverDelay: number = 0) {
     // 挂载 server 调试对象
     win.__undoManager__ = undoManager;
     win.__bridge__ = bridgeServer;
+    win.__forceSyncToClient__ = () => bridgeServer.forceSyncToClient();
   };
 
   if (serverDelay > 0) {
