@@ -32,6 +32,8 @@ interface BindDrawioFileOptions {
   applyFileData?: (file, xml) => void;     // 可选，自定义 file 数据应用方式
   disableBeforeUnload?: boolean;           // 可选，禁用 beforeUnload 弹窗，默认 true
   transformPatch?: (patch: FilePatch) => FilePatch | null | undefined; // 可选，转换/过滤本地 patch
+  origin?: object;             // 可选，自定义本地改动 origin，默认 LOCAL_ORIGIN
+  syncOnOrderMismatch?: boolean; // 可选，patch 后检查顺序一致性，默认 false
 }
 ```
 
@@ -98,6 +100,29 @@ const binding = new Binding(file, {
 ```
 
 详见 [IMAGE-STORAGE.md](https://github.com/mizuka-wu/y-mxgraph/blob/main/apps/demo/src/helpers/IMAGE-STORAGE.md) 完整实现。
+
+#### `origin`
+
+自定义本地改动的 origin 标识。默认使用模块级 `LOCAL_ORIGIN`（所有 Binding 实例共享）。
+
+**多 tab 场景**：当同一页面打开多个 tab 时，各 tab 应传入不同的 origin 对象，以确保 UndoManager 只跟踪当前 tab 的本地改动。
+
+```ts
+// 每个 tab 创建唯一的 origin
+const binding = new Binding(file, { doc, origin: {} });
+```
+
+#### `syncOnOrderMismatch`
+
+patch 后检查顺序一致性，不一致时自动 forceSync。默认 `false`。
+
+启用后，当远端 patch 应用到 draw.io 后，会检查 YDoc 中的 cell 顺序是否与 patch 期望一致。如果不一致（如 draw.io 内部重排序），会触发 debounce 的 `forceSync("file-to-ydoc")` 保底同步。
+
+```ts
+const binding = new Binding(file, { doc, syncOnOrderMismatch: true });
+```
+
+**注意**：此选项会引入额外的顺序比较开销，仅在发现顺序不同步问题时建议启用。
 
 ## 实例属性
 
