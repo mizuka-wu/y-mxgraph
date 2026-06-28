@@ -805,10 +805,9 @@ export function generatePatch(
     const cellUpdate = (cellsPatch[DIFF_UPDATE]![cellId] =
       cellsPatch[DIFF_UPDATE]![cellId] || {});
     for (const key of Array.from(changed)) {
-      // 注意：getAttribute 返回 null 表示属性不存在，这里转换为空字符串
-      // 这意味着属性删除会被同步为空字符串设置，而非真正删除
-      // 在 draw.io 中，空字符串通常等效于"未设置"，所以这是可接受的
-      cellUpdate[key] = el.getAttribute(key) ?? "";
+      // getAttribute 返回 null 表示属性不存在，转换为空字符串
+      // 属性删除会同步为空字符串设置，draw.io 中空字符串等效于"未设置"
+      cellUpdate[key] = el.getAttribute(key) || "";
     }
   }
 
