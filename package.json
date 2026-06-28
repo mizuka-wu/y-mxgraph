@@ -2,7 +2,7 @@
   "private": true,
   "name": "y-mxgraph-monorepo",
   "description": "Yjs binding for mxGraph, enabling real-time collaborative diagram editing",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "license": "MIT",
   "author": "y-mxgraph contributors",
   "repository": {
