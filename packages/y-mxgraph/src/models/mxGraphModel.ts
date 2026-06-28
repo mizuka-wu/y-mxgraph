@@ -69,13 +69,15 @@ export function serialize(map: YMxGraphModel) {
   if (bg) _attributes.background = bg;
   const orderIds = cellsOrder.toArray();
   const missingIds: string[] = [];
-  const filtered = orderIds.filter((id) => {
-    if (!cells.has(id)) {
+  const filtered: Y.XmlElement[] = [];
+  for (const id of orderIds) {
+    const cell = cells.get(id);
+    if (cell) {
+      filtered.push(cell);
+    } else {
       missingIds.push(id);
-      return false;
     }
-    return true;
-  });
+  }
   if (missingIds.length) {
     console.warn(
       `[y-mxgraph] serialize: cellsOrder contains ids not present in mxCell map: ${missingIds.join(",")}`,
@@ -84,7 +86,7 @@ export function serialize(map: YMxGraphModel) {
   return {
     _attributes,
     root: {
-      [mxCellKey]: filtered.map((id) => serializeMxCell(cells.get(id) as Y.XmlElement)),
+      [mxCellKey]: filtered.map((cell) => serializeMxCell(cell)),
     },
   };
 }
