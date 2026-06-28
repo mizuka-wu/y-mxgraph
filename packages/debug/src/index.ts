@@ -22,6 +22,12 @@ export interface DebugStatus {
 }
 
 export interface CheckResult {
+  /** 是否同步 */
+  synced: boolean;
+  /** 待处理的 update 数量 */
+  updatePending: number;
+  /** 是否为草稿状态（YDoc 未编辑） */
+  isDraft: boolean;
   timestamp: number;
   updates: UpdateStats;
   sync: SyncCheckResult;
@@ -53,11 +59,18 @@ export function createDebugTools(
     timeSinceLastUpdate: updateTracker.getTimeSinceLastUpdate(),
   });
 
-  const checkNow = (): CheckResult => ({
-    timestamp: Date.now(),
-    updates: updateTracker.getStats(),
-    sync: syncChecker.check(),
-  });
+  const checkNow = (): CheckResult => {
+    const updates = updateTracker.getStats();
+    const sync = syncChecker.check();
+    return {
+      synced: sync.status.inSync,
+      updatePending: updates.pendingCount,
+      isDraft: sync.status.isDraft,
+      timestamp: Date.now(),
+      updates,
+      sync,
+    };
+  };
 
   const startAutoCheck = (intervalMs = 5000): void => {
     stopAutoCheck();
