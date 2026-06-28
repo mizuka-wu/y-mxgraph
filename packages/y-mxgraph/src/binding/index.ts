@@ -409,7 +409,8 @@ export class Binding {
       transaction: Y.Transaction,
     ) => {
       if (transaction.local && transaction.origin === LOCAL_ORIGIN) {
-        generatePatch(events);
+        // 本地改动由 mxListener 处理，这里只跳过，不更新 snapshot
+        // 如果调用 generatePatch 会更新共享 snapshot，导致远端 tab 无法检测到变化
         return;
       }
 
