@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "tsx server.ts",
-    "start": "concurrently \"pnpm server\" \"pnpm dev\"",
+    "start": "concurrently \"tsx server.ts\" \"vite\"",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
