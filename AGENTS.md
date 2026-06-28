@@ -45,9 +45,8 @@ pnpm --filter y-mxgraph lint
 # Run demo (single-page WebRTC mode)
 pnpm --filter @y-mxgraph/demo dev
 
-# Run WebSocket demo (requires TWO terminals)
-pnpm --filter @y-mxgraph/websocket-demo server  # Terminal 1: server on ws://localhost:2345
-pnpm --filter @y-mxgraph/websocket-demo dev     # Terminal 2: client on http://localhost:5174
+# Run WebSocket demo
+pnpm --filter @y-mxgraph/websocket-demo dev  # Starts both server (ws://localhost:2345) and client (http://localhost:5174)
 
 # Run docs site
 pnpm --filter @y-mxgraph/docs dev

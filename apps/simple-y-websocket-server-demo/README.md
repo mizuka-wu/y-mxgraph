@@ -12,29 +12,15 @@
 pnpm install
 ```
 
-### 2. 一键启动（推荐）
-
-```bash
-pnpm --filter @y-mxgraph/websocket-demo start
-```
-
-这会同时启动 WebSocket 服务器和客户端开发服务器。
-
-浏览器访问 `http://localhost:5174`。
-
-### 或者分别启动
-
-**终端 1 - 启动 WebSocket 服务器：**
-
-```bash
-pnpm --filter @y-mxgraph/websocket-demo server
-```
-
-**终端 2 - 启动客户端：**
+### 2. 启动
 
 ```bash
 pnpm --filter @y-mxgraph/websocket-demo dev
 ```
+
+这会同时启动 WebSocket 服务器（`ws://localhost:2345`）和客户端开发服务器。
+
+浏览器访问 `http://localhost:5174`。
 
 ## 工作原理
 
