@@ -4,6 +4,7 @@ import { type Awareness } from "y-protocols/awareness";
 import { Binding, LOCAL_ORIGIN } from "y-mxgraph";
 import { ydoc2xml } from "y-mxgraph/transform";
 import { type AwarenessLike } from "y-mxgraph/iframe-bridge/provider";
+import { installDebugTools, type DebugTools } from "@y-mxgraph/debug";
 import { SIGNALING_SERVERS, DEFAULT_ROOM } from "./config.js";
 import {
   transformImagePatch,
@@ -18,6 +19,7 @@ export interface CollabState {
   provider: WebrtcProvider | null;
   doc: Y.Doc | null;
   binding: Binding | null;
+  debugTools: DebugTools | null;
 }
 
 export interface CollabCallbacks {
@@ -58,7 +60,7 @@ export function createCollaboration(
     }
   });
 
-  return { provider, doc, binding: null };
+  return { provider, doc, binding: null, debugTools: null };
 }
 
 export function bindDrawioFile(
@@ -129,28 +131,12 @@ export function bindDrawioFile(
     Reflect.set(window, "__binding__", binding);
     Reflect.set(window, "__app__", app);
 
-    // 调试命令：对比 draw.io 原始 XML 与 doc 序列化后的 XML
-    Reflect.set(window, "__compareXml__", () => {
-      const original = file.getData ? file.getData() : "";
-      const serialized = ydoc2xml(doc);
-
-      const stats = (xml: string) => ({
-        mxCell: (xml.match(/<mxCell/g) || []).length,
-        mxGeometry: (xml.match(/<mxGeometry/g) || []).length,
-        mxPoint: (xml.match(/<mxPoint/g) || []).length,
-      });
-
-      console.log("=== draw.io 原始 XML (file.getData) ===");
-      console.log(original.slice(0, 2000));
-      console.log("=== doc 序列化 XML (ydoc2xml) ===");
-      console.log(serialized.slice(0, 2000));
-      console.table({
-        original: stats(original),
-        serialized: stats(serialized),
-      });
-
-      return { original, serialized };
+    const debugTools = installDebugTools(doc, () => file.getData(), {
+      autoStart: true,
+      autoCheckIntervalMs: 10000,
+      windowKey: "__y_mxgraph_debug__",
     });
+    Reflect.set(window, "__debugTools__", debugTools);
 
     onBind(binding);
   };
@@ -242,6 +228,10 @@ export function bindDrawioFile(
 }
 
 export function disconnectCollaboration(state: CollabState): void {
+  if (state.debugTools) {
+    state.debugTools.destroy();
+    state.debugTools = null;
+  }
   if (state.binding) {
     state.binding.destroy(true);
     state.binding = null;
@@ -270,4 +260,6 @@ export function disconnectCollaboration(state: CollabState): void {
   delete (window as any).__provider__;
   delete (window as any).__binding__;
   delete (window as any).__app__;
+  delete (window as any).__debugTools__;
+  delete (window as any).__y_mxgraph_debug__;
 }

@@ -11,6 +11,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@y-mxgraph/debug": "workspace:*",
     "idb-keyval": "^6.2.2",
     "localforage": "^1.10.0",
     "y-mxgraph": "workspace:*",
