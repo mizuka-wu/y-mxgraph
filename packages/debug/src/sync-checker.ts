@@ -3,12 +3,12 @@ import { ydoc2xml } from "y-mxgraph";
 
 export interface SyncStatus {
   inSync: boolean;
-  /** YDoc 是否为空（未编辑状态） */
   isDraft: boolean;
   ydocXml: string | null;
   fileXml: string | null;
   diagramCountMatch: boolean;
   cellCountMatch: boolean;
+  cellOrderMatch: boolean;
   details: string[];
 }
 
@@ -64,6 +64,7 @@ export class SyncChecker {
           fileXml,
           diagramCountMatch: true,
           cellCountMatch: true,
+          cellOrderMatch: true,
           details: ["文件为空，跳过检查"],
         };
       }
@@ -86,6 +87,7 @@ export class SyncChecker {
           fileXml,
           diagramCountMatch,
           cellCountMatch,
+          cellOrderMatch: true,
           details,
         };
       }
@@ -98,7 +100,19 @@ export class SyncChecker {
         details.push(`元素数量不一致：YDoc=${ydocCellCount}, 文件=${fileCellCount}`);
       }
 
-      const inSync = diagramCountMatch && cellCountMatch;
+      let cellOrderMatch = true;
+      if (cellCountMatch && ydocCellCount > 0) {
+        const ydocIds = this.extractCellIds(ydocXml);
+        const fileIds = this.extractCellIds(fileXml);
+        const orderSame = ydocIds.length === fileIds.length &&
+          ydocIds.every((id, i) => id === fileIds[i]);
+        if (!orderSame) {
+          cellOrderMatch = false;
+          details.push(`元素顺序不一致`);
+        }
+      }
+
+      const inSync = diagramCountMatch && cellCountMatch && cellOrderMatch;
 
       if (inSync) {
         details.push("同步正常");
@@ -111,6 +125,7 @@ export class SyncChecker {
         fileXml,
         diagramCountMatch,
         cellCountMatch,
+        cellOrderMatch,
         details,
       };
     } catch (e) {
@@ -121,9 +136,20 @@ export class SyncChecker {
         fileXml: null,
         diagramCountMatch: false,
         cellCountMatch: false,
+        cellOrderMatch: false,
         details: [`检查出错: ${e}`],
       };
     }
+  }
+
+  private extractCellIds(xml: string): string[] {
+    const ids: string[] = [];
+    const regex = /<mxCell[^>]*\sid="([^"]*)"/g;
+    let match;
+    while ((match = regex.exec(xml)) !== null) {
+      ids.push(match[1]);
+    }
+    return ids;
   }
 
   getHistory(): SyncCheckResult[] {
