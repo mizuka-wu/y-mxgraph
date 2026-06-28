@@ -403,45 +403,50 @@ export function applyFilePatch(
               }
 
               if (cellsMap && orderArr) {
-                Object.keys(update.cells[DIFF_UPDATE]).forEach((cellId) => {
-                  const updateObj = update.cells![DIFF_UPDATE]![cellId];
-                  const hasPrev = "previous" in updateObj;
-                  const hasParent = "parent" in updateObj;
-                  if (!hasPrev && !hasParent) return;
+                const reorderEntries = Object.keys(update.cells[DIFF_UPDATE])
+                  .map((cellId) => {
+                    const updateObj = update.cells![DIFF_UPDATE]![cellId];
+                    const hasPrev = "previous" in updateObj;
+                    const hasParent = "parent" in updateObj;
+                    if (!hasPrev && !hasParent) return null;
 
-                  const prevVal = hasPrev
-                    ? (updateObj.previous as string)
-                    : undefined;
-                  const parentVal = hasParent
-                    ? (updateObj.parent as string)
-                    : undefined;
+                    const prevVal = hasPrev
+                      ? (updateObj.previous as string)
+                      : undefined;
+                    const parentVal = hasParent
+                      ? (updateObj.parent as string)
+                      : undefined;
 
-                  let anchorId: string | null | undefined = null;
-                  let fallbackToEnd = true;
+                    let anchorId: string | null | undefined = null;
+                    let fallbackToEnd = true;
 
-                  if (hasPrev) {
-                    if (prevVal === "") {
-                      anchorId = "";
-                      fallbackToEnd = false;
-                    } else if (prevVal === null || typeof prevVal === "undefined") {
-                      anchorId = null;
-                      fallbackToEnd = true;
-                    } else {
-                      anchorId = prevVal as string;
+                    if (hasPrev) {
+                      if (prevVal === "") {
+                        anchorId = "";
+                        fallbackToEnd = false;
+                      } else if (prevVal === null || typeof prevVal === "undefined") {
+                        anchorId = null;
+                        fallbackToEnd = true;
+                      } else {
+                        anchorId = prevVal as string;
+                        fallbackToEnd = true;
+                      }
+                    } else if (parentVal) {
+                      anchorId = parentVal;
                       fallbackToEnd = true;
                     }
-                  } else if (parentVal) {
-                    anchorId = parentVal;
-                    fallbackToEnd = true;
-                  }
 
+                    return { cellId, anchorId, fallbackToEnd, updateObj };
+                  })
+                  .filter((e): e is NonNullable<typeof e> => e !== null);
+
+                const applyReorder = (entry: { cellId: string; anchorId: string | null | undefined; fallbackToEnd: boolean; updateObj: Record<string, string> }) => {
+                  const { cellId, anchorId, fallbackToEnd, updateObj } = entry;
                   const currentIds = orderArr.toArray();
                   const currentIndex = currentIds.indexOf(cellId);
 
                   if (currentIndex === -1) {
-                    let newCell = cellsMap.get(cellId) as
-                      | Y.XmlElement
-                      | undefined;
+                    let newCell = cellsMap.get(cellId) as Y.XmlElement | undefined;
                     if (!newCell) {
                       newCell = new Y.XmlElement("mxCell");
                       newCell.setAttribute("id", cellId);
@@ -451,22 +456,19 @@ export function applyFilePatch(
                       });
                       cellsMap.set(cellId, newCell);
                     }
-                    insertAfterUnique(
-                      orderArr,
-                      cellId,
-                      anchorId,
-                      fallbackToEnd,
-                    );
+                    insertAfterUnique(orderArr, cellId, anchorId, fallbackToEnd);
                     return;
                   }
 
-                  insertAfterUnique(
-                    orderArr,
-                    cellId,
-                    anchorId,
-                    fallbackToEnd,
-                  );
-                });
+                  insertAfterUnique(orderArr, cellId, anchorId, fallbackToEnd);
+                };
+
+                reorderEntries
+                  .filter((e) => e.anchorId === "" || e.anchorId === null)
+                  .forEach(applyReorder);
+                reorderEntries
+                  .filter((e) => e.anchorId !== "" && e.anchorId !== null)
+                  .forEach(applyReorder);
               }
             }
           }
