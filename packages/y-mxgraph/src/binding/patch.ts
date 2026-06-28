@@ -48,6 +48,15 @@ function insertAfterUnique(
   if (anchorPos === -1 && fallbackToEnd) anchorPos = currentIds.length - 1;
   let targetIndex = anchorPos + 1;
 
+  // mxGraph root cells "0" (root) and "1" (default layer) must always be at the front.
+  // When previous="" means "insert at front", we insert after "1" instead of absolute index 0.
+  if (previous === "" && id !== "0" && id !== "1") {
+    const layerIndex = currentIds.indexOf("1");
+    if (layerIndex >= 0) {
+      targetIndex = layerIndex + 1;
+    }
+  }
+
   const existingIndex = currentIds.indexOf(id);
   if (existingIndex === -1) {
     orderArr.insert(targetIndex, [id]);

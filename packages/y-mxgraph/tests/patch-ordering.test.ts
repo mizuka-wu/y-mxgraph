@@ -26,7 +26,7 @@ function getOrder(doc: Y.Doc, diagramId = "p1"): string[] {
 }
 
 describe("insertAfterUnique — 空串语义修复", () => {
-  it("previous=\"\" 将 cell 插到最前面", () => {
+  it("previous=\"\" 将 cell 插到最前面（root cell 之后）", () => {
     const doc = makeDoc();
     applyFilePatch(doc, {
       u: {
@@ -38,8 +38,9 @@ describe("insertAfterUnique — 空串语义修复", () => {
       },
     });
     const order = getOrder(doc);
-    // previous="" 表示插到最前面
-    expect(order.indexOf("c-front")).toBe(0);
+    // previous="" 表示插到最前面，但 root cell "0" 和 default layer "1" 始终在最前
+    expect(order.indexOf("c-front")).toBe(2);
+    expect(order.slice(0, 2)).toEqual(["0", "1"]);
   });
 
   it("previous=null 表示未找到，fallbackToEnd=true 时插到末尾", () => {

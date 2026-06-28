@@ -139,7 +139,8 @@ describe("集成测试：模拟 draw.io 操作并验证 Y.Doc 状态", () => {
         },
       });
 
-      expect(getCellOrder(doc)).toEqual(["c-2", "0", "1"]);
+      // previous="" 表示插到最前面，但 root cell "0" 和 default layer "1" 始终在最前
+      expect(getCellOrder(doc)).toEqual(["0", "1", "c-2"]);
       verifyDocState(doc);
     });
 

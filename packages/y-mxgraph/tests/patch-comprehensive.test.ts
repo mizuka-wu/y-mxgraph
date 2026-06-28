@@ -42,12 +42,13 @@ function getCellAttrs(doc: Y.Doc, cellId: string, diagramId = "p1"): Record<stri
 // ===== applyFilePatch — cell 操作 =====
 
 describe("applyFilePatch — cell insert 语义", () => {
-  it("previous=\"\" 插到最前面", () => {
+  it("previous=\"\" 插到最前面（root cell 之后）", () => {
     const doc = makeDoc();
     applyFilePatch(doc, {
       u: { p1: { cells: { i: [{ id: "c-front", value: "f", parent: "1", vertex: "1", previous: "" }] } } },
     });
-    expect(getCellOrder(doc)[0]).toBe("c-front");
+    expect(getCellOrder(doc)[2]).toBe("c-front");
+    expect(getCellOrder(doc).slice(0, 2)).toEqual(["0", "1"]);
   });
 
   it("previous=<id> 插在该 id 之后", () => {
