@@ -15,6 +15,11 @@ import {
   parse as parseDiagram,
   type YDiagram,
 } from "../models/diagram";
+import {
+  key as mxGraphModelKey,
+  mxCellOrderKey,
+  type YMxGraphModel,
+} from "../models/mxGraphModel";
 import { parse as parseXml } from "../helper/xml";
 import type { DrawioFile, DrawioUi, MxGraphModel } from "../types/drawio";
 import { ConsistencyChecker, type DriftEvent, type DriftHandler } from "./consistency";
@@ -306,6 +311,8 @@ export class Binding {
   private consistencyChecker?: ConsistencyChecker;
   /** applyFileData 回调引用（forceSync 需要） */
   private applyFileData: (file: DrawioFile, xml: string) => void;
+  /** debounce 后的 forceSync，用于 patch 后保底 */
+  private debouncedForceSync: ReturnType<typeof setTimeout> | null = null;
 
   /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
   private get shouldReplaceWhenDocHasData(): boolean {
@@ -486,10 +493,18 @@ export class Binding {
         file.patch([patch]);
         file.setShadowPages(file.ui.clonePages(file.ui.pages));
         this.resetEditorStatus();
-        console.log("[y-mxgraph] 4. patch 应用完成");
-        console.log("[y-mxgraph] ===== 远端 patch 处理完成 =====");
       } finally {
         this.suppressLocalApply = false;
+      }
+
+      // 保底：检查顺序是否一致，不一致则 debounce forceSync
+      if (patch.u && this.checkOrderMismatch(patch)) {
+        console.log("[y-mxgraph] 检测到顺序不一致，触发 debounce forceSync");
+        if (this.debouncedForceSync) clearTimeout(this.debouncedForceSync);
+        this.debouncedForceSync = setTimeout(() => {
+          this.debouncedForceSync = null;
+          this.forceSync("ydoc-to-file");
+        }, 300);
       }
     };
     doc.getMap(mxfileKey).observeDeep(this.docObserver);
@@ -574,6 +589,34 @@ export class Binding {
     }
     // forceSync 成功后重置 drift 计数
     this.consistencyChecker?.resetDriftCount();
+  }
+
+  private checkOrderMismatch(patch: import("./patch").FilePatch): boolean {
+    if (!patch.u) return false;
+    for (const [did, update] of Object.entries(patch.u)) {
+      if (!update.cells?.u) continue;
+      for (const [cid, cellUpdate] of Object.entries(update.cells.u)) {
+        if (!("previous" in cellUpdate)) continue;
+        const mxfile = this.doc.getMap(mxfileKey) as YMxFile;
+        const diagramsMap = mxfile.get(diagramKey) as Y.Map<YDiagram> | undefined;
+        const diagram = diagramsMap?.get(did) as YDiagram | undefined;
+        if (!diagram) continue;
+        const gm = diagram.get(mxGraphModelKey) as YMxGraphModel | undefined;
+        if (!gm) continue;
+        const orderArr = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+        if (!orderArr) continue;
+        const ids = orderArr.toArray();
+        const idx = ids.indexOf(cid);
+        if (idx === -1) continue;
+        const expectedPrev = idx === 0 ? "" : ids[idx - 1];
+        const actualPrev = cellUpdate.previous as string;
+        if (expectedPrev !== actualPrev) {
+          console.log(`[y-mxgraph] order mismatch: cell=${cid}, ydoc prev=${JSON.stringify(expectedPrev)}, patch prev=${JSON.stringify(actualPrev)}`);
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
