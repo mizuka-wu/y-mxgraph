@@ -20,6 +20,7 @@ import {
   mxCellOrderKey,
   type YMxGraphModel,
 } from "../models/mxGraphModel";
+import { key as mxCellKey } from "../models/mxCell";
 import { parse as parseXml } from "../helper/xml";
 import type { DrawioFile, DrawioUi, MxGraphModel } from "../types/drawio";
 import { ConsistencyChecker, type DriftEvent, type DriftHandler } from "./consistency";
@@ -546,6 +547,8 @@ export class Binding {
    */
   forceSync(direction: "ydoc-to-file" | "file-to-ydoc" = "ydoc-to-file"): void {
     if (direction === "ydoc-to-file") {
+      // 在 forceSync 时清理异常 cellOrder，避免影响 undo 栈
+      this.cleanInvalidCellOrder();
       const xml = ydoc2xml(this.doc);
       if (!xml || !xml.includes("<diagram")) return;
       this.suppressLocalApply = true;
@@ -565,6 +568,45 @@ export class Binding {
     }
     // forceSync 成功后重置 drift 计数
     this.consistencyChecker?.resetDriftCount();
+  }
+
+  /**
+   * 清理 cellsMap 中不存在的 cell id，避免影响 undo 栈。
+   * 只在 forceSync 时调用，因为这是用户主动触发的同步操作。
+   */
+  private cleanInvalidCellOrder(): void {
+    const mxfile = this.doc.getMap(mxfileKey) as YMxFile;
+    const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+    if (!diagramsMap) return;
+
+    for (const [did, diagram] of diagramsMap.entries()) {
+      const gm = diagram.get(mxGraphModelKey) as YMxGraphModel | undefined;
+      if (!gm) continue;
+
+      const order = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+      const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+      if (!order || !cellsMap) continue;
+
+      const ids = order.toArray();
+      const invalidIds: string[] = [];
+
+      for (const cid of ids) {
+        const cell = cellsMap.get(cid);
+        if (!cell || typeof (cell as any).getAttributes !== 'function') {
+          invalidIds.push(cid);
+        }
+      }
+
+      if (invalidIds.length > 0) {
+        console.warn(`[y-mxgraph] forceSync: cleaning invalid cell ids from order: ${invalidIds.join(",")}`);
+        for (const invalidId of invalidIds) {
+          const index = order.toArray().indexOf(invalidId);
+          if (index !== -1) {
+            order.delete(index, 1);
+          }
+        }
+      }
+    }
   }
 
   private checkOrderMismatch(patch: import("./patch").FilePatch): boolean {
