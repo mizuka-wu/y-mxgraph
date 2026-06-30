@@ -76,6 +76,18 @@ export function serialize(map: YMxGraphModel) {
   const ordered: Y.XmlElement[] = [];
   const visited = new Set<string>();
 
+  // 预构建 parent → children 映射（避免 O(n²)）
+  const childrenMap = new Map<string, string[]>();
+  for (const id of orderIds) {
+    const cell = cells.get(id);
+    if (!cell || typeof cell.getAttributes !== 'function') continue;
+    const parent = cell.getAttribute('parent') ?? '';
+    if (!childrenMap.has(parent)) {
+      childrenMap.set(parent, []);
+    }
+    childrenMap.get(parent)!.push(id);
+  }
+
   function addCellAndChildren(id: string) {
     if (visited.has(id)) return;
     visited.add(id);
@@ -84,16 +96,10 @@ export function serialize(map: YMxGraphModel) {
     if (cell && typeof cell.getAttributes === 'function') {
       ordered.push(cell);
 
-      // 找出所有 parent=id 的子单元格，按 cellsOrder 顺序
-      for (const childId of orderIds) {
-        if (visited.has(childId)) continue;
-        const childCell = cells.get(childId);
-        if (childCell && typeof childCell.getAttributes === 'function') {
-          const childParent = childCell.getAttribute('parent') ?? '1';
-          if (childParent === id) {
-            addCellAndChildren(childId);
-          }
-        }
+      // 递归处理子单元格
+      const children = childrenMap.get(id) || [];
+      for (const childId of children) {
+        addCellAndChildren(childId);
       }
     } else if (cell) {
       invalidIds.push(id);
@@ -102,14 +108,19 @@ export function serialize(map: YMxGraphModel) {
     }
   }
 
-  // 先处理 root cells（parent='0' 或没有 parent），再处理其他
-  for (const id of orderIds) {
-    const cell = cells.get(id);
-    if (!cell || typeof cell.getAttributes !== 'function') continue;
-    const parent = cell.getAttribute('parent') ?? '';
-    if (parent === '0' || parent === '') {
-      addCellAndChildren(id);
-    }
+  // 先处理 root cells（没有 parent），再处理 parent='0'，再处理 parent='1'
+  const noParentCells = childrenMap.get('') || [];
+  for (const id of noParentCells) {
+    addCellAndChildren(id);
+  }
+  const rootChildren = childrenMap.get('0') || [];
+  for (const id of rootChildren) {
+    addCellAndChildren(id);
+  }
+  // 处理 parent='1' 的单元格（default layer 的子节点）
+  const layerCells = childrenMap.get('1') || [];
+  for (const id of layerCells) {
+    addCellAndChildren(id);
   }
   // 处理剩余未访问的单元格
   for (const id of orderIds) {
