@@ -108,6 +108,8 @@ function patchCellRecursive(
   const moved = temp?.moved ? { ...temp.moved } : {};
 
   // 获取当前 parent 下的子单元格索引
+  // draw.io 会从 model.getChildCount(cell) 获取子单元格
+  // 我们需要从 cellsMap 中获取所有 parent=parentId 的单元格
   const currentOrder = orderArr.toArray();
   const childIndices: number[] = [];
   for (let i = 0; i < currentOrder.length; i++) {
@@ -120,6 +122,7 @@ function patchCellRecursive(
   }
 
   // Restores existing order - 按照 draw.io 原始实现
+  // 即使 parentLookup 中没有条目，也要从 cellsMap 中获取子单元格的顺序
   let prev = '';
   for (const idx of childIndices) {
     const cellId = currentOrder[idx];
@@ -172,8 +175,34 @@ function patchCellRecursive(
       }
 
       // 立即递归处理子单元格（关键！在 index++ 之前）
-      if (parentLookup[id]) {
+      const hasParentLookupEntry = !!parentLookup[id];
+      let hasChildrenInCellsMap = false;
+      
+      if (!hasParentLookupEntry) {
+        hasChildrenInCellsMap = Array.from(cellsMap.keys()).some(cid => {
+          const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
+          return cell?.getAttribute('parent') === id;
+        });
+      }
+      
+      if (hasParentLookupEntry || hasChildrenInCellsMap) {
         patchCellRecursive(orderArr, cellsMap, id, parentLookup, cellsDiff);
+        // 递归后，index 需要跳过所有子树
+        // 找到当前 cell 的 parent，然后找到下一个同级 sibling 的位置
+        const cellParent = (cellsMap.get(id) as Y.XmlElement)?.getAttribute('parent') ?? '';
+        const orderNow = orderArr.toArray();
+        const cellPos = orderNow.indexOf(id);
+        let nextSiblingPos = orderNow.length;
+        for (let i = cellPos + 1; i < orderNow.length; i++) {
+          const cid = orderNow[i];
+          const c = cellsMap.get(cid) as Y.XmlElement | undefined;
+          const cParent = c?.getAttribute('parent') ?? '';
+          if (cParent === cellParent) {
+            nextSiblingPos = i;
+            break;
+          }
+        }
+        index = nextSiblingPos;
       }
 
       index++;
@@ -256,10 +285,8 @@ function handleParentChanges(
 
     if (currentParent === newParent) continue;
 
-    // 更新 parent 属性
     cell.setAttribute('parent', newParent);
 
-    // 从当前 order 中移除（如果存在）
     const currentIndex = currentOrder.indexOf(cellId);
     if (currentIndex !== -1) {
       orderArr.delete(currentIndex, 1);
@@ -578,7 +605,6 @@ export function applyFilePatch(
             }
 
             // 按照 draw.io 原始实现：使用 patchCellRecursive 处理顺序
-            // 递归处理所有 parent
             if (orderArr && cellsMap) {
               const processedParents = new Set<string>();
               const processParent = (parentId: string) => {
@@ -586,7 +612,6 @@ export function applyFilePatch(
                 processedParents.add(parentId);
                 patchCellRecursive(orderArr!, cellsMap!, parentId, parentLookup, update.cells);
               };
-              // 从根 parent '' 开始，然后处理 parentLookup 中的所有 parent
               processParent('');
               for (const parentId of Object.keys(parentLookup)) {
                 processParent(parentId);
@@ -1035,6 +1060,7 @@ export function generatePatch(
         if (insertedCellIdGlobal.has(cid)) continue;
         const prevAttrs = prevAttrsMap.get(cid) || {};
         const currAttrs = currAttrsMap.get(cid) || {};
+        
         const keys = new Set<string>([
           ...Object.keys(prevAttrs),
           ...Object.keys(currAttrs),
