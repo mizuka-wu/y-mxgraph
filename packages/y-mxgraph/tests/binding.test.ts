@@ -72,6 +72,7 @@ function createMockFile(doc: Y.Doc): DrawioFile {
         undoManager: undefined,
         setModified: vi.fn(),
         setStatus: vi.fn(),
+        getGraphXml: vi.fn(() => BASE_XML),
       },
       currentPage: { getId: () => "p1" },
       currentFile: { setModified: vi.fn() },
@@ -80,6 +81,8 @@ function createMockFile(doc: Y.Doc): DrawioFile {
       diffPages: vi.fn(() => ({})),
       clonePages: vi.fn((p: unknown[]) => [...p]),
       setFileData: vi.fn(),
+      getPagesForXml: vi.fn(() => pages),
+      getFileData: vi.fn(() => BASE_XML),
     },
     getUi: vi.fn(function (this: typeof file) {
       return this.ui;
@@ -150,9 +153,8 @@ describe("Binding", () => {
     expect(file.setShadowPages).toHaveBeenCalled();
   });
 
-  it("远端变更触发 file.patch", () => {
+  it("远端变更触发 applyFileData", () => {
     const binding = new Binding(file, { doc });
-    expect(file.patch).not.toHaveBeenCalled();
 
     doc.transact(() => {
       const mxfile = doc.getMap("mxfile");
@@ -163,7 +165,8 @@ describe("Binding", () => {
       }
     });
 
-    expect(file.patch).toHaveBeenCalled();
+    // 远端变更通过 ydoc2xml + applyFileData 更新 draw.io 文件
+    expect(file.ui.setFileData).toHaveBeenCalled();
     binding.destroy();
   });
 

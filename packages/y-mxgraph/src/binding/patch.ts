@@ -159,20 +159,20 @@ function patchCellRecursive(
       // 确保单元格在 orderArr 的正确位置
       const currentOrderNow = orderArr.toArray();
       const currentIdx = currentOrderNow.indexOf(id);
-      if (currentIdx === -1) {
-        // 新单元格，插入到当前位置
-        if (index <= currentOrderNow.length) {
-          orderArr.insert(index, [id]);
-        } else {
-          orderArr.push([id]);
+        if (currentIdx === -1) {
+          // 新单元格，插入到当前位置
+          if (index <= currentOrderNow.length) {
+            orderArr.insert(index, [id]);
+          } else {
+            orderArr.push([id]);
+          }
+        } else if (currentIdx !== index) {
+          // 已有单元格，移动到正确位置
+          orderArr.delete(currentIdx, 1);
+          const newOrder = orderArr.toArray();
+          const targetIdx = Math.min(index, newOrder.length);
+          orderArr.insert(targetIdx, [id]);
         }
-      } else if (currentIdx !== index) {
-        // 已有单元格，移动到正确位置
-        orderArr.delete(currentIdx, 1);
-        const newOrder = orderArr.toArray();
-        const targetIdx = Math.min(index, newOrder.length);
-        orderArr.insert(targetIdx, [id]);
-      }
 
       // 立即递归处理子单元格（关键！在 index++ 之前）
       const hasParentLookupEntry = !!parentLookup[id];

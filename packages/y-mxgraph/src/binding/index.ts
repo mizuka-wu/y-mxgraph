@@ -327,6 +327,22 @@ export class Binding {
     return this.initialContentStrategy === "replace" && !this.docInitialized;
   }
 
+  /**
+   * 比较两个 Y.Doc，生成 FilePatch
+   * 用 ydoc2xml 将两个 doc 转为 XML，然后用 diffPages 计算 diff
+   */
+  private generatePatchFromDocs(oldDoc: Y.Doc, newDoc: Y.Doc): import("./patch").FilePatch {
+    const oldXml = ydoc2xml(oldDoc);
+    const newXml = ydoc2xml(newDoc);
+
+    if (!oldXml || !newXml) return {};
+
+    const oldPages = this.file.ui.getPagesForXml(oldXml);
+    const newPages = this.file.ui.getPagesForXml(newXml);
+
+    return this.file.ui.diffPages(oldPages, newPages) as import("./patch").FilePatch;
+  }
+
   constructor(file: DrawioFile, options: BindDrawioFileOptions) {
     const {
       doc,
@@ -386,6 +402,7 @@ export class Binding {
     this.mxListener = () => {
       if (this.suppressLocalApply) return;
 
+      // 用 diffPages 计算 shadowPages 和当前 pages 的差异
       const patch = file.ui.diffPages(
         file.shadowPages,
         file.ui.pages,
@@ -411,13 +428,13 @@ export class Binding {
         this.docInitialized = true;
       }
 
-      file.setShadowPages(file.ui.clonePages(file.ui.pages));
       applyFilePatch(doc, finalPatch, { origin: LOCAL_ORIGIN });
+      file.setShadowPages(file.ui.clonePages(file.ui.pages));
       this.resetEditorStatus();
     };
     this.mxGraphModel.addListener("change", this.mxListener);
 
-    // 远端变更监听
+    // 远端变更监听（包括其他用户的变更和 undo/redo）
     this.docObserver = (
       events: Y.YEvent<
         Y.XmlElement | Y.Array<string> | Y.Map<Y.XmlElement> | YMxFile
@@ -425,20 +442,17 @@ export class Binding {
       transaction: Y.Transaction,
     ) => {
       if (transaction.local && transaction.origin === LOCAL_ORIGIN) {
-        // 本地改动由 mxListener 处理，这里只跳过，不更新 snapshot
-        // 如果调用 generatePatch 会更新共享 snapshot，导致远端 tab 无法检测到变化
+        // 本地改动由 mxListener 处理，跳过
         return;
       }
 
       // replace 策略下，若构造时 doc 为空，现在 doc 有数据，强制替换本地 file
-      // 注意：只有非本地 transaction 时才执行强制替换，避免本地初始化时自我覆盖
       if (this.shouldReplaceWhenDocHasData && !transaction.local) {
         const mxfileMap = doc.getMap(mxfileKey);
         const diagramMap = mxfileMap.get(diagramKey) as
           | Y.Map<Y.XmlElement>
           | undefined;
         if (diagramMap && diagramMap.size > 0) {
-          // doc 已有数据，执行强制替换
           const xml = ydoc2xml(doc);
           if (xml && xml.includes("<diagram")) {
             this.suppressLocalApply = true;
@@ -450,18 +464,17 @@ export class Binding {
             } finally {
               this.suppressLocalApply = false;
             }
-            // 强制替换完成后再标记 docInitialized
             this.docInitialized = true;
             return;
           }
         }
       }
 
-      // 标记已初始化（远端数据到达且不是首次强制替换）
       if (!this.docInitialized) {
         this.docInitialized = true;
       }
 
+      // 用 generatePatch 计算 diff，应用到 draw.io
       const patch = generatePatch(events);
       const patchKeys = Object.keys(patch);
       if (patchKeys.length === 0) return;
@@ -473,15 +486,6 @@ export class Binding {
         this.resetEditorStatus();
       } finally {
         this.suppressLocalApply = false;
-      }
-
-      if (this.syncOnOrderMismatch && patch.u && this.checkOrderMismatch(patch)) {
-        console.warn("[y-mxgraph] order mismatch detected, debounced forceSync (file → ydoc)");
-        if (this.debouncedForceSync) clearTimeout(this.debouncedForceSync);
-        this.debouncedForceSync = setTimeout(() => {
-          this.debouncedForceSync = null;
-          this.forceSync("file-to-ydoc");
-        }, 300);
       }
     };
     doc.getMap(mxfileKey).observeDeep(this.docObserver);

@@ -150,7 +150,7 @@ export function bindUndoManager(doc: Y.Doc, file: DrawioFile, yUndo: Y.UndoManag
   bridge("add", "stack-item-added");
   bridge("clear", "stack-cleared");
 
-  const poppedHandler = (e: { type?: string; reason?: string; kind?: string }) => {
+  const poppedHandler = (e: { type?: string; reason?: string; kind?: string; stackItem?: unknown }) => {
     const t = e && (e.type || e.reason || e.kind);
     if (t === "undo") {
       if (mxLike.indexOfNextAdd > 0) mxLike.indexOfNextAdd--;

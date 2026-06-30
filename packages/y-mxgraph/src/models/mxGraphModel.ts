@@ -85,6 +85,14 @@ export function serialize(map: YMxGraphModel) {
     console.warn(
       `[y-mxgraph] serialize: cellsOrder contains ids not present in mxCell map: ${missingIds.join(",")}`,
     );
+    console.warn('[y-mxgraph] serialize: cellsOrder ids:', orderIds);
+    console.warn('[y-mxgraph] serialize: cellsMap keys:', Array.from(cells.keys()));
+    // 打印每个 cell 的 parent 属性，帮助诊断
+    for (const [id, cell] of cells) {
+      if (typeof cell.getAttributes === 'function') {
+        console.warn('[y-mxgraph] serialize: cell', id, 'parent:', cell.getAttribute('parent'));
+      }
+    }
   }
   if (invalidIds.length) {
     console.warn(

@@ -50,6 +50,8 @@ export interface DrawioEditor {
   graph: MxGraph;
   setStatus(status: string): void;
   setModified(modified: boolean): void;
+  /** 获取当前页面的 XML 状态 */
+  getGraphXml(): string;
   undoManager?: {
     eventListeners?: unknown[];
     undoListener?: (...args: unknown[]) => void;
@@ -69,6 +71,8 @@ export interface DrawioUi {
   clonePages(pages: unknown[]): unknown[];
   /** 解析 XML 并重建 pages / mxGraphModel，触发 UI 重绘 */
   setFileData(data: string): void;
+  /** 获取整个文件的 XML 数据 */
+  getFileData(): string;
 }
 
 /** mxGraph 事件对象 */
