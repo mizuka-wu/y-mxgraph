@@ -885,8 +885,21 @@ export function generatePatch(
       const attrsMap = cellAttrMap.get(did) || new Map();
       for (const cid of inserted) {
         const attrs = attrsMap.get(cid) || {};
+        const cellParent = (attrs as Record<string, string>).parent ?? '1';
+        
+        // 找同 parent 下的前一个 sibling（不是全局的前一个）
+        let previous = '';
         const index = currCells.indexOf(cid);
-        const previous = index <= 0 ? "" : currCells[index - 1];
+        for (let i = index - 1; i >= 0; i--) {
+          const siblingId = currCells[i];
+          const siblingAttrs = (attrsMap.get(siblingId) || {}) as Record<string, string>;
+          const siblingParent = siblingAttrs.parent ?? '1';
+          if (siblingParent === cellParent) {
+            previous = siblingId;
+            break;
+          }
+        }
+        
         cells[DIFF_INSERT]!.push({
           ...(attrs as Record<string, string>),
           previous,
@@ -895,15 +908,28 @@ export function generatePatch(
       }
     }
 
-    const prevNeighbor = (order: string[], id: string) => {
+    const prevNeighbor = (order: string[], id: string, attrsMap?: Map<string, Record<string, string>>) => {
       const i = order.indexOf(id);
       if (i === -1) return null;
-      return i === 0 ? "" : order[i - 1];
+      if (!attrsMap) return i === 0 ? "" : order[i - 1];
+      const cellAttrs = attrsMap.get(id) || {};
+      const cellParent = cellAttrs.parent ?? '1';
+      // 找同 parent 下的前一个 sibling
+      for (let j = i - 1; j >= 0; j--) {
+        const siblingAttrs = attrsMap.get(order[j]) || {};
+        const siblingParent = siblingAttrs.parent ?? '1';
+        if (siblingParent === cellParent) {
+          return order[j];
+        }
+      }
+      return "";
     };
     const commonCells = currCells.filter((cid) => prevSet.has(cid) && cid);
+    const prevAttrsMap = prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
+    const currAttrsMap = cellAttrMap.get(did) || new Map<string, Record<string, string>>();
     for (const cid of commonCells) {
-      const prevP = prevNeighbor(prevCells, cid);
-      const currP = prevNeighbor(currCells, cid);
+      const prevP = prevNeighbor(prevCells, cid, prevAttrsMap);
+      const currP = prevNeighbor(currCells, cid, currAttrsMap);
       if (prevP !== currP) {
         if (prevP && removedCellSet.has(prevP)) continue;
         const cells = ensureCellSection(did);

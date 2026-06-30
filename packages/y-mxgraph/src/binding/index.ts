@@ -458,6 +458,29 @@ export class Binding {
         this.docInitialized = true;
       }
 
+      // 检测是否是 undo/redo（Yjs UndoManager）
+      const isUndoRedo = transaction.local && transaction.origin != null &&
+        typeof transaction.origin === 'object' &&
+        'undo' in transaction.origin && 'redo' in transaction.origin;
+
+      if (isUndoRedo) {
+        // undo/redo 会导致 cellsOrder 错乱，用 ydoc2xml + applyFileData 同步
+        // serialize 已改为树形遍历，不受 cellsOrder 影响
+        const xml = ydoc2xml(doc);
+        if (xml && xml.includes("<diagram")) {
+          this.suppressLocalApply = true;
+          try {
+            applyFileData(file, xml);
+            file.setShadowPages(file.ui.clonePages(file.ui.pages));
+            initDocSnapshot(doc, false);
+            this.resetEditorStatus();
+          } finally {
+            this.suppressLocalApply = false;
+          }
+        }
+        return;
+      }
+
       const patch = generatePatch(events);
       const patchKeys = Object.keys(patch);
       if (patchKeys.length === 0) return;
