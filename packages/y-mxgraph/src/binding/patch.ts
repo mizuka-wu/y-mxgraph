@@ -137,12 +137,16 @@ function patchCellRecursive(
     prev = cellId;
   }
 
-  // 按照 draw.io 原始实现
-  let index = childIndices.length > 0 ? childIndices[0] : currentOrder.length;
-  const children: Array<{ child: Y.XmlElement | null; insert: boolean } | null> = [null];
+  interface ChildEntry {
+    child: Y.XmlElement | null;
+    insert: boolean;
+    prevId: string;
+  }
+
+  const children: ChildEntry[] = [{ child: null, insert: false, prevId: '' }];
   const processed = new Set<string>();
 
-  const addCell = (child: Y.XmlElement | null, insert: boolean): string => {
+  const addCell = (child: Y.XmlElement | null, insert: boolean, prevId: string): string => {
     const id = child ? (child.getAttribute('id') || '') : '';
     if (!id || processed.has(id)) return id;
 
@@ -156,56 +160,20 @@ function patchCellRecursive(
     if (child != null) {
       processed.add(id);
 
-      // 确保单元格在 orderArr 的正确位置
+      // 按照前一个 cell 的位置插入（draw.io 用 model.add(cell, child, index)）
       const currentOrderNow = orderArr.toArray();
+      const prevIdx = prevId ? currentOrderNow.indexOf(prevId) : -1;
+      const insertIdx = prevIdx >= 0 ? prevIdx + 1 : 0;
+
       const currentIdx = currentOrderNow.indexOf(id);
-        if (currentIdx === -1) {
-          // 新单元格，插入到当前位置
-          if (index <= currentOrderNow.length) {
-            orderArr.insert(index, [id]);
-          } else {
-            orderArr.push([id]);
-          }
-        } else if (currentIdx !== index) {
-          // 已有单元格，移动到正确位置
-          orderArr.delete(currentIdx, 1);
-          const newOrder = orderArr.toArray();
-          const targetIdx = Math.min(index, newOrder.length);
-          orderArr.insert(targetIdx, [id]);
-        }
-
-      // 立即递归处理子单元格（关键！在 index++ 之前）
-      const hasParentLookupEntry = !!parentLookup[id];
-      let hasChildrenInCellsMap = false;
-      
-      if (!hasParentLookupEntry) {
-        hasChildrenInCellsMap = Array.from(cellsMap.keys()).some(cid => {
-          const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
-          return cell?.getAttribute('parent') === id;
-        });
+      if (currentIdx === -1) {
+        orderArr.insert(insertIdx, [id]);
+      } else if (currentIdx !== insertIdx) {
+        orderArr.delete(currentIdx, 1);
+        const newOrder = orderArr.toArray();
+        const targetIdx = Math.min(insertIdx, newOrder.length);
+        orderArr.insert(targetIdx, [id]);
       }
-      
-      if (hasParentLookupEntry || hasChildrenInCellsMap) {
-        patchCellRecursive(orderArr, cellsMap, id, parentLookup, cellsDiff);
-        // 递归后，index 需要跳过所有子树
-        // 找到当前 cell 的 parent，然后找到下一个同级 sibling 的位置
-        const cellParent = (cellsMap.get(id) as Y.XmlElement)?.getAttribute('parent') ?? '';
-        const orderNow = orderArr.toArray();
-        const cellPos = orderNow.indexOf(id);
-        let nextSiblingPos = orderNow.length;
-        for (let i = cellPos + 1; i < orderNow.length; i++) {
-          const cid = orderNow[i];
-          const c = cellsMap.get(cid) as Y.XmlElement | undefined;
-          const cParent = c?.getAttribute('parent') ?? '';
-          if (cParent === cellParent) {
-            nextSiblingPos = i;
-            break;
-          }
-        }
-        index = nextSiblingPos;
-      }
-
-      index++;
     }
 
     return id;
@@ -213,16 +181,15 @@ function patchCellRecursive(
 
   while (children.length > 0) {
     const entry = children.shift()!;
-    const child = entry?.child ?? null;
-    const insert = entry?.insert ?? false;
-    const id = addCell(child, insert);
+    const { child, insert, prevId } = entry;
+    const id = addCell(child, insert, prevId);
 
     const mov = moved[id];
     if (mov != null) {
       delete moved[id];
       const movCell = cellsMap.get(mov) as Y.XmlElement | undefined;
       if (movCell && !processed.has(mov)) {
-        children.push({ child: movCell, insert: false });
+        children.push({ child: movCell, insert: false, prevId: id });
       }
     }
 
@@ -231,7 +198,7 @@ function patchCellRecursive(
       delete inserted[id];
       const insId = ins['id'];
       if (insId && cellsMap.has(insId) && !processed.has(insId)) {
-        children.push({ child: cellsMap.get(insId) as Y.XmlElement, insert: true });
+        children.push({ child: cellsMap.get(insId) as Y.XmlElement, insert: true, prevId: id });
       }
     }
 
@@ -239,7 +206,7 @@ function patchCellRecursive(
       for (const orphanId of Object.keys(moved)) {
         const orphanCell = cellsMap.get(moved[orphanId]) as Y.XmlElement | undefined;
         if (orphanCell && !processed.has(moved[orphanId])) {
-          children.push({ child: orphanCell, insert: false });
+          children.push({ child: orphanCell, insert: false, prevId: '' });
         }
         delete moved[orphanId];
       }
@@ -248,7 +215,7 @@ function patchCellRecursive(
         const orphanData = inserted[orphanPrev];
         const orphanId = orphanData['id'];
         if (orphanId && cellsMap.has(orphanId) && !processed.has(orphanId)) {
-          children.push({ child: cellsMap.get(orphanId) as Y.XmlElement, insert: true });
+          children.push({ child: cellsMap.get(orphanId) as Y.XmlElement, insert: true, prevId: '' });
         }
         delete inserted[orphanPrev];
       }
@@ -1075,6 +1042,15 @@ export function generatePatch(
             changed = true;
           }
         }
+
+        // 当 parent 变更时，也需要生成 previous 变更
+        // draw.io 的 patchCellRecursive 通过 previous 确定单元格在新 parent 下的位置
+        if (cellUpdate.parent != null && cellUpdate.previous === undefined) {
+          const currCells = currCellsOrder.get(did) || [];
+          const cellIndex = currCells.indexOf(cid);
+          cellUpdate.previous = cellIndex > 0 ? currCells[cellIndex - 1] : "";
+        }
+
         if (!changed) {
           if (Object.keys(cellUpdate).length === 0) {
             delete updateBucket[cid];
