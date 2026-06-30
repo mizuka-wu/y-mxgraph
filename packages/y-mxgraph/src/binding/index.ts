@@ -468,8 +468,12 @@ export class Binding {
         // serialize 已改为树形遍历，不受 cellsOrder 影响
         const xml = ydoc2xml(doc);
         if (xml && xml.includes("<diagram")) {
-          // 保存当前页面，applyFileData 会重置到 page 1
+          // 保存当前页面和视图状态
           const currentPageId = this.ui?.currentPage?.getId?.();
+          const graph = this.ui?.editor?.graph;
+          const savedScale = graph?.view?.scale;
+          const savedTranslateX = graph?.view?.translate?.x;
+          const savedTranslateY = graph?.view?.translate?.y;
           
           this.suppressLocalApply = true;
           try {
@@ -483,6 +487,16 @@ export class Binding {
               if (page) {
                 this.ui.selectPage(page, true);
               }
+            }
+            
+            // 恢复视图状态
+            if (graph) {
+              if (savedScale) graph.view.scale = savedScale;
+              if (savedTranslateX != null && savedTranslateY != null) {
+                graph.view.translate.x = savedTranslateX;
+                graph.view.translate.y = savedTranslateY;
+              }
+              graph.sizeDidChange();
             }
             
             this.resetEditorStatus();
