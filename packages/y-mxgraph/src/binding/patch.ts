@@ -524,20 +524,40 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
       if (gm) {
         const order = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
         const ids = order ? order.toArray().slice() : [];
-        snap.cellsOrder.set(did, ids);
         const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
         const attrMap = new Map<string, Record<string, string>>();
+        const validIds: string[] = [];
+        const invalidIds: string[] = [];
+        
         if (cellsMap) {
           for (const cid of ids) {
             const el = cellsMap.get(cid) as Y.XmlElement | undefined;
-            if (el) {
+            if (el && typeof el.getAttributes === 'function') {
+              validIds.push(cid);
               attrMap.set(
                 cid,
                 (el.getAttributes() as Record<string, string>) || {},
               );
+            } else {
+              invalidIds.push(cid);
+            }
+          }
+        } else {
+          validIds.push(...ids);
+        }
+        
+        // 在初始化阶段清理异常 id，不影响 undo 栈
+        if (invalidIds.length > 0 && order) {
+          console.warn(`[y-mxgraph] initDocSnapshot: cleaning invalid cell ids from order: ${invalidIds.join(",")}`);
+          for (const invalidId of invalidIds) {
+            const index = order.toArray().indexOf(invalidId);
+            if (index !== -1) {
+              order.delete(index, 1);
             }
           }
         }
+        
+        snap.cellsOrder.set(did, validIds);
         snap.cellAttrs.set(did, attrMap);
       } else {
         snap.cellsOrder.set(did, []);
