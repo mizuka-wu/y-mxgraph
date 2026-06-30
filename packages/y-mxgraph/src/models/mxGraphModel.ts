@@ -80,8 +80,8 @@ export function serialize(map: YMxGraphModel) {
   const childrenMap = new Map<string, string[]>();
   for (const id of orderIds) {
     const cell = cells.get(id);
-    if (!cell || typeof cell.getAttributes !== 'function') continue;
-    const parent = cell.getAttribute('parent') ?? '';
+    if (!cell || typeof cell.getAttributes !== "function") continue;
+    const parent = cell.getAttribute("parent") ?? "";
     if (!childrenMap.has(parent)) {
       childrenMap.set(parent, []);
     }
@@ -92,8 +92,12 @@ export function serialize(map: YMxGraphModel) {
     if (visited.has(id)) return;
     visited.add(id);
 
+    if (!cells || typeof cells.get !== "function") {
+      return console.warn("cells is not defined or not ymap");
+    }
+
     const cell = cells.get(id);
-    if (cell && typeof cell.getAttributes === 'function') {
+    if (cell && typeof cell.getAttributes === "function") {
       ordered.push(cell);
 
       // 递归处理子单元格
@@ -109,16 +113,16 @@ export function serialize(map: YMxGraphModel) {
   }
 
   // 先处理 root cells（没有 parent），再处理 parent='0'，再处理 parent='1'
-  const noParentCells = childrenMap.get('') || [];
+  const noParentCells = childrenMap.get("") || [];
   for (const id of noParentCells) {
     addCellAndChildren(id);
   }
-  const rootChildren = childrenMap.get('0') || [];
+  const rootChildren = childrenMap.get("0") || [];
   for (const id of rootChildren) {
     addCellAndChildren(id);
   }
   // 处理 parent='1' 的单元格（default layer 的子节点）
-  const layerCells = childrenMap.get('1') || [];
+  const layerCells = childrenMap.get("1") || [];
   for (const id of layerCells) {
     addCellAndChildren(id);
   }

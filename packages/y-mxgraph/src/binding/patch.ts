@@ -59,8 +59,8 @@ function createParentLookup(
 
   if (cellsDiff[DIFF_INSERT]) {
     for (const item of cellsDiff[DIFF_INSERT]!) {
-      const par = (item.parent != null) ? item.parent : '';
-      const prev = (item.previous != null) ? item.previous : '';
+      const par = item.parent != null ? item.parent : "";
+      const prev = item.previous != null ? item.previous : "";
       getLookup(par).inserted[prev] = item;
     }
   }
@@ -73,7 +73,7 @@ function createParentLookup(
         if (par == null && cellsMap) {
           const cell = cellsMap.get(id) as Y.XmlElement | undefined;
           if (cell) {
-            const parentId = cell.getAttribute('parent');
+            const parentId = cell.getAttribute("parent");
             if (parentId) {
               par = parentId;
             }
@@ -115,7 +115,7 @@ function patchCellRecursive(
   for (let i = 0; i < currentOrder.length; i++) {
     const cellId = currentOrder[i];
     const cell = cellsMap.get(cellId) as Y.XmlElement | undefined;
-    const cellParent = cell?.getAttribute('parent') ?? '';
+    const cellParent = cell?.getAttribute("parent") ?? "";
     if (cellParent === parentId) {
       childIndices.push(i);
     }
@@ -123,10 +123,11 @@ function patchCellRecursive(
 
   // Restores existing order - 按照 draw.io 原始实现
   // 即使 parentLookup 中没有条目，也要从 cellsMap 中获取子单元格的顺序
-  let prev = '';
+  let prev = "";
   for (const idx of childIndices) {
     const cellId = currentOrder[idx];
-    if (moved[prev] == null &&
+    if (
+      moved[prev] == null &&
       (cellsDiff[DIFF_UPDATE] == null ||
         cellsDiff[DIFF_UPDATE][cellId] == null ||
         (cellsDiff[DIFF_UPDATE][cellId].previous == null &&
@@ -143,11 +144,15 @@ function patchCellRecursive(
     prevId: string;
   }
 
-  const children: ChildEntry[] = [{ child: null, insert: false, prevId: '' }];
+  const children: ChildEntry[] = [{ child: null, insert: false, prevId: "" }];
   const processed = new Set<string>();
 
-  const addCell = (child: Y.XmlElement | null, insert: boolean, prevId: string): string => {
-    const id = child ? (child.getAttribute('id') || '') : '';
+  const addCell = (
+    child: Y.XmlElement | null,
+    insert: boolean,
+    prevId: string,
+  ): string => {
+    const id = child ? child.getAttribute("id") || "" : "";
     if (!id || processed.has(id)) return id;
 
     if (child != null && insert) {
@@ -196,26 +201,35 @@ function patchCellRecursive(
     const ins = inserted[id];
     if (ins != null) {
       delete inserted[id];
-      const insId = ins['id'];
+      const insId = ins["id"];
       if (insId && cellsMap.has(insId) && !processed.has(insId)) {
-        children.push({ child: cellsMap.get(insId) as Y.XmlElement, insert: true, prevId: id });
+        children.push({
+          child: cellsMap.get(insId) as Y.XmlElement,
+          insert: true,
+          prevId: id,
+        });
       }
     }
 
     if (children.length === 0) {
       for (const orphanId of Object.keys(moved)) {
-        const orphanCell = cellsMap.get(moved[orphanId]) as Y.XmlElement | undefined;
+        const orphanCell = cellsMap.get(moved[orphanId]) as
+          Y.XmlElement | undefined;
         if (orphanCell && !processed.has(moved[orphanId])) {
-          children.push({ child: orphanCell, insert: false, prevId: '' });
+          children.push({ child: orphanCell, insert: false, prevId: "" });
         }
         delete moved[orphanId];
       }
 
       for (const orphanPrev of Object.keys(inserted)) {
         const orphanData = inserted[orphanPrev];
-        const orphanId = orphanData['id'];
+        const orphanId = orphanData["id"];
         if (orphanId && cellsMap.has(orphanId) && !processed.has(orphanId)) {
-          children.push({ child: cellsMap.get(orphanId) as Y.XmlElement, insert: true, prevId: '' });
+          children.push({
+            child: cellsMap.get(orphanId) as Y.XmlElement,
+            insert: true,
+            prevId: "",
+          });
         }
         delete inserted[orphanPrev];
       }
@@ -247,12 +261,12 @@ function handleParentChanges(
     const cell = cellsMap.get(cellId) as Y.XmlElement | undefined;
     if (!cell) continue;
 
-    const currentParent = cell.getAttribute('parent') || '1';
+    const currentParent = cell.getAttribute("parent") || "1";
     const newParent = diff.parent;
 
     if (currentParent === newParent) continue;
 
-    cell.setAttribute('parent', newParent);
+    cell.setAttribute("parent", newParent);
 
     const currentIndex = currentOrder.indexOf(cellId);
     if (currentIndex !== -1) {
@@ -378,12 +392,9 @@ export function applyFilePatch(
   doc.transact(() => {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     if (patch[DIFF_REMOVE]) {
-      const diagramsMap = mxfile.get(diagramKey) as
-        | Y.Map<YDiagram>
-        | undefined;
+      const diagramsMap = mxfile.get(diagramKey) as Y.Map<YDiagram> | undefined;
       const orderArr = mxfile.get(diagramOrderKey) as
-        | Y.Array<string>
-        | undefined;
+        Y.Array<string> | undefined;
 
       if (orderArr) ensureUniqueOrder(orderArr);
 
@@ -408,12 +419,9 @@ export function applyFilePatch(
     }
 
     if (patch[DIFF_INSERT]) {
-      const diagramsMap = mxfile.get(diagramKey) as
-        | Y.Map<YDiagram>
-        | undefined;
+      const diagramsMap = mxfile.get(diagramKey) as Y.Map<YDiagram> | undefined;
       const orderArr = mxfile.get(diagramOrderKey) as
-        | Y.Array<string>
-        | undefined;
+        Y.Array<string> | undefined;
 
       if (orderArr) {
         ensureUniqueOrder(orderArr);
@@ -507,8 +515,7 @@ export function applyFilePatch(
     if (patch[DIFF_UPDATE]) {
       Object.keys(patch[DIFF_UPDATE]).forEach((id) => {
         const diagramsMap = mxfile.get(diagramKey) as
-          | Y.Map<YDiagram>
-          | undefined;
+          Y.Map<YDiagram> | undefined;
         const diagram = diagramsMap?.get(id) as YDiagram | undefined;
         if (diagram) {
           const update = patch[DIFF_UPDATE]![id];
@@ -525,8 +532,7 @@ export function applyFilePatch(
 
           if (update.cells) {
             const yMxGraphModel = diagram.get(mxGraphModelKey) as
-              | YMxGraphModel
-              | undefined;
+              YMxGraphModel | undefined;
             if (!yMxGraphModel) {
               console.warn(
                 "[y-mxgraph] applyFilePatch: yMxGraphModel not found for diagram, skipping cells update",
@@ -534,11 +540,9 @@ export function applyFilePatch(
               return;
             }
             const cellsMap = yMxGraphModel.get(mxCellKey) as
-              | Y.Map<Y.XmlElement>
-              | undefined;
+              Y.Map<Y.XmlElement> | undefined;
             const orderArr = yMxGraphModel.get(mxCellOrderKey) as
-              | Y.Array<string>
-              | undefined;
+              Y.Array<string> | undefined;
 
             if (!cellsMap && !orderArr) {
               console.warn(
@@ -577,9 +581,18 @@ export function applyFilePatch(
               const processParent = (parentId: string) => {
                 if (processedParents.has(parentId)) return;
                 processedParents.add(parentId);
-                patchCellRecursive(orderArr!, cellsMap!, parentId, parentLookup, update.cells);
+                if (!update.cells) {
+                  return console.warn("cells is not defined");
+                }
+                patchCellRecursive(
+                  orderArr!,
+                  cellsMap!,
+                  parentId,
+                  parentLookup,
+                  update.cells,
+                );
               };
-              processParent('');
+              processParent("");
               for (const parentId of Object.keys(parentLookup)) {
                 processParent(parentId);
               }
@@ -621,14 +634,16 @@ export function applyFilePatch(
           }
 
           if ("previous" in update) {
-            const previous = Object.prototype.hasOwnProperty.call(update, "previous")
+            const previous = Object.prototype.hasOwnProperty.call(
+              update,
+              "previous",
+            )
               ? (update.previous as string | null)
               : null;
             // draw.io 语义：previous 为 null 表示没有移动，不执行任何操作
             if (previous !== null) {
               const orderArr = mxfile.get(diagramOrderKey) as
-                | Y.Array<string>
-                | undefined;
+                Y.Array<string> | undefined;
               if (orderArr) {
                 ensureUniqueOrder(orderArr);
                 insertAfterUnique(orderArr, id, previous, false);
@@ -646,13 +661,16 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
     const mxfile = doc.getMap(mxfileKey) as YMxFile;
     const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
     const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
-    
+
     // 如果 diagramOrder 为空但 diagram map 不为空,使用 diagram map 中的所有 ID
     const orderIds = orderArr ? orderArr.toArray() : [];
-    const allDiagramIds = orderIds.length > 0 
-      ? orderIds 
-      : (diagramsMap ? Array.from(diagramsMap.keys()) : []);
-    
+    const allDiagramIds =
+      orderIds.length > 0
+        ? orderIds
+        : diagramsMap
+          ? Array.from(diagramsMap.keys())
+          : [];
+
     // resetSnapshot=true 时把 diagramOrder 设为空数组，
     // 使第一次 generatePatch 把所有现有 diagram/cells 都识别为 insert
     const diagramOrder = resetSnapshot ? [] : allDiagramIds.slice();
@@ -678,11 +696,11 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
         const attrMap = new Map<string, Record<string, string>>();
         const validIds: string[] = [];
         const invalidIds: string[] = [];
-        
+
         if (cellsMap) {
           for (const cid of ids) {
             const el = cellsMap.get(cid) as Y.XmlElement | undefined;
-            if (el && typeof el.getAttributes === 'function') {
+            if (el && typeof el.getAttributes === "function") {
               validIds.push(cid);
               attrMap.set(
                 cid,
@@ -695,10 +713,12 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
         } else {
           validIds.push(...ids);
         }
-        
+
         // 在初始化阶段清理异常 id，不影响 undo 栈
         if (invalidIds.length > 0 && order) {
-          console.warn(`[y-mxgraph] initDocSnapshot: cleaning invalid cell ids from order: ${invalidIds.join(",")}`);
+          console.warn(
+            `[y-mxgraph] initDocSnapshot: cleaning invalid cell ids from order: ${invalidIds.join(",")}`,
+          );
           for (const invalidId of invalidIds) {
             const index = order.toArray().indexOf(invalidId);
             if (index !== -1) {
@@ -706,7 +726,7 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
             }
           }
         }
-        
+
         snap.cellsOrder.set(did, validIds);
         snap.cellAttrs.set(did, attrMap);
       } else {
@@ -768,9 +788,12 @@ export function generatePatch(
 
   // 如果 diagramOrder 为空但 diagram map 不为空,使用 diagram map 中的所有 ID
   const orderIds = orderArr?.toArray() ?? [];
-  const currDiagramOrder = orderIds.length > 0 
-    ? orderIds 
-    : (diagramsMap ? Array.from(diagramsMap.keys()) : []);
+  const currDiagramOrder =
+    orderIds.length > 0
+      ? orderIds
+      : diagramsMap
+        ? Array.from(diagramsMap.keys())
+        : [];
   const diagramsList = currDiagramOrder
     .map((id) => diagramsMap?.get(id) as YDiagram | undefined)
     .filter((d): d is YDiagram => !!d);
@@ -791,13 +814,18 @@ export function generatePatch(
         const validIds: string[] = [];
         for (const cid of ids) {
           const c = cellsMap.get(cid) as Y.XmlElement | undefined;
-          if (c && typeof c.getAttributes === 'function') {
+          if (c && typeof c.getAttributes === "function") {
             validIds.push(cid);
             attrs.set(cid, (c.getAttributes() as Record<string, string>) || {});
           } else if (c) {
-            console.warn(`[y-mxgraph] cell ${cid} is not a valid Y.XmlElement:`, c);
+            console.warn(
+              `[y-mxgraph] cell ${cid} is not a valid Y.XmlElement:`,
+              c,
+            );
           } else {
-            console.warn(`[y-mxgraph] cell ${cid} in order but not in cellsMap, skipping`);
+            console.warn(
+              `[y-mxgraph] cell ${cid} in order but not in cellsMap, skipping`,
+            );
           }
         }
         currCellsOrder.set(did, validIds);
@@ -885,21 +913,24 @@ export function generatePatch(
       const attrsMap = cellAttrMap.get(did) || new Map();
       for (const cid of inserted) {
         const attrs = attrsMap.get(cid) || {};
-        const cellParent = (attrs as Record<string, string>).parent ?? '1';
-        
+        const cellParent = (attrs as Record<string, string>).parent ?? "1";
+
         // 找同 parent 下的前一个 sibling（不是全局的前一个）
-        let previous = '';
+        let previous = "";
         const index = currCells.indexOf(cid);
         for (let i = index - 1; i >= 0; i--) {
           const siblingId = currCells[i];
-          const siblingAttrs = (attrsMap.get(siblingId) || {}) as Record<string, string>;
-          const siblingParent = siblingAttrs.parent ?? '1';
+          const siblingAttrs = (attrsMap.get(siblingId) || {}) as Record<
+            string,
+            string
+          >;
+          const siblingParent = siblingAttrs.parent ?? "1";
           if (siblingParent === cellParent) {
             previous = siblingId;
             break;
           }
         }
-        
+
         cells[DIFF_INSERT]!.push({
           ...(attrs as Record<string, string>),
           previous,
@@ -908,16 +939,20 @@ export function generatePatch(
       }
     }
 
-    const prevNeighbor = (order: string[], id: string, attrsMap?: Map<string, Record<string, string>>) => {
+    const prevNeighbor = (
+      order: string[],
+      id: string,
+      attrsMap?: Map<string, Record<string, string>>,
+    ) => {
       const i = order.indexOf(id);
       if (i === -1) return null;
       if (!attrsMap) return i === 0 ? "" : order[i - 1];
       const cellAttrs = attrsMap.get(id) || {};
-      const cellParent = cellAttrs.parent ?? '1';
+      const cellParent = cellAttrs.parent ?? "1";
       // 找同 parent 下的前一个 sibling
       for (let j = i - 1; j >= 0; j--) {
         const siblingAttrs = attrsMap.get(order[j]) || {};
-        const siblingParent = siblingAttrs.parent ?? '1';
+        const siblingParent = siblingAttrs.parent ?? "1";
         if (siblingParent === cellParent) {
           return order[j];
         }
@@ -925,8 +960,10 @@ export function generatePatch(
       return "";
     };
     const commonCells = currCells.filter((cid) => prevSet.has(cid) && cid);
-    const prevAttrsMap = prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
-    const currAttrsMap = cellAttrMap.get(did) || new Map<string, Record<string, string>>();
+    const prevAttrsMap =
+      prevCellsAttrs.get(did) || new Map<string, Record<string, string>>();
+    const currAttrsMap =
+      cellAttrMap.get(did) || new Map<string, Record<string, string>>();
     for (const cid of commonCells) {
       const prevP = prevNeighbor(prevCells, cid, prevAttrsMap);
       const currP = prevNeighbor(currCells, cid, currAttrsMap);
@@ -992,13 +1029,19 @@ export function generatePatch(
     const target = (ev as unknown as { target?: unknown }).target;
     if (!(target instanceof Y.XmlElement)) continue;
     const el = target as Y.XmlElement;
-    
+
     // 添加运行时类型检查，防止失效对象导致崩溃
-    if (typeof el.getAttribute !== 'function' || typeof el.getAttributes !== 'function') {
-      console.warn('[y-mxgraph] el is not a valid Y.XmlElement in event handler:', el);
+    if (
+      typeof el.getAttribute !== "function" ||
+      typeof el.getAttributes !== "function"
+    ) {
+      console.warn(
+        "[y-mxgraph] el is not a valid Y.XmlElement in event handler:",
+        el,
+      );
       continue;
     }
-    
+
     if (el.nodeName !== "mxCell") continue;
 
     const changed: Set<string> =
@@ -1053,7 +1096,7 @@ export function generatePatch(
         if (insertedCellIdGlobal.has(cid)) continue;
         const prevAttrs = prevAttrsMap.get(cid) || {};
         const currAttrs = currAttrsMap.get(cid) || {};
-        
+
         const keys = new Set<string>([
           ...Object.keys(prevAttrs),
           ...Object.keys(currAttrs),
