@@ -324,7 +324,7 @@ function insertAfterUnique(
   }
 }
 
-function ensureUniqueOrder(orderArr: Y.Array<string>) {
+export function ensureUniqueOrder(orderArr: Y.Array<string>) {
   const arr = orderArr.toArray();
   const seen = new Set<string>();
   const dupIdx: number[] = [];

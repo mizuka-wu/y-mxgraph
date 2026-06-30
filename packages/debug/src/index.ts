@@ -10,6 +10,7 @@ export interface DebugTools {
   syncChecker: SyncChecker;
   getStatus: () => DebugStatus;
   checkNow: () => CheckResult;
+  dumpXml: () => { ydocXml: string; fileXml: string };
   startAutoCheck: (intervalMs?: number) => void;
   stopAutoCheck: () => void;
   destroy: () => void;
@@ -97,11 +98,20 @@ export function createDebugTools(
     syncChecker.destroy();
   };
 
+  const dumpXml = (): { ydocXml: string; fileXml: string } => {
+    const result = syncChecker.check();
+    return {
+      ydocXml: result.status.ydocXml ?? '',
+      fileXml: result.status.fileXml ?? '',
+    };
+  };
+
   return {
     updateTracker,
     syncChecker,
     getStatus,
     checkNow,
+    dumpXml,
     startAutoCheck,
     stopAutoCheck,
     destroy,

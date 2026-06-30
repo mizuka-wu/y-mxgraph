@@ -327,22 +327,6 @@ export class Binding {
     return this.initialContentStrategy === "replace" && !this.docInitialized;
   }
 
-  /**
-   * 比较两个 Y.Doc，生成 FilePatch
-   * 用 ydoc2xml 将两个 doc 转为 XML，然后用 diffPages 计算 diff
-   */
-  private generatePatchFromDocs(oldDoc: Y.Doc, newDoc: Y.Doc): import("./patch").FilePatch {
-    const oldXml = ydoc2xml(oldDoc);
-    const newXml = ydoc2xml(newDoc);
-
-    if (!oldXml || !newXml) return {};
-
-    const oldPages = this.file.ui.getPagesForXml(oldXml);
-    const newPages = this.file.ui.getPagesForXml(newXml);
-
-    return this.file.ui.diffPages(oldPages, newPages) as import("./patch").FilePatch;
-  }
-
   constructor(file: DrawioFile, options: BindDrawioFileOptions) {
     const {
       doc,
@@ -474,7 +458,6 @@ export class Binding {
         this.docInitialized = true;
       }
 
-      // 用 generatePatch 计算 diff，应用到 draw.io
       const patch = generatePatch(events);
       const patchKeys = Object.keys(patch);
       if (patchKeys.length === 0) return;

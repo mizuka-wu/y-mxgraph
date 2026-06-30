@@ -70,29 +70,58 @@ export function serialize(map: YMxGraphModel) {
   const orderIds = cellsOrder.toArray();
   const missingIds: string[] = [];
   const invalidIds: string[] = [];
-  const filtered: Y.XmlElement[] = [];
-  for (const id of orderIds) {
+
+  // 按 draw.io 期望的顺序输出：parent-child 树形遍历
+  // group children 紧跟在 group 后面
+  const ordered: Y.XmlElement[] = [];
+  const visited = new Set<string>();
+
+  function addCellAndChildren(id: string) {
+    if (visited.has(id)) return;
+    visited.add(id);
+
     const cell = cells.get(id);
     if (cell && typeof cell.getAttributes === 'function') {
-      filtered.push(cell);
+      ordered.push(cell);
+
+      // 找出所有 parent=id 的子单元格，按 cellsOrder 顺序
+      for (const childId of orderIds) {
+        if (visited.has(childId)) continue;
+        const childCell = cells.get(childId);
+        if (childCell && typeof childCell.getAttributes === 'function') {
+          const childParent = childCell.getAttribute('parent') ?? '1';
+          if (childParent === id) {
+            addCellAndChildren(childId);
+          }
+        }
+      }
     } else if (cell) {
       invalidIds.push(id);
     } else {
       missingIds.push(id);
     }
   }
+
+  // 先处理 root cells（parent='0' 或没有 parent），再处理其他
+  for (const id of orderIds) {
+    const cell = cells.get(id);
+    if (!cell || typeof cell.getAttributes !== 'function') continue;
+    const parent = cell.getAttribute('parent') ?? '';
+    if (parent === '0' || parent === '') {
+      addCellAndChildren(id);
+    }
+  }
+  // 处理剩余未访问的单元格
+  for (const id of orderIds) {
+    if (!visited.has(id)) {
+      addCellAndChildren(id);
+    }
+  }
+
   if (missingIds.length) {
     console.warn(
       `[y-mxgraph] serialize: cellsOrder contains ids not present in mxCell map: ${missingIds.join(",")}`,
     );
-    console.warn('[y-mxgraph] serialize: cellsOrder ids:', orderIds);
-    console.warn('[y-mxgraph] serialize: cellsMap keys:', Array.from(cells.keys()));
-    // 打印每个 cell 的 parent 属性，帮助诊断
-    for (const [id, cell] of cells) {
-      if (typeof cell.getAttributes === 'function') {
-        console.warn('[y-mxgraph] serialize: cell', id, 'parent:', cell.getAttribute('parent'));
-      }
-    }
   }
   if (invalidIds.length) {
     console.warn(
@@ -102,7 +131,7 @@ export function serialize(map: YMxGraphModel) {
   return {
     _attributes,
     root: {
-      [mxCellKey]: filtered.map((cell) => serializeMxCell(cell)),
+      [mxCellKey]: ordered.map((cell) => serializeMxCell(cell)),
     },
   };
 }
