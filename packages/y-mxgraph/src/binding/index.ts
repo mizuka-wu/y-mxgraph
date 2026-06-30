@@ -468,11 +468,23 @@ export class Binding {
         // serialize 已改为树形遍历，不受 cellsOrder 影响
         const xml = ydoc2xml(doc);
         if (xml && xml.includes("<diagram")) {
+          // 保存当前页面，applyFileData 会重置到 page 1
+          const currentPageId = this.ui?.currentPage?.getId?.();
+          
           this.suppressLocalApply = true;
           try {
             applyFileData(file, xml);
             file.setShadowPages(file.ui.clonePages(file.ui.pages));
             initDocSnapshot(doc, false);
+            
+            // 恢复当前页面
+            if (currentPageId && this.ui?.pages) {
+              const page = this.ui.pages.find((p: any) => p.getId?.() === currentPageId);
+              if (page) {
+                this.ui.selectPage(page, true);
+              }
+            }
+            
             this.resetEditorStatus();
           } finally {
             this.suppressLocalApply = false;
