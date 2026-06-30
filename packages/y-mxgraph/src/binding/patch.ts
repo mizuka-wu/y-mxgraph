@@ -36,6 +36,200 @@ type DocSnapshot = {
 };
 const docSnapshots = new WeakMap<Y.Doc, DocSnapshot>();
 
+interface ParentLookupEntry {
+  inserted: Record<string, Record<string, string>>;
+  moved: Record<string, string>;
+}
+
+function createParentLookup(
+  cellsDiff: {
+    [DIFF_INSERT]?: Record<string, string>[];
+    [DIFF_UPDATE]?: { [key: string]: Record<string, string> };
+  },
+  cellsMap?: Y.Map<Y.XmlElement>,
+): Record<string, ParentLookupEntry> {
+  const parentLookup: Record<string, ParentLookupEntry> = {};
+
+  const getLookup = (id: string): ParentLookupEntry => {
+    if (!parentLookup[id]) {
+      parentLookup[id] = { inserted: {}, moved: {} };
+    }
+    return parentLookup[id];
+  };
+
+  if (cellsDiff[DIFF_INSERT]) {
+    for (const item of cellsDiff[DIFF_INSERT]!) {
+      const par = (item.parent != null) ? item.parent : '';
+      const prev = (item.previous != null) ? item.previous : '';
+      getLookup(par).inserted[prev] = item;
+    }
+  }
+
+  if (cellsDiff[DIFF_UPDATE]) {
+    for (const id of Object.keys(cellsDiff[DIFF_UPDATE]!)) {
+      const temp = cellsDiff[DIFF_UPDATE]![id];
+      if (temp.previous != null) {
+        let par = temp.parent;
+        if (par == null && cellsMap) {
+          const cell = cellsMap.get(id) as Y.XmlElement | undefined;
+          if (cell) {
+            const parentId = cell.getAttribute('parent');
+            if (parentId) {
+              par = parentId;
+            }
+          }
+        }
+        if (par != null) {
+          getLookup(par).moved[temp.previous] = id;
+        }
+      }
+    }
+  }
+
+  return parentLookup;
+}
+
+/**
+ * 按照 draw.io 原始实现：处理单元格顺序
+ * 参考 DiffSync.js 中的 patchCellRecursive
+ */
+function patchCellRecursive(
+  orderArr: Y.Array<string>,
+  cellsMap: Y.Map<Y.XmlElement>,
+  parentId: string,
+  parentLookup: Record<string, ParentLookupEntry>,
+  cellsDiff: {
+    [DIFF_INSERT]?: Record<string, string>[];
+    [DIFF_UPDATE]?: { [key: string]: Record<string, string> };
+  },
+) {
+  const temp = parentLookup[parentId];
+  const inserted = temp?.inserted ? { ...temp.inserted } : {};
+  const moved = temp?.moved ? { ...temp.moved } : {};
+
+  // Restores existing order - 按照 draw.io 原始实现
+  const currentOrder = orderArr.toArray();
+  let prev = '';
+
+  for (let i = 0; i < currentOrder.length; i++) {
+    const cellId = currentOrder[i];
+    const cell = cellsMap.get(cellId) as Y.XmlElement | undefined;
+    const cellParent = cell?.getAttribute('parent') || '1';
+    
+    // 只处理当前 parent 下的单元格
+    if (cellParent !== parentId) continue;
+    
+    if (moved[prev] == null &&
+      (cellsDiff[DIFF_UPDATE] == null ||
+        cellsDiff[DIFF_UPDATE][cellId] == null ||
+        (cellsDiff[DIFF_UPDATE][cellId].previous == null &&
+          cellsDiff[DIFF_UPDATE][cellId].parent == null))
+    ) {
+      moved[prev] = cellId;
+    }
+    prev = cellId;
+  }
+
+  // 按照 draw.io 原始实现：使用栈处理
+  const children: Array<{ child: Y.XmlElement | null; insert: boolean } | null> = [null];
+  const processed = new Set<string>();
+
+  while (children.length > 0) {
+    const entry = children.shift()!;
+    const child = entry?.child ?? null;
+    const insert = entry?.insert ?? false;
+    const id = child ? (child.getAttribute('id') || '') : '';
+
+    if (id && !processed.has(id)) {
+      processed.add(id);
+
+      // 确保单元格在 orderArr 中
+      if (!currentOrder.includes(id)) {
+        orderArr.push([id]);
+        currentOrder.push(id);
+      }
+    }
+
+    const mov = moved[id];
+    if (mov != null) {
+      delete moved[id];
+      const movCell = cellsMap.get(mov) as Y.XmlElement | undefined;
+      if (movCell && !processed.has(mov)) {
+        children.push({ child: movCell, insert: false });
+      }
+    }
+
+    const ins = inserted[id];
+    if (ins != null) {
+      delete inserted[id];
+      const insId = ins['id'];
+      if (insId && cellsMap.has(insId) && !processed.has(insId)) {
+        children.push({ child: cellsMap.get(insId) as Y.XmlElement, insert: true });
+      }
+    }
+
+    if (children.length === 0) {
+      for (const orphanId of Object.keys(moved)) {
+        const orphanCell = cellsMap.get(moved[orphanId]) as Y.XmlElement | undefined;
+        if (orphanCell && !processed.has(moved[orphanId])) {
+          children.push({ child: orphanCell, insert: false });
+        }
+        delete moved[orphanId];
+      }
+
+      for (const orphanPrev of Object.keys(inserted)) {
+        const orphanData = inserted[orphanPrev];
+        const orphanId = orphanData['id'];
+        if (orphanId && cellsMap.has(orphanId) && !processed.has(orphanId)) {
+          children.push({ child: cellsMap.get(orphanId) as Y.XmlElement, insert: true });
+        }
+        delete inserted[orphanPrev];
+      }
+    }
+  }
+}
+
+/**
+ * 处理 parent 变化的情况（如创建分组）
+ * 当单元格的 parent 从 A 变为 B 时，需要：
+ * 1. 从 A 的 order 中移除
+ * 2. 添加到 B 的 order 中
+ */
+function handleParentChanges(
+  cellsDiff: {
+    [DIFF_UPDATE]?: { [key: string]: Record<string, string> };
+  },
+  cellsMap: Y.Map<Y.XmlElement>,
+  orderArr: Y.Array<string>,
+) {
+  if (!cellsDiff[DIFF_UPDATE]) return;
+
+  const currentOrder = orderArr.toArray();
+
+  for (const cellId of Object.keys(cellsDiff[DIFF_UPDATE])) {
+    const diff = cellsDiff[DIFF_UPDATE][cellId];
+    if (diff.parent == null) continue;
+
+    const cell = cellsMap.get(cellId) as Y.XmlElement | undefined;
+    if (!cell) continue;
+
+    const currentParent = cell.getAttribute('parent') || '1';
+    const newParent = diff.parent;
+
+    if (currentParent === newParent) continue;
+
+    // 更新 parent 属性
+    cell.setAttribute('parent', newParent);
+
+    // 从当前 order 中移除（如果存在）
+    const currentIndex = currentOrder.indexOf(cellId);
+    if (currentIndex !== -1) {
+      orderArr.delete(currentIndex, 1);
+      currentOrder.splice(currentIndex, 1);
+    }
+  }
+}
+
 function insertAfterUnique(
   orderArr: Y.Array<string>,
   id: string,
@@ -46,16 +240,7 @@ function insertAfterUnique(
   // previous 语义："" = 插到最前面，null/undefined = 未找到（走 fallback），string = 在该 id 之后
   let anchorPos = previous != null ? currentIds.indexOf(previous) : -1;
   if (anchorPos === -1 && fallbackToEnd) anchorPos = currentIds.length - 1;
-  let targetIndex = anchorPos + 1;
-
-  // mxGraph root cells "0" (root) and "1" (default layer) must always be at the front.
-  // When previous="" means "insert at front", we insert after "1" instead of absolute index 0.
-  if (previous === "" && id !== "0" && id !== "1") {
-    const layerIndex = currentIds.indexOf("1");
-    if (layerIndex >= 0) {
-      targetIndex = layerIndex + 1;
-    }
-  }
+  const targetIndex = anchorPos + 1;
 
   const existingIndex = currentIds.indexOf(id);
   if (existingIndex === -1) {
@@ -65,9 +250,13 @@ function insertAfterUnique(
 
   if (existingIndex === targetIndex) return;
 
-  if (existingIndex < targetIndex) targetIndex -= 1;
-  orderArr.delete(existingIndex, 1);
-  orderArr.insert(targetIndex, [id]);
+  if (existingIndex < targetIndex) {
+    orderArr.delete(existingIndex, 1);
+    orderArr.insert(targetIndex - 1, [id]);
+  } else {
+    orderArr.delete(existingIndex, 1);
+    orderArr.insert(targetIndex, [id]);
+  }
 }
 
 function ensureUniqueOrder(orderArr: Y.Array<string>) {
@@ -81,7 +270,10 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
     else seen.add(id);
   }
   if (dupIdx.length) {
-    dupIdx.sort((a, b) => b - a).forEach((idx) => orderArr.delete(idx, 1));
+    // 从后往前删除，避免索引偏移
+    for (let i = dupIdx.length - 1; i >= 0; i--) {
+      orderArr.delete(dupIdx[i], 1);
+    }
   }
 }
 
@@ -316,15 +508,68 @@ export function applyFilePatch(
               | Y.Array<string>
               | undefined;
 
-            // 降级处理：即使 cellsMap 或 orderArr 缺失，也尽可能处理可用的操作
             if (!cellsMap && !orderArr) {
               console.warn(
                 "[y-mxgraph] applyFilePatch: both cellsMap and orderArr missing, skipping cells update",
               );
               return;
             }
-            if (orderArr) ensureUniqueOrder(orderArr);
 
+            // 按照 draw.io 原始实现：先创建 parentLookup
+            const parentLookup = createParentLookup(update.cells, cellsMap);
+
+            // 处理插入的单元格 - 创建 XmlElement 并加入 cellsMap
+            if (cellsMap && update.cells[DIFF_INSERT]) {
+              for (const item of update.cells[DIFF_INSERT]) {
+                const cellId = item["id"] as string | undefined;
+                if (!cellId) continue;
+                if (!cellsMap.has(cellId)) {
+                  const xmlElement = new Y.XmlElement("mxCell");
+                  Object.keys(item).forEach((key) => {
+                    if (key === "previous") return;
+                    xmlElement.setAttribute(key, item[key]);
+                  });
+                  cellsMap.set(cellId, xmlElement);
+                }
+              }
+            }
+
+            // 处理 parent 变化（如创建分组）
+            if (cellsMap && orderArr) {
+              handleParentChanges(update.cells, cellsMap, orderArr);
+            }
+
+            // 按照 draw.io 原始实现：使用 patchCellRecursive 处理顺序
+            // 递归处理所有 parent
+            if (orderArr && cellsMap) {
+              const processedParents = new Set<string>();
+              const processParent = (parentId: string) => {
+                if (processedParents.has(parentId)) return;
+                processedParents.add(parentId);
+                patchCellRecursive(orderArr!, cellsMap!, parentId, parentLookup, update.cells);
+              };
+              // 从根 parent '' 开始，然后处理 parentLookup 中的所有 parent
+              processParent('');
+              for (const parentId of Object.keys(parentLookup)) {
+                processParent(parentId);
+              }
+            }
+
+            // 更新单元格属性
+            if (cellsMap && update.cells[DIFF_UPDATE]) {
+              Object.keys(update.cells[DIFF_UPDATE]).forEach((cid) => {
+                const updateObj = update.cells![DIFF_UPDATE]![cid];
+                const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
+                if (cell) {
+                  Object.keys(updateObj).forEach((k) => {
+                    if (k === "previous" || k === "parent") return;
+                    cell.setAttribute(k, updateObj[k]);
+                  });
+                }
+              });
+            }
+
+            // 删除单元格 - 按照 draw.io 原始实现，在最后处理
             if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
               if (orderArr) {
                 const orderIds = orderArr.toArray();
@@ -343,146 +588,21 @@ export function applyFilePatch(
                 });
               }
             }
-
-            if (update.cells[DIFF_INSERT] && update.cells[DIFF_INSERT].length) {
-              for (const item of update.cells[DIFF_INSERT]) {
-                const id = item["id"] as string | undefined;
-                if (!id) continue;
-                if (cellsMap) {
-                  const xmlElement = new Y.XmlElement("mxCell");
-                  Object.keys(item).forEach((key) => {
-                    if (key === "previous") return;
-                    xmlElement.setAttribute(key, item[key]);
-                  });
-                  cellsMap.set(id, xmlElement);
-                }
-                if (orderArr) {
-                  const previous = item["previous"] as string | undefined;
-                  const parent = item["parent"] as string | undefined;
-                  let anchorId: string | null | undefined = null;
-                  let fallbackToEnd = true;
-                  if (typeof previous !== "undefined") {
-                    if (previous === "") {
-                      anchorId = "";
-                      fallbackToEnd = false;
-                    } else {
-                      anchorId = previous;
-                      fallbackToEnd = true;
-                    }
-                  } else if (parent) {
-                    anchorId = parent;
-                    fallbackToEnd = true;
-                  }
-
-                  insertAfterUnique(
-                    orderArr,
-                    id,
-                    anchorId,
-                    fallbackToEnd,
-                  );
-                }
-              }
-            }
-
-            if (update.cells[DIFF_UPDATE]) {
-              if (cellsMap) {
-                Object.keys(update.cells[DIFF_UPDATE]).forEach((cid) => {
-                  const updateObj = update.cells![DIFF_UPDATE]![cid];
-                  const cell = cellsMap.get(cid) as Y.XmlElement | undefined;
-                  if (cell) {
-                    Object.keys(updateObj).forEach((k) => {
-                      if (k === "previous") return;
-                      cell.setAttribute(k, updateObj[k]);
-                    });
-                  } else {
-                    console.warn(
-                      `[y-mxgraph] applyFilePatch: cell ${cid} not found in cellsMap, skipping update`,
-                    );
-                  }
-                });
-              }
-
-              if (cellsMap && orderArr) {
-                const reorderEntries = Object.keys(update.cells[DIFF_UPDATE])
-                  .map((cellId) => {
-                    const updateObj = update.cells![DIFF_UPDATE]![cellId];
-                    const hasPrev = "previous" in updateObj;
-                    const hasParent = "parent" in updateObj;
-                    if (!hasPrev && !hasParent) return null;
-
-                    const prevVal = hasPrev
-                      ? (updateObj.previous as string)
-                      : undefined;
-                    const parentVal = hasParent
-                      ? (updateObj.parent as string)
-                      : undefined;
-
-                    let anchorId: string | null | undefined = null;
-                    let fallbackToEnd = true;
-
-                    if (hasPrev) {
-                      if (prevVal === "") {
-                        anchorId = "";
-                        fallbackToEnd = false;
-                      } else if (prevVal === null || typeof prevVal === "undefined") {
-                        anchorId = null;
-                        fallbackToEnd = true;
-                      } else {
-                        anchorId = prevVal as string;
-                        fallbackToEnd = true;
-                      }
-                    } else if (parentVal) {
-                      anchorId = parentVal;
-                      fallbackToEnd = true;
-                    }
-
-                    return { cellId, anchorId, fallbackToEnd, updateObj };
-                  })
-                  .filter((e): e is NonNullable<typeof e> => e !== null);
-
-                const applyReorder = (entry: { cellId: string; anchorId: string | null | undefined; fallbackToEnd: boolean; updateObj: Record<string, string> }) => {
-                  const { cellId, anchorId, fallbackToEnd, updateObj } = entry;
-                  const currentIds = orderArr.toArray();
-                  const currentIndex = currentIds.indexOf(cellId);
-
-                  if (currentIndex === -1) {
-                    let newCell = cellsMap.get(cellId) as Y.XmlElement | undefined;
-                    if (!newCell) {
-                      newCell = new Y.XmlElement("mxCell");
-                      newCell.setAttribute("id", cellId);
-                      Object.keys(updateObj).forEach((k) => {
-                        if (k === "previous") return;
-                        newCell!.setAttribute(k, updateObj[k] as string);
-                      });
-                      cellsMap.set(cellId, newCell);
-                    }
-                    insertAfterUnique(orderArr, cellId, anchorId, fallbackToEnd);
-                    return;
-                  }
-
-                  insertAfterUnique(orderArr, cellId, anchorId, fallbackToEnd);
-                };
-
-                reorderEntries
-                  .filter((e) => e.anchorId === "" || e.anchorId === null)
-                  .forEach(applyReorder);
-                reorderEntries
-                  .filter((e) => e.anchorId !== "" && e.anchorId !== null)
-                  .forEach(applyReorder);
-              }
-            }
           }
 
           if ("previous" in update) {
             const previous = Object.prototype.hasOwnProperty.call(update, "previous")
               ? (update.previous as string | null)
               : null;
-            const orderArr = mxfile.get(diagramOrderKey) as
-              | Y.Array<string>
-              | undefined;
-            if (orderArr) {
-              ensureUniqueOrder(orderArr);
-              insertAfterUnique(orderArr, id, previous, false);
+            // draw.io 语义：previous 为 null 表示没有移动，不执行任何操作
+            if (previous !== null) {
+              const orderArr = mxfile.get(diagramOrderKey) as
+                | Y.Array<string>
+                | undefined;
+              if (orderArr) {
+                ensureUniqueOrder(orderArr);
+                insertAfterUnique(orderArr, id, previous, false);
+              }
             }
           }
         }
