@@ -85,27 +85,11 @@ export function serialize(map: YMxGraphModel) {
     console.warn(
       `[y-mxgraph] serialize: cellsOrder contains ids not present in mxCell map: ${missingIds.join(",")}`,
     );
-    // 自动清理无效的 id（可能是 undo 后不同步导致的）
-    for (const id of missingIds) {
-      const idx = orderIds.indexOf(id);
-      if (idx !== -1) {
-        cellsOrder.delete(idx, 1);
-        orderIds.splice(idx, 1);
-      }
-    }
   }
   if (invalidIds.length) {
     console.warn(
       `[y-mxgraph] serialize: cellsOrder contains invalid Y.XmlElement: ${invalidIds.join(",")}`,
     );
-    // 自动清理无效的 id
-    for (const id of invalidIds) {
-      const idx = orderIds.indexOf(id);
-      if (idx !== -1) {
-        cellsOrder.delete(idx, 1);
-        orderIds.splice(idx, 1);
-      }
-    }
   }
   return {
     _attributes,
