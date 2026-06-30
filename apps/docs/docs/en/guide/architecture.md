@@ -344,3 +344,8 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
 1. **Destroy**: call `destroy(true)` when unmounting to fully clean up
 2. **Single doc**: each draw.io file is bound to one Y.Doc; multiple docs are not supported
 3. **draw.io API dependency**: relies on internal APIs like `file.ui.diffPages()` which may change across draw.io versions
+4. **Undo Stack Safety**:
+   - Invalid cellOrder (cell ids not present in cellsMap) can be caused by undo operations
+   - `generatePatch` filters out these invalid ids to prevent crashes
+   - Cleanup only executes during `forceSync` to avoid affecting the undo stack
+   - Does not clean data received from the server to avoid data inconsistency

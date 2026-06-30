@@ -351,3 +351,8 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
 1. **销毁方法**: 提供 `destroy(deep?: boolean)`，建议组件卸载时调用 `destroy(true)` 完全清理
 2. **单文档**: 每个 draw.io file 绑定一个 Y.Doc，不支持多文档
 3. **draw.io 依赖**: 依赖 `file.ui.diffPages()` 等内部 API，可能随 draw.io 版本变化
+4. **Undo 栈安全性**: 
+   - 异常 cellOrder（cellsMap 中不存在的 cell id）可能由 undo 操作导致
+   - `generatePatch` 会过滤这些异常 id，防止崩溃
+   - 清理操作只在 `forceSync` 时执行，不影响 undo 栈
+   - 不清理服务器下发的数据，避免数据不一致

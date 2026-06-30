@@ -137,6 +137,30 @@ const template = Binding.generateFileTemplate("room-123-main");
 
 ## Instance Methods
 
+### `forceSync(direction?: "ydoc-to-file" | "file-to-ydoc"): void`
+
+Force sync ydoc and file to fix detected inconsistencies.
+
+**Parameters**:
+
+- `direction` — sync direction, defaults to `"ydoc-to-file"`
+  - `"ydoc-to-file"`: overwrite file with ydoc data (cleans invalid cellOrder)
+  - `"file-to-ydoc"`: overwrite ydoc with file data
+
+**Invalid cellOrder cleanup**:
+
+In the `ydoc-to-file` direction, automatically cleans cell ids that don't exist in the cellsMap. This fixes the order and map inconsistency that can be caused by undo operations.
+
+**Note**: Cleanup only executes during `forceSync`, doesn't affect the undo stack, and doesn't clean data received from the server.
+
+```ts
+// Fix data inconsistency
+binding.forceSync("ydoc-to-file");
+
+// Overwrite remote with local data
+binding.forceSync("file-to-ydoc");
+```
+
 ### `destroy(deep?: boolean): void`
 
 Destroys the binding and removes all listeners.

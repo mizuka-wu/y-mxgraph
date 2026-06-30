@@ -162,6 +162,30 @@ const template = Binding.generateFileTemplate("room-123-main");
 
 ## 实例方法
 
+### `forceSync(direction?: "ydoc-to-file" | "file-to-ydoc"): void`
+
+强制同步 ydoc 与 file，修复检测到的不一致。
+
+**参数**:
+
+- `direction` - 同步方向，默认 `"ydoc-to-file"`
+  - `"ydoc-to-file"`: 用 ydoc 数据覆盖 file（会清理异常 cellOrder）
+  - `"file-to-ydoc"`: 用 file 数据覆盖 ydoc
+
+**异常 cellOrder 清理**:
+
+在 `ydoc-to-file` 方向，会自动清理 cellsMap 中不存在的 cell id。这解决了 undo 操作可能导致的 order 和 map 不一致问题。
+
+**注意**: 清理操作只在 `forceSync` 时执行，不会影响 undo 栈，也不会清理服务器下发的数据。
+
+```ts
+// 修复数据不一致
+binding.forceSync("ydoc-to-file");
+
+// 用本地数据覆盖远端
+binding.forceSync("file-to-ydoc");
+```
+
 ### `destroy(deep?: boolean): void`
 
 销毁绑定，解除所有监听器。
