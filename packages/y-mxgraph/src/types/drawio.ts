@@ -43,6 +43,8 @@ export interface MxGraph {
     opacity: number,
     width: number,
   ): { destroy(): void };
+  /** 通知图形视图大小已变化，触发重新布局 */
+  sizeDidChange(): void;
 }
 
 /** draw.io 编辑器 */
@@ -73,6 +75,8 @@ export interface DrawioUi {
   setFileData(data: string): void;
   /** 获取整个文件的 XML 数据 */
   getFileData(): string;
+  /** 切换到指定页面 */
+  selectPage(page: unknown, updateHistory?: boolean): void;
 }
 
 /** mxGraph 事件对象 */
