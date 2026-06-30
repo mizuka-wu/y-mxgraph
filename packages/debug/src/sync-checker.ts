@@ -9,6 +9,7 @@ export interface SyncStatus {
   diagramCountMatch: boolean;
   cellCountMatch: boolean;
   cellOrderMatch: boolean;
+  geometryMatch: boolean;
   details: string[];
 }
 
@@ -85,9 +86,10 @@ export class SyncChecker {
           isDraft,
           ydocXml,
           fileXml,
-          diagramCountMatch,
-          cellCountMatch,
+          diagramCountMatch: true,
+          cellCountMatch: true,
           cellOrderMatch: true,
+          geometryMatch: true,
           details,
         };
       }
@@ -112,7 +114,35 @@ export class SyncChecker {
         }
       }
 
-      const inSync = diagramCountMatch && cellCountMatch && cellOrderMatch;
+      // 检查几何数据是否一致
+      let geometryMatch = true;
+      if (cellCountMatch && ydocCellCount > 0) {
+        const ydocGeometries = this.extractGeometries(ydocXml);
+        const fileGeometries = this.extractGeometries(fileXml);
+        const geoDiffs: string[] = [];
+        for (const [id, ydocGeo] of ydocGeometries) {
+          const fileGeo = fileGeometries.get(id);
+          if (!fileGeo) continue;
+          const allKeys = new Set([...Object.keys(ydocGeo), ...Object.keys(fileGeo)]);
+          const fieldDiffs: string[] = [];
+          for (const key of allKeys) {
+            const yv = ydocGeo[key] ?? '';
+            const fv = fileGeo[key] ?? '';
+            if (yv !== fv) {
+              fieldDiffs.push(`${key}: ydoc=${yv} file=${fv}`);
+            }
+          }
+          if (fieldDiffs.length > 0) {
+            geoDiffs.push(`${id}: ${fieldDiffs.join(', ')}`);
+          }
+        }
+        if (geoDiffs.length > 0) {
+          geometryMatch = false;
+          details.push(`几何数据不一致：${geoDiffs.slice(0, 3).join('; ')}${geoDiffs.length > 3 ? ` (共${geoDiffs.length}处)` : ''}`);
+        }
+      }
+
+      const inSync = diagramCountMatch && cellCountMatch && cellOrderMatch && geometryMatch;
 
       if (inSync) {
         details.push("同步正常");
@@ -126,6 +156,7 @@ export class SyncChecker {
         diagramCountMatch,
         cellCountMatch,
         cellOrderMatch,
+        geometryMatch,
         details,
       };
     } catch (e) {
@@ -137,6 +168,7 @@ export class SyncChecker {
         diagramCountMatch: false,
         cellCountMatch: false,
         cellOrderMatch: false,
+        geometryMatch: false,
         details: [`检查出错: ${e}`],
       };
     }
@@ -150,6 +182,28 @@ export class SyncChecker {
       ids.push(match[1]);
     }
     return ids;
+  }
+
+  private extractGeometries(xml: string): Map<string, Record<string, string>> {
+    const geometries = new Map<string, Record<string, string>>();
+    const cellBlockRegex = /<mxCell[^>]*\sid="([^"]*)"[^>]*>([\s\S]*?)<\/mxCell>/g;
+    let match;
+    while ((match = cellBlockRegex.exec(xml)) !== null) {
+      const cellId = match[1];
+      const cellContent = match[2];
+      const geoRegex = /<mxGeometry\s+([^>]*)\/?>/;
+      const geoMatch = cellContent.match(geoRegex);
+      if (geoMatch) {
+        const attrs: Record<string, string> = {};
+        const attrRegex = /(\w+)="([^"]*)"/g;
+        let attrMatch;
+        while ((attrMatch = attrRegex.exec(geoMatch[1])) !== null) {
+          attrs[attrMatch[1]] = attrMatch[2];
+        }
+        geometries.set(cellId, attrs);
+      }
+    }
+    return geometries;
   }
 
   getHistory(): SyncCheckResult[] {
