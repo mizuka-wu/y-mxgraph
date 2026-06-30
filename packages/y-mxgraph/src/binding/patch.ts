@@ -107,18 +107,22 @@ function patchCellRecursive(
   const inserted = temp?.inserted ? { ...temp.inserted } : {};
   const moved = temp?.moved ? { ...temp.moved } : {};
 
-  // Restores existing order - 按照 draw.io 原始实现
+  // 获取当前 parent 下的子单元格
+  // 注意：draw.io 中 parent 为空字符串表示 root，'0' 表示 root cell，'1' 表示 default layer
   const currentOrder = orderArr.toArray();
-  let prev = '';
-
+  const childIds: string[] = [];
   for (let i = 0; i < currentOrder.length; i++) {
     const cellId = currentOrder[i];
     const cell = cellsMap.get(cellId) as Y.XmlElement | undefined;
-    const cellParent = cell?.getAttribute('parent') || '1';
-    
-    // 只处理当前 parent 下的单元格
-    if (cellParent !== parentId) continue;
-    
+    const cellParent = cell?.getAttribute('parent') ?? '';
+    if (cellParent === parentId) {
+      childIds.push(cellId);
+    }
+  }
+
+  // Restores existing order - 按照 draw.io 原始实现
+  let prev = '';
+  for (const cellId of childIds) {
     if (moved[prev] == null &&
       (cellsDiff[DIFF_UPDATE] == null ||
         cellsDiff[DIFF_UPDATE][cellId] == null ||
@@ -130,7 +134,8 @@ function patchCellRecursive(
     prev = cellId;
   }
 
-  // 按照 draw.io 原始实现：使用栈处理
+  // 按照 draw.io 原始实现：使用栈处理，重建顺序
+  const newOrder: string[] = [];
   const children: Array<{ child: Y.XmlElement | null; insert: boolean } | null> = [null];
   const processed = new Set<string>();
 
@@ -142,12 +147,7 @@ function patchCellRecursive(
 
     if (id && !processed.has(id)) {
       processed.add(id);
-
-      // 确保单元格在 orderArr 中
-      if (!currentOrder.includes(id)) {
-        orderArr.push([id]);
-        currentOrder.push(id);
-      }
+      newOrder.push(id);
     }
 
     const mov = moved[id];
@@ -184,6 +184,41 @@ function patchCellRecursive(
           children.push({ child: cellsMap.get(orphanId) as Y.XmlElement, insert: true });
         }
         delete inserted[orphanPrev];
+      }
+    }
+  }
+
+  // 重建 orderArr：移除旧的 childIds，按 newOrder 插入
+  if (newOrder.length > 0) {
+    // 找到插入位置（第一个 child 的位置）
+    let insertPos = currentOrder.length;
+    for (let i = 0; i < currentOrder.length; i++) {
+      if (childIds.includes(currentOrder[i])) {
+        insertPos = i;
+        break;
+      }
+    }
+    
+    // 从后往前删除旧的 childIds
+    for (let i = currentOrder.length - 1; i >= 0; i--) {
+      if (childIds.includes(currentOrder[i])) {
+        orderArr.delete(i, 1);
+      }
+    }
+    
+    // 在正确位置插入新的顺序
+    for (let i = 0; i < newOrder.length; i++) {
+      orderArr.insert(insertPos + i, [newOrder[i]]);
+    }
+  }
+
+  // 递归处理子单元格的子单元格（如 group 的子元素）
+  for (const cellId of newOrder) {
+    const cell = cellsMap.get(cellId) as Y.XmlElement | undefined;
+    if (cell) {
+      const cellIdAttr = cell.getAttribute('id');
+      if (cellIdAttr && parentLookup[cellIdAttr]) {
+        patchCellRecursive(orderArr, cellsMap, cellIdAttr, parentLookup, cellsDiff);
       }
     }
   }
