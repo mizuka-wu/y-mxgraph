@@ -547,8 +547,6 @@ export class Binding {
    */
   forceSync(direction: "ydoc-to-file" | "file-to-ydoc" = "ydoc-to-file"): void {
     if (direction === "ydoc-to-file") {
-      // 在 forceSync 时清理异常 cellOrder，避免影响 undo 栈
-      this.cleanInvalidCellOrder();
       const xml = ydoc2xml(this.doc);
       if (!xml || !xml.includes("<diagram")) return;
       this.suppressLocalApply = true;
@@ -566,6 +564,8 @@ export class Binding {
         initDocSnapshot(this.doc, false);
       }, LOCAL_ORIGIN);
     }
+    // 在 forceSync 后清理异常 cellOrder，避免影响 undo 栈
+    this.cleanInvalidCellOrder();
     // forceSync 成功后重置 drift 计数
     this.consistencyChecker?.resetDriftCount();
   }
