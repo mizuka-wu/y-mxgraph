@@ -618,12 +618,19 @@ export function generatePatch(
       const orderArr = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
       if (cellsMap && orderArr) {
         const ids = orderArr.toArray();
-        currCellsOrder.set(did, ids);
+        const validIds: string[] = [];
         for (const cid of ids) {
           const c = cellsMap.get(cid) as Y.XmlElement | undefined;
-          if (c)
+          if (c && typeof c.getAttributes === 'function') {
+            validIds.push(cid);
             attrs.set(cid, (c.getAttributes() as Record<string, string>) || {});
+          } else if (c) {
+            console.warn(`[y-mxgraph] cell ${cid} is not a valid Y.XmlElement:`, c);
+          } else {
+            console.warn(`[y-mxgraph] cell ${cid} in order but not in cellsMap, skipping`);
+          }
         }
+        currCellsOrder.set(did, validIds);
       } else {
         currCellsOrder.set(did, []);
       }
@@ -789,6 +796,13 @@ export function generatePatch(
     const target = (ev as unknown as { target?: unknown }).target;
     if (!(target instanceof Y.XmlElement)) continue;
     const el = target as Y.XmlElement;
+    
+    // 添加运行时类型检查，防止失效对象导致崩溃
+    if (typeof el.getAttribute !== 'function' || typeof el.getAttributes !== 'function') {
+      console.warn('[y-mxgraph] el is not a valid Y.XmlElement in event handler:', el);
+      continue;
+    }
+    
     if (el.nodeName !== "mxCell") continue;
 
     const changed: Set<string> =
