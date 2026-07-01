@@ -9,7 +9,7 @@ export interface SyncStatus {
   diagramCountMatch: boolean;
   cellCountMatch: boolean;
   cellOrderMatch: boolean;
-  geometryMatch: boolean;
+  geometryMatch?: boolean;
   details: string[];
 }
 
@@ -95,18 +95,23 @@ export class SyncChecker {
       }
 
       if (!diagramCountMatch) {
-        details.push(`页面数量不一致：YDoc=${ydocDiagramCount}, 文件=${fileDiagramCount}`);
+        details.push(
+          `页面数量不一致：YDoc=${ydocDiagramCount}, 文件=${fileDiagramCount}`,
+        );
       }
 
       if (!cellCountMatch) {
-        details.push(`元素数量不一致：YDoc=${ydocCellCount}, 文件=${fileCellCount}`);
+        details.push(
+          `元素数量不一致：YDoc=${ydocCellCount}, 文件=${fileCellCount}`,
+        );
       }
 
       let cellOrderMatch = true;
       if (cellCountMatch && ydocCellCount > 0) {
         const ydocIds = this.extractCellIds(ydocXml);
         const fileIds = this.extractCellIds(fileXml);
-        const orderSame = ydocIds.length === fileIds.length &&
+        const orderSame =
+          ydocIds.length === fileIds.length &&
           ydocIds.every((id, i) => id === fileIds[i]);
         if (!orderSame) {
           cellOrderMatch = false;
@@ -123,26 +128,32 @@ export class SyncChecker {
         for (const [id, ydocGeo] of ydocGeometries) {
           const fileGeo = fileGeometries.get(id);
           if (!fileGeo) continue;
-          const allKeys = new Set([...Object.keys(ydocGeo), ...Object.keys(fileGeo)]);
+          const allKeys = new Set([
+            ...Object.keys(ydocGeo),
+            ...Object.keys(fileGeo),
+          ]);
           const fieldDiffs: string[] = [];
           for (const key of allKeys) {
-            const yv = ydocGeo[key] ?? '';
-            const fv = fileGeo[key] ?? '';
+            const yv = ydocGeo[key] ?? "";
+            const fv = fileGeo[key] ?? "";
             if (yv !== fv) {
               fieldDiffs.push(`${key}: ydoc=${yv} file=${fv}`);
             }
           }
           if (fieldDiffs.length > 0) {
-            geoDiffs.push(`${id}: ${fieldDiffs.join(', ')}`);
+            geoDiffs.push(`${id}: ${fieldDiffs.join(", ")}`);
           }
         }
         if (geoDiffs.length > 0) {
           geometryMatch = false;
-          details.push(`几何数据不一致：${geoDiffs.slice(0, 3).join('; ')}${geoDiffs.length > 3 ? ` (共${geoDiffs.length}处)` : ''}`);
+          details.push(
+            `几何数据不一致：${geoDiffs.slice(0, 3).join("; ")}${geoDiffs.length > 3 ? ` (共${geoDiffs.length}处)` : ""}`,
+          );
         }
       }
 
-      const inSync = diagramCountMatch && cellCountMatch && cellOrderMatch && geometryMatch;
+      const inSync =
+        diagramCountMatch && cellCountMatch && cellOrderMatch && geometryMatch;
 
       if (inSync) {
         details.push("同步正常");
@@ -186,7 +197,8 @@ export class SyncChecker {
 
   private extractGeometries(xml: string): Map<string, Record<string, string>> {
     const geometries = new Map<string, Record<string, string>>();
-    const cellBlockRegex = /<mxCell[^>]*\sid="([^"]*)"[^>]*>([\s\S]*?)<\/mxCell>/g;
+    const cellBlockRegex =
+      /<mxCell[^>]*\sid="([^"]*)"[^>]*>([\s\S]*?)<\/mxCell>/g;
     let match;
     while ((match = cellBlockRegex.exec(xml)) !== null) {
       const cellId = match[1];
@@ -211,7 +223,9 @@ export class SyncChecker {
   }
 
   getLastCheck(): SyncCheckResult | null {
-    return this.history.length > 0 ? this.history[this.history.length - 1] : null;
+    return this.history.length > 0
+      ? this.history[this.history.length - 1]
+      : null;
   }
 
   isConsistent(): boolean {
