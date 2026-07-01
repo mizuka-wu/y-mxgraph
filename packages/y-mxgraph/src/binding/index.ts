@@ -425,8 +425,11 @@ export class Binding {
       >[],
       transaction: Y.Transaction,
     ) => {
-      if (transaction.local) {
-        // 本地改动由 mxListener 处理，跳过
+      const isUndoRedo = transaction.local && transaction.origin != null &&
+        typeof transaction.origin === 'object' &&
+        'undo' in transaction.origin && 'redo' in transaction.origin;
+
+      if (transaction.local && !isUndoRedo) {
         return;
       }
 
