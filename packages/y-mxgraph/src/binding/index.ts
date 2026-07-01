@@ -425,99 +425,50 @@ export class Binding {
       >[],
       transaction: Y.Transaction,
     ) => {
-      if (transaction.local && transaction.origin === LOCAL_ORIGIN) {
+      if (transaction.local) {
         // 本地改动由 mxListener 处理，跳过
         return;
       }
 
-      // replace 策略下，若构造时 doc 为空，现在 doc 有数据，强制替换本地 file
-      if (this.shouldReplaceWhenDocHasData && !transaction.local) {
-        const mxfileMap = doc.getMap(mxfileKey);
-        const diagramMap = mxfileMap.get(diagramKey) as
-          | Y.Map<Y.XmlElement>
-          | undefined;
-        if (diagramMap && diagramMap.size > 0) {
-          const xml = ydoc2xml(doc);
-          if (xml && xml.includes("<diagram")) {
-            this.suppressLocalApply = true;
-            try {
-              applyFileData(file, xml);
-              file.setShadowPages(file.ui.clonePages(file.ui.pages));
-              initDocSnapshot(doc, false);
-              this.resetEditorStatus();
-            } finally {
-              this.suppressLocalApply = false;
+      // 非本地改动（远端同步、iframe-bridge、undo/redo 等）统一用 ydoc2xml 全量刷新
+      const xml = ydoc2xml(doc);
+      if (xml && xml.includes("<diagram")) {
+        // 保存当前页面和视图状态
+        const currentPageId = this.ui?.currentPage?.getId?.();
+        const graph = this.ui?.editor?.graph;
+        const savedScale = graph?.view?.scale;
+        const savedTranslateX = graph?.view?.translate?.x;
+        const savedTranslateY = graph?.view?.translate?.y;
+
+        this.suppressLocalApply = true;
+        try {
+          applyFileData(file, xml);
+          file.setShadowPages(file.ui.clonePages(file.ui.pages));
+          initDocSnapshot(doc, false);
+          this.docInitialized = true;
+
+          // 恢复当前页面
+          if (currentPageId && this.ui?.pages) {
+            const page = this.ui.pages.find((p: any) => p.getId?.() === currentPageId);
+            if (page) {
+              this.ui.selectPage(page, true);
             }
-            this.docInitialized = true;
-            return;
           }
-        }
-      }
 
-      if (!this.docInitialized) {
-        this.docInitialized = true;
-      }
-
-      // 检测是否是 undo/redo（Yjs UndoManager）
-      const isUndoRedo = transaction.local && transaction.origin != null &&
-        typeof transaction.origin === 'object' &&
-        'undo' in transaction.origin && 'redo' in transaction.origin;
-
-      if (isUndoRedo) {
-        // undo/redo 会导致 cellsOrder 错乱，用 ydoc2xml + applyFileData 同步
-        // serialize 已改为树形遍历，不受 cellsOrder 影响
-        const xml = ydoc2xml(doc);
-        if (xml && xml.includes("<diagram")) {
-          // 保存当前页面和视图状态
-          const currentPageId = this.ui?.currentPage?.getId?.();
-          const graph = this.ui?.editor?.graph;
-          const savedScale = graph?.view?.scale;
-          const savedTranslateX = graph?.view?.translate?.x;
-          const savedTranslateY = graph?.view?.translate?.y;
-          
-          this.suppressLocalApply = true;
-          try {
-            applyFileData(file, xml);
-            file.setShadowPages(file.ui.clonePages(file.ui.pages));
-            initDocSnapshot(doc, false);
-            
-            // 恢复当前页面
-            if (currentPageId && this.ui?.pages) {
-              const page = this.ui.pages.find((p: any) => p.getId?.() === currentPageId);
-              if (page) {
-                this.ui.selectPage(page, true);
-              }
+          // 恢复视图状态
+          if (graph) {
+            if (savedScale) graph.view.scale = savedScale;
+            if (savedTranslateX != null && savedTranslateY != null) {
+              graph.view.translate.x = savedTranslateX;
+              graph.view.translate.y = savedTranslateY;
             }
-            
-            // 恢复视图状态
-            if (graph) {
-              if (savedScale) graph.view.scale = savedScale;
-              if (savedTranslateX != null && savedTranslateY != null) {
-                graph.view.translate.x = savedTranslateX;
-                graph.view.translate.y = savedTranslateY;
-              }
-              graph.sizeDidChange();
-            }
-            
-            this.resetEditorStatus();
-          } finally {
-            this.suppressLocalApply = false;
+            graph.sizeDidChange?.();
           }
+
+          this.resetEditorStatus();
+        } finally {
+          this.suppressLocalApply = false;
         }
-        return;
-      }
-
-      const patch = generatePatch(events);
-      const patchKeys = Object.keys(patch);
-      if (patchKeys.length === 0) return;
-
-      this.suppressLocalApply = true;
-      try {
-        file.patch([patch]);
-        file.setShadowPages(file.ui.clonePages(file.ui.pages));
-        this.resetEditorStatus();
-      } finally {
-        this.suppressLocalApply = false;
       }
     };
     doc.getMap(mxfileKey).observeDeep(this.docObserver);
