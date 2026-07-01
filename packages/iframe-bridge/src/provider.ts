@@ -558,6 +558,13 @@ export function createIframeBridgeProvider(
       const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
       Y.applyUpdate(ydoc, new Uint8Array(payload), applyOrigin);
       applyingParentUpdate = false;
+      // 对 server 发来的 ydoc-update 发送 ack，清理 server 的 unackedServerUpdates
+      if (type === "ydoc-update") {
+        const inSeq = event.data.seq;
+        if (inSeq != null) {
+          window.parent.postMessage({ type: "ydoc-update-ack", seq: inSeq }, "*");
+        }
+      }
       // ydoc-sync 也可能带 protocolVersion（兜底检测，正常情况 pong 已检测）
       if (type === "ydoc-sync" && event.data.protocolVersion != null) {
         if (event.data.protocolVersion >= 2 && !serverSupportsAck) {
