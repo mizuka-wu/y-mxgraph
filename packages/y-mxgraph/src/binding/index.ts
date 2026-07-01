@@ -23,7 +23,11 @@ import {
 import { key as mxCellKey } from "../models/mxCell";
 import { parse as parseXml } from "../helper/xml";
 import type { DrawioFile, DrawioUi, MxGraphModel } from "../types/drawio";
-import { ConsistencyChecker, type DriftEvent, type DriftHandler } from "./consistency";
+import {
+  ConsistencyChecker,
+  type DriftEvent,
+  type DriftHandler,
+} from "./consistency";
 export type { DriftEvent, DriftHandler } from "./consistency";
 
 /**
@@ -33,9 +37,7 @@ export type { DriftEvent, DriftHandler } from "./consistency";
  * - `merge-client` : 按 diagram id 取并集，同 id 冲突时以 file 为准（本地权威，覆盖到 doc）。
  */
 export type InitialContentStrategy =
-  | "replace"
-  | "merge-remote"
-  | "merge-client";
+  "replace" | "merge-remote" | "merge-client";
 
 export interface BindDrawioFileOptions {
   doc: Y.Doc;
@@ -90,7 +92,9 @@ export interface BindDrawioFileOptions {
    *
    * 适用于异步资源处理场景（如图片上传），可精确过滤包含中间态的 cell 变更。
    */
-  transformPatch?: (patch: import("./patch").FilePatch) => import("./patch").FilePatch | null | undefined;
+  transformPatch?: (
+    patch: import("./patch").FilePatch,
+  ) => import("./patch").FilePatch | null | undefined;
   /**
    * 一致性检查间隔（毫秒）。设为 0 或不传则禁用定期检查。
    * 检测到 ydoc 与 file XML 不一致时会触发 drift 事件。
@@ -127,7 +131,11 @@ export interface BindDrawioFileOptions {
  * ```
  */
 const defaultApplyFileData = (file: DrawioFile, xml: string) => {
-  file.ui.setFileData(xml);
+  if (typeof file.ui.replaceFileData === "function") {
+    file.ui.replaceFileData(xml);
+  } else {
+    file.ui.setFileData(xml);
+  }
 };
 
 /**
@@ -151,8 +159,7 @@ function mergeFileIntoDoc(
   }
 
   const mxfileObj = (parsed as Record<string, unknown>)?.mxfile as
-    | { diagram?: Array<Record<string, unknown>> }
-    | undefined;
+    { diagram?: Array<Record<string, unknown>> } | undefined;
   if (!mxfileObj || !Array.isArray(mxfileObj.diagram)) {
     console.warn(
       "[y-mxgraph] 合并失败，file XML 不是合法 mxfile，回退到 replace",
@@ -163,8 +170,7 @@ function mergeFileIntoDoc(
   const mxfileMap = doc.getMap(mxfileKey);
   const diagramMap = mxfileMap.get(diagramKey) as Y.Map<YDiagram> | undefined;
   const diagramOrder = mxfileMap.get(diagramOrderKey) as
-    | Y.Array<string>
-    | undefined;
+    Y.Array<string> | undefined;
   if (!diagramMap || !diagramOrder) {
     console.warn("[y-mxgraph] 合并失败，doc 结构不完整，回退到 replace");
     return false;
@@ -312,7 +318,9 @@ export class Binding {
   /** draw.io UI 引用，用于重置状态和获取 currentFile */
   private ui: DrawioUi | null = null;
   /** 转换本地 patch 的回调 */
-  private transformPatch?: (patch: import("./patch").FilePatch) => import("./patch").FilePatch | null | undefined;
+  private transformPatch?: (
+    patch: import("./patch").FilePatch,
+  ) => import("./patch").FilePatch | null | undefined;
   /** 一致性检查器 */
   private consistencyChecker?: ConsistencyChecker;
   /** applyFileData 回调引用（forceSync 需要） */
@@ -357,7 +365,7 @@ export class Binding {
     // Yjs 接管持久化后，draw.io 的原生保存状态不再有意义，
     // 但 draw.io 内部会在特定条件下弹出 "All changes will be lost" 提示。
     if (disableBeforeUnload) {
-      (ui as any).onBeforeUnload = () => null;
+      ui.onBeforeUnload = () => null;
     }
 
     // 统一初始化：根据 initialContent 策略对齐 file 与 doc。
@@ -425,23 +433,23 @@ export class Binding {
       >[],
       transaction: Y.Transaction,
     ) => {
-      const isUndoRedo = transaction.local && transaction.origin != null &&
-        typeof transaction.origin === 'object' &&
-        'undo' in transaction.origin && 'redo' in transaction.origin;
+      const isUndoRedo =
+        transaction.local &&
+        transaction.origin != null &&
+        typeof transaction.origin === "object" &&
+        "undo" in transaction.origin &&
+        "redo" in transaction.origin;
 
       if (transaction.local && !isUndoRedo) {
         return;
       }
 
-      // 非本地改动（远端同步、iframe-bridge、undo/redo 等）统一用 ydoc2xml 全量刷新
       const xml = ydoc2xml(doc);
       if (xml && xml.includes("<diagram")) {
-        // 保存当前页面和视图状态
-        const currentPageId = this.ui?.currentPage?.getId?.();
         const graph = this.ui?.editor?.graph;
-        const savedScale = graph?.view?.scale;
-        const savedTranslateX = graph?.view?.translate?.x;
-        const savedTranslateY = graph?.view?.translate?.y;
+        const currentPageId = this.ui?.currentPage?.getId?.();
+        const viewState = graph?.getViewState?.();
+        const selection = graph?.getSelectionCells?.();
 
         this.suppressLocalApply = true;
         try {
@@ -450,22 +458,19 @@ export class Binding {
           initDocSnapshot(doc, false);
           this.docInitialized = true;
 
-          // 恢复当前页面
           if (currentPageId && this.ui?.pages) {
-            const page = this.ui.pages.find((p: any) => p.getId?.() === currentPageId);
+            const page = this.ui.pages.find(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (p: any) => p.getId?.() === currentPageId,
+            );
             if (page) {
-              this.ui.selectPage(page, true);
+              if (this.ui.currentPage?.getId?.() !== currentPageId) {
+                this.ui.selectPage(page, true);
+              }
+              if (viewState) {
+                this.ui.restoreViewState?.(page, viewState, selection);
+              }
             }
-          }
-
-          // 恢复视图状态
-          if (graph) {
-            if (savedScale) graph.view.scale = savedScale;
-            if (savedTranslateX != null && savedTranslateY != null) {
-              graph.view.translate.x = savedTranslateX;
-              graph.view.translate.y = savedTranslateY;
-            }
-            graph.sizeDidChange?.();
           }
 
           this.resetEditorStatus();
@@ -492,10 +497,7 @@ export class Binding {
     }
 
     // 一致性检查器
-    const {
-      consistencyCheckInterval,
-      onDrift,
-    } = options;
+    const { consistencyCheckInterval, onDrift } = options;
     if (consistencyCheckInterval && consistencyCheckInterval > 0) {
       this.consistencyChecker = new ConsistencyChecker(doc, () => file.data, {
         source: "binding",
@@ -582,13 +584,15 @@ export class Binding {
 
       for (const cid of ids) {
         const cell = cellsMap.get(cid);
-        if (!cell || typeof (cell as any).getAttributes !== 'function') {
+        if (!cell || typeof cell.getAttributes !== "function") {
           invalidIds.push(cid);
         }
       }
 
       if (invalidIds.length > 0) {
-        console.warn(`[y-mxgraph] forceSync: cleaning invalid cell ids from order: ${invalidIds.join(",")}`);
+        console.warn(
+          `[y-mxgraph] forceSync: cleaning invalid cell ids from order: ${invalidIds.join(",")}`,
+        );
         for (const invalidId of invalidIds) {
           const index = order.toArray().indexOf(invalidId);
           if (index !== -1) {
@@ -606,7 +610,8 @@ export class Binding {
       for (const [cid, cellUpdate] of Object.entries(update.cells.u)) {
         if (!("previous" in cellUpdate)) continue;
         const mxfile = this.doc.getMap(mxfileKey) as YMxFile;
-        const diagramsMap = mxfile.get(diagramKey) as Y.Map<YDiagram> | undefined;
+        const diagramsMap = mxfile.get(diagramKey) as
+          Y.Map<YDiagram> | undefined;
         const diagram = diagramsMap?.get(did) as YDiagram | undefined;
         if (!diagram) continue;
         const gm = diagram.get(mxGraphModelKey) as YMxGraphModel | undefined;
@@ -619,7 +624,9 @@ export class Binding {
         const expectedPrev = idx === 0 ? "" : ids[idx - 1];
         const actualPrev = cellUpdate.previous as string;
         if (expectedPrev !== actualPrev) {
-          console.log(`[y-mxgraph] order mismatch: cell=${cid}, ydoc prev=${JSON.stringify(expectedPrev)}, patch prev=${JSON.stringify(actualPrev)}`);
+          console.log(
+            `[y-mxgraph] order mismatch: cell=${cid}, ydoc prev=${JSON.stringify(expectedPrev)}, patch prev=${JSON.stringify(actualPrev)}`,
+          );
           return true;
         }
       }

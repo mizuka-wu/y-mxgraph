@@ -36,6 +36,8 @@ export interface MxGraph {
   addMouseListener(listener: unknown): void;
   removeMouseListener(listener: unknown): void;
   getSelectionModel(): SelectionModel;
+  getSelectionCells(): unknown[];
+  getViewState(): Record<string, unknown>;
   highlightCell(
     cell: unknown,
     color: string,
@@ -71,12 +73,12 @@ export interface DrawioUi {
   pages: unknown[];
   diffPages(oldPages: unknown[], newPages: unknown[]): unknown;
   clonePages(pages: unknown[]): unknown[];
-  /** 解析 XML 并重建 pages / mxGraphModel，触发 UI 重绘 */
   setFileData(data: string): void;
-  /** 获取整个文件的 XML 数据 */
+  replaceFileData(data: string, patches?: unknown[]): void;
+  restoreViewState(page: unknown, viewState?: Record<string, unknown> | null, selection?: unknown[]): void;
   getFileData(): string;
-  /** 切换到指定页面 */
-  selectPage(page: unknown, updateHistory?: boolean): void;
+  selectPage(page: unknown, quiet?: boolean): void;
+  onBeforeUnload?: (() => null | undefined) | null;
 }
 
 /** mxGraph 事件对象 */
