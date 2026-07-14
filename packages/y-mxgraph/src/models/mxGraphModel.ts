@@ -38,6 +38,22 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
 
   cellsOrder.push(mxCells.map((cell) => cell.id));
 
+  // 确保 cell 0（根节点）和 cell 1（默认图层）始终存在
+  if (!cells.has("0")) {
+    const cell0 = new Y.XmlElement("mxCell");
+    cell0.setAttribute("id", "0");
+    cells.set("0", cell0);
+    cellsOrder.insert(0, ["0"]);
+  }
+  if (!cells.has("1")) {
+    const cell1 = new Y.XmlElement("mxCell");
+    cell1.setAttribute("id", "1");
+    cell1.setAttribute("parent", "0");
+    cells.set("1", cell1);
+    const idx0 = cellsOrder.toArray().indexOf("0");
+    cellsOrder.insert(idx0 >= 0 ? idx0 + 1 : 0, ["1"]);
+  }
+
   mxGraphElement.set(mxCellKey, cells);
   mxGraphElement.set(mxCellOrderKey, cellsOrder);
 
