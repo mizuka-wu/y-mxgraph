@@ -193,6 +193,143 @@ window.onload = function () {
       Reflect.set(window, "__doc__", doc);
       Reflect.set(window, "__awareness__", provider.awareness);
       console.log("注入完成 当前room：", roomName);
+
+      // 显示调试工具
+      const debugTools = document.getElementById("debug-tools");
+      if (debugTools) debugTools.style.display = "block";
+
+      // === Cell 0/1 损坏模拟工具 ===
+      const mxfileKey = "mxfile";
+      const diagramKey = "diagram";
+      const diagramOrderKey = "diagramOrder";
+      const mxGraphModelKey = "mxGraphModel";
+      const mxCellKey = "mxCell";
+      const mxCellOrderKey = "mxCellOrder";
+
+      function getDocState() {
+        const mxfile = doc.getMap(mxfileKey) as Y.Map<any>;
+        if (!mxfile) return { error: "no mxfile" };
+        const diags = mxfile.get(diagramKey) as Y.Map<any>;
+        const order = mxfile.get(diagramOrderKey) as Y.Array<string>;
+        const result: any = {
+          diagramOrder: order?.toArray() || [],
+          diagrams: {},
+        };
+        for (const did of order?.toArray() || []) {
+          const diag = diags?.get(did);
+          if (!diag) continue;
+          const gm = diag.get(mxGraphModelKey);
+          if (!gm) continue;
+          const cells = gm.get(mxCellKey) as Y.Map<Y.XmlElement>;
+          const cellOrder = gm.get(mxCellOrderKey) as Y.Array<string>;
+          result.diagrams[did] = {
+            cellOrder: cellOrder?.toArray() || [],
+            cellsMapKeys: cells ? Array.from(cells.keys()) : [],
+            hasCell0: cells?.has("0"),
+            hasCell1: cells?.has("1"),
+          };
+        }
+        return result;
+      }
+
+      (window as any).__showDocState = () => {
+        const state = getDocState();
+        const el = document.getElementById("doc-state");
+        if (el) el.textContent = JSON.stringify(state, null, 2);
+        console.log("Doc state:", state);
+      };
+
+      (window as any).__removeCell0 = () => {
+        doc.transact(() => {
+          const mxfile = doc.getMap(mxfileKey) as Y.Map<any>;
+          const diags = mxfile.get(diagramKey) as Y.Map<any>;
+          for (const did of (mxfile.get(diagramOrderKey) as Y.Array<string>).toArray()) {
+            const diag = diags.get(did);
+            if (!diag) continue;
+            const gm = diag.get(mxGraphModelKey);
+            if (!gm) continue;
+            const cells = gm.get(mxCellKey) as Y.Map<Y.XmlElement>;
+            const cellOrder = gm.get(mxCellOrderKey) as Y.Array<string>;
+            if (cells?.has("0")) cells.delete("0");
+            const idx = cellOrder?.toArray().indexOf("0");
+            if (idx !== undefined && idx >= 0) cellOrder.delete(idx, 1);
+          }
+        });
+        console.warn("⚠️ Cell 0 已删除（模拟损坏）");
+        (window as any).__showDocState?.();
+      };
+
+      (window as any).__removeCell1 = () => {
+        doc.transact(() => {
+          const mxfile = doc.getMap(mxfileKey) as Y.Map<any>;
+          const diags = mxfile.get(diagramKey) as Y.Map<any>;
+          for (const did of (mxfile.get(diagramOrderKey) as Y.Array<string>).toArray()) {
+            const diag = diags.get(did);
+            if (!diag) continue;
+            const gm = diag.get(mxGraphModelKey);
+            if (!gm) continue;
+            const cells = gm.get(mxCellKey) as Y.Map<Y.XmlElement>;
+            const cellOrder = gm.get(mxCellOrderKey) as Y.Array<string>;
+            if (cells?.has("1")) cells.delete("1");
+            const idx = cellOrder?.toArray().indexOf("1");
+            if (idx !== undefined && idx >= 0) cellOrder.delete(idx, 1);
+          }
+        });
+        console.warn("⚠️ Cell 1 已删除（模拟损坏）");
+        (window as any).__showDocState?.();
+      };
+
+      (window as any).__removeCell0And1 = () => {
+        doc.transact(() => {
+          const mxfile = doc.getMap(mxfileKey) as Y.Map<any>;
+          const diags = mxfile.get(diagramKey) as Y.Map<any>;
+          for (const did of (mxfile.get(diagramOrderKey) as Y.Array<string>).toArray()) {
+            const diag = diags.get(did);
+            if (!diag) continue;
+            const gm = diag.get(mxGraphModelKey);
+            if (!gm) continue;
+            const cells = gm.get(mxCellKey) as Y.Map<Y.XmlElement>;
+            const cellOrder = gm.get(mxCellOrderKey) as Y.Array<string>;
+            if (cells?.has("0")) cells.delete("0");
+            if (cells?.has("1")) cells.delete("1");
+            const orderArr = cellOrder?.toArray() || [];
+            for (let i = orderArr.length - 1; i >= 0; i--) {
+              if (orderArr[i] === "0" || orderArr[i] === "1") {
+                cellOrder.delete(i, 1);
+              }
+            }
+          }
+        });
+        console.warn("⚠️ Cell 0 和 1 已同时删除（模拟损坏）");
+        (window as any).__showDocState?.();
+      };
+
+      (window as any).__removeAllFromOrder = () => {
+        doc.transact(() => {
+          const mxfile = doc.getMap(mxfileKey) as Y.Map<any>;
+          const diags = mxfile.get(diagramKey) as Y.Map<any>;
+          for (const did of (mxfile.get(diagramOrderKey) as Y.Array<string>).toArray()) {
+            const diag = diags.get(did);
+            if (!diag) continue;
+            const gm = diag.get(mxGraphModelKey);
+            if (!gm) continue;
+            const cellOrder = gm.get(mxCellOrderKey) as Y.Array<string>;
+            if (cellOrder) cellOrder.delete(0, cellOrder.length);
+          }
+        });
+        console.warn("⚠️ cellsOrder 已清空（模拟损坏）");
+        (window as any).__showDocState?.();
+      };
+
+      (window as any).__ensureRootCells = async () => {
+        const { ensureRootCells, syncCellsMapAndOrder } = await import("./src/yjs/binding/patch");
+        doc.transact(() => {
+          ensureRootCells(doc);
+          syncCellsMapAndOrder(doc);
+        });
+        console.log("✅ ensureRootCells + syncCellsMapAndOrder 已执行");
+        (window as any).__showDocState?.();
+      };
     }
 
     app.spinner.spin(document.body);

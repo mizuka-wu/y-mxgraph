@@ -52,15 +52,25 @@
       <h1>Flowchart Maker and Online Diagram Software</h1>
       <p>
         draw.io is free online diagram software. You can use it as a flowchart maker, network diagram software, to
-        create UML online, as an ER diagram tool,
-        to design database schema, to build BPMN online, as a circuit diagram maker, and more. draw.io can import .vsdx,
+        create UML online, as an ER diagram tool, to design database schema, to build BPMN online, as a circuit diagram maker, and more. draw.io can import .vsdx,
         Gliffy&trade; and Lucidchart&trade; files .
       </p>
       <h2 id="geStatus">Loading... <img src="./drawio/src/main/webapp/images/spin.gif" /></h2>
       <p>
         Please ensure JavaScript is enabled.
       </p>
+      <div id="debug-tools" style="display:none;margin-top:10px;padding:10px;border:1px solid #ccc;border-radius:4px;background:#f9f9f9;">
+        <strong>🔧 Cell 0/1 损坏模拟工具</strong><br/>
+        <button onclick="window.__removeCell0?.()" style="margin:4px;padding:4px 8px;">删除 Cell 0 (根节点)</button>
+        <button onclick="window.__removeCell1?.()" style="margin:4px;padding:4px 8px;">删除 Cell 1 (默认图层)</button>
+        <button onclick="window.__removeCell0And1?.()" style="margin:4px;padding:4px 8px;">同时删除 Cell 0 和 1</button>
+        <button onclick="window.__removeAllFromOrder?.()" style="margin:4px;padding:4px 8px;">清空 cellsOrder (保留 cellsMap)</button>
+        <button onclick="window.__ensureRootCells?.()" style="margin:4px;padding:4px 8px;">手动恢复 Cell 0/1</button>
+        <button onclick="window.__showDocState?.()" style="margin:4px;padding:4px 8px;">查看文档状态</button>
+        <pre id="doc-state" style="text-align:left;font-size:11px;max-height:200px;overflow:auto;margin-top:8px;"></pre>
+      </div>
     </div>
+  </div>
   </div>
   <script src="./bootstrap.js"></script>
 </body>
