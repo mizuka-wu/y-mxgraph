@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "@types/node": "^20.14.10",
     "@types/lodash-es": "^4.17.12",
+    "@types/node": "^20.14.10",
     "diff": "^8.0.2",
     "json-diff": "^1.0.6",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
+    "vitest": "^4.1.10",
     "y-webrtc": "^10.3.0"
   },
   "packageManager": "pnpm@10.11.0+sha512.6540583f41cc5f628eb3d9773ecee802f4f9ef9923cc45b69890fb47991d4b092964694ec3a4f738a420c918a333062c8b925d312f42e4f0c263eb603551f977",

@@ -27,6 +27,9 @@ const DIFF_INSERT = "i";
 const DIFF_REMOVE = "r";
 const DIFF_UPDATE = "u";
 
+/** 受保护的 cell id：cell 0（根节点）和 cell 1（默认图层），不允许被删除 */
+const PROTECTED_CELLS = new Set(["0", "1"]);
+
 // 轻量快照按文档维度存储，避免全局共享与泄漏
 type DocSnapshot = {
   diagramOrder: string[] | null;
@@ -85,6 +88,126 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
   }
   if (dupIdx.length) {
     dupIdx.sort((a, b) => b - a).forEach((idx) => orderArr.delete(idx, 1));
+  }
+}
+
+/**
+ * 确保每个 diagram 的 cell 0（根节点）和 cell 1（默认图层）存在。
+ * 如果缺失则创建，如果 cellsOrder 缺少则补回。
+ * 影响范围：仅在 cellsMap/cellsOrder 缺失 "0" "1" 时执行写入操作，正常情况无副作用。
+ */
+export function ensureRootCells(doc: Y.Doc): void {
+  const mxfile = doc.getMap(mxfileKey) as YMxFile;
+  const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+  const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
+  if (!orderArr) return;
+
+  const diagramOrder = orderArr.toArray();
+  for (const did of diagramOrder) {
+    const diagram = diagramsMap.get(did);
+    if (!diagram) continue;
+
+    const gm = diagram.get(mxGraphModelKey) as YMxGraphModel | undefined;
+    if (!gm) continue;
+
+    const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+    const cellOrder = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+    if (!cellsMap || !cellOrder) continue;
+
+    const currentOrder = cellOrder.toArray();
+
+    // 确保 cell 0 存在
+    if (!cellsMap.has("0")) {
+      const cell0 = new Y.XmlElement("mxCell");
+      cell0.setAttribute("id", "0");
+      cellsMap.set("0", cell0);
+      console.warn(`[y-mxgraph] recreated missing cell 0 in diagram ${did}`);
+    }
+    if (!currentOrder.includes("0")) {
+      cellOrder.insert(0, ["0"]);
+    }
+
+    // 确保 cell 1 存在
+    if (!cellsMap.has("1")) {
+      const cell1 = new Y.XmlElement("mxCell");
+      cell1.setAttribute("id", "1");
+      cell1.setAttribute("parent", "0");
+      cellsMap.set("1", cell1);
+      console.warn(`[y-mxgraph] recreated missing cell 1 in diagram ${did}`);
+    }
+    const updatedOrder = cellOrder.toArray();
+    if (!updatedOrder.includes("1")) {
+      const idx0 = updatedOrder.indexOf("0");
+      cellOrder.insert(idx0 >= 0 ? idx0 + 1 : 0, ["1"]);
+    }
+
+    // 确保 cell 1 的 parent 是 "0"
+    const cell1 = cellsMap.get("1");
+    if (cell1 && cell1.getAttribute("parent") !== "0") {
+      cell1.setAttribute("parent", "0");
+    }
+  }
+}
+
+/**
+ * 同步 cellsMap 和 cellsOrder，确保两者一致：
+ * - cellsOrder 中 cellsMap 没有的 id → 从 cellsOrder 删除（保护 "0" "1"）
+ * - cellsMap 中 cellsOrder 没有的 id → 添加到 cellsOrder
+ * 影响范围：清理孤儿 id 和补回缺失 id，不影响正常存在的 cell。
+ */
+export function syncCellsMapAndOrder(doc: Y.Doc): void {
+  const mxfile = doc.getMap(mxfileKey) as YMxFile;
+  const diagramsMap = mxfile.get(diagramKey) as unknown as Y.Map<YDiagram>;
+  const orderArr = mxfile.get(diagramOrderKey) as unknown as Y.Array<string>;
+  if (!orderArr) return;
+
+  const diagramOrder = orderArr.toArray();
+  for (const did of diagramOrder) {
+    const diagram = diagramsMap.get(did);
+    if (!diagram) continue;
+
+    const gm = diagram.get(mxGraphModelKey) as YMxGraphModel | undefined;
+    if (!gm) continue;
+
+    const cellsMap = gm.get(mxCellKey) as Y.Map<Y.XmlElement> | undefined;
+    const cellOrder = gm.get(mxCellOrderKey) as Y.Array<string> | undefined;
+    if (!cellsMap || !cellOrder) continue;
+
+    const mapKeys = new Set(cellsMap.keys());
+    const currentOrder = cellOrder.toArray();
+
+    // 1. 删除 cellsOrder 中 cellsMap 没有的（保护 "0" "1"）
+    const toRemove = currentOrder.filter(
+      (id) => !mapKeys.has(id) && !PROTECTED_CELLS.has(id)
+    );
+    if (toRemove.length > 0) {
+      console.warn(
+        `[y-mxgraph] sync: removing ${toRemove.length} orphan entries from cellsOrder in diagram ${did}`
+      );
+      toRemove.forEach((id) => {
+        const idx = cellOrder.toArray().indexOf(id);
+        if (idx !== -1) cellOrder.delete(idx, 1);
+      });
+    }
+
+    // 2. 添加 cellsMap 中 cellsOrder 没有的
+    const orderSet = new Set(cellOrder.toArray());
+    const toAdd = Array.from(mapKeys).filter((id) => !orderSet.has(id));
+    if (toAdd.length > 0) {
+      console.warn(
+        `[y-mxgraph] sync: adding ${toAdd.length} missing entries to cellsOrder in diagram ${did}`
+      );
+      // 受保护的 id 优先插入到前面
+      const protectedToAdd = toAdd.filter((id) => PROTECTED_CELLS.has(id));
+      const normalToAdd = toAdd.filter((id) => !PROTECTED_CELLS.has(id));
+
+      for (const id of protectedToAdd) {
+        const insertIdx =
+          id === "0" ? 0 : cellOrder.toArray().indexOf("0") + 1;
+        cellOrder.insert(Math.max(0, insertIdx), [id]);
+      }
+      cellOrder.push(normalToAdd);
+    }
   }
 }
 
@@ -265,14 +388,30 @@ export function applyFilePatch(
 
             // 删除
             if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
-              const orderIds = orderArr.toArray();
-              const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
-                orderIds.indexOf(cid)
-              )
-                .filter((i) => i !== -1)
-                .sort((a, b) => b - a);
-              removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
-              update.cells[DIFF_REMOVE].forEach((cid) => cellsMap.delete(cid));
+              // 过滤掉受保护的 cell（"0" 根节点、"1" 默认图层）和 cellsMap 中不存在的 id
+              const safeRemove = update.cells[DIFF_REMOVE].filter(
+                (cid) => !PROTECTED_CELLS.has(cid) && cellsMap.has(cid)
+              );
+              const blockedCount =
+                update.cells[DIFF_REMOVE].length - safeRemove.length;
+              if (blockedCount > 0) {
+                console.warn(
+                  "[y-mxgraph] blocked removal of protected/invalid cells:",
+                  update.cells[DIFF_REMOVE].filter(
+                    (cid) =>
+                      PROTECTED_CELLS.has(cid) || !cellsMap.has(cid)
+                  )
+                );
+              }
+              if (safeRemove.length) {
+                const orderIds = orderArr.toArray();
+                const removeIndexList = safeRemove
+                  .map((cid) => orderIds.indexOf(cid))
+                  .filter((i) => i !== -1)
+                  .sort((a, b) => b - a);
+                removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
+                safeRemove.forEach((cid) => cellsMap.delete(cid));
+              }
             }
 
             // 添加
@@ -616,8 +755,10 @@ export function generatePatch(
     const prevSet = new Set(prevCells);
     const currSet = new Set(currCells);
 
-    // 删除
-    const removed = prevCells.filter((cid: string) => !currSet.has(cid) && cid);
+    // 删除（跳过受保护的 cell "0" "1"）
+    const removed = prevCells.filter(
+      (cid: string) => !currSet.has(cid) && cid && !PROTECTED_CELLS.has(cid)
+    );
     if (removed.length) {
       const cells = ensureCellSection(did);
       cells[DIFF_REMOVE] = (cells[DIFF_REMOVE] || []).concat(removed);
