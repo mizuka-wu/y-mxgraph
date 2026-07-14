@@ -38,6 +38,22 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
 
   cellsOrder.push(mxCells.map((cell) => cell.id));
 
+  // 确保 cell 0（根节点）和 cell 1（默认图层）始终存在
+  if (!cells.has("0")) {
+    const cell0 = new Y.XmlElement("mxCell");
+    cell0.setAttribute("id", "0");
+    cells.set("0", cell0);
+    cellsOrder.insert(0, ["0"]);
+  }
+  if (!cells.has("1")) {
+    const cell1 = new Y.XmlElement("mxCell");
+    cell1.setAttribute("id", "1");
+    cell1.setAttribute("parent", "0");
+    cells.set("1", cell1);
+    const idx0 = cellsOrder.toArray().indexOf("0");
+    cellsOrder.insert(idx0 >= 0 ? idx0 + 1 : 0, ["1"]);
+  }
+
   mxGraphElement.set(mxCellKey, cells);
   mxGraphElement.set(mxCellOrderKey, cellsOrder);
 
@@ -61,6 +77,27 @@ export function serialize(map: YMxGraphModel) {
       return true;
     })
     .map((id) => serializeMxCell(cells.get(id) as Y.XmlElement));
+
+  // 确保输出中始终包含 cell 0 和 cell 1
+  const hasCell0 = orderedCells.some(
+    (c) => (c as any)?._attributes?.id === "0",
+  );
+  const hasCell1 = orderedCells.some(
+    (c) => (c as any)?._attributes?.id === "1",
+  );
+  if (!hasCell0) {
+    orderedCells.unshift({ _attributes: { id: "0" }, mxCell: [] });
+  }
+  if (!hasCell1) {
+    const idx0 = orderedCells.findIndex(
+      (c) => (c as any)?._attributes?.id === "0",
+    );
+    const insertIdx = idx0 >= 0 ? idx0 + 1 : 0;
+    orderedCells.splice(insertIdx, 0, {
+      _attributes: { id: "1", parent: "0" },
+      mxCell: [],
+    });
+  }
 
   return {
     _attributes: {},
