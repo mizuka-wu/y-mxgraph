@@ -47,12 +47,25 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
 export function serialize(map: YMxGraphModel) {
   const cells = map.get(mxCellKey) as unknown as Y.Map<Y.XmlElement>;
   const cellsOrder = map.get(mxCellOrderKey) as unknown as Y.Array<string>;
+
+  const orderedCells = cellsOrder
+    .toArray()
+    .filter((id) => {
+      const cell = cells.get(id);
+      if (!cell) {
+        console.warn(
+          `[y-mxgraph] serialize: cell "${id}" in order but not in cellsMap, skipping`,
+        );
+        return false;
+      }
+      return true;
+    })
+    .map((id) => serializeMxCell(cells.get(id) as Y.XmlElement));
+
   return {
     _attributes: {},
     root: {
-      [mxCellKey]: cellsOrder
-        .toArray()
-        .map((id) => serializeMxCell(cells.get(id) as Y.XmlElement)),
+      [mxCellKey]: orderedCells,
     },
   };
 }

@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
-import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
+import { applyFilePatch, generatePatch, initDocSnapshot, ensureRootCells, syncCellsMapAndOrder } from "./patch";
 import { xml2doc } from "../transformer";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
@@ -61,6 +61,10 @@ export class Binding {
 
     initDocSnapshot(doc, docHasData);
 
+    // 确保根节点（cell 0/1）存在 + 同步 cellsMap 与 cellsOrder 一致性
+    ensureRootCells(doc);
+    syncCellsMapAndOrder(doc);
+
     // 本地变更监听
     this.mxListener = () => {
       if (this.suppressLocalApply) return;
@@ -68,8 +72,23 @@ export class Binding {
         file.shadowPages,
         file.ui.pages,
       ) as import("./patch").FilePatch;
+
+      // 过滤掉对 cell 0/1 的删除操作（draw.io diffPages 黑盒可能产生）
+      if (patch?.u) {
+        for (const diagramId of Object.keys(patch.u)) {
+          const update = patch.u[diagramId];
+          if (update?.cells?.r) {
+            update.cells.r = update.cells.r.filter(
+              (cid: string) => cid !== "0" && cid !== "1",
+            );
+          }
+        }
+      }
+
       file.setShadowPages(file.ui.clonePages(file.ui.pages));
       applyFilePatch(doc, patch, { origin: LOCAL_ORIGIN });
+      // 本地修改后确保根节点完整
+      ensureRootCells(doc);
     };
     this.mxGraphModel.addListener("change", this.mxListener);
 
@@ -89,6 +108,8 @@ export class Binding {
       try {
         file.patch([patch]);
         file.setShadowPages(file.ui.clonePages(file.ui.pages));
+        // patch 应用后确保根节点完整
+        ensureRootCells(doc);
       } finally {
         this.suppressLocalApply = false;
       }
