@@ -28,6 +28,134 @@ const DIFF_INSERT = "i";
 const DIFF_REMOVE = "r";
 const DIFF_UPDATE = "u";
 
+/** 受保护的 cell id：始终存在于 cellsMap 和 cellsOrder 中，不可被删除 */
+export const PROTECTED_CELLS = new Set(["0", "1"]);
+
+/**
+ * 确保 cell 0（根节点）和 cell 1（默认图层）始终存在于 cellsMap 和 cellsOrder 中。
+ * 如果缺失则创建并确保在 cellsOrder 开头（"0" 在最前，"1" 紧随）。
+ */
+export function ensureRootCells(doc: Y.Doc): void {
+  const mxfile = doc.getMap("mxfile");
+  const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+  if (!diagrams) return;
+
+  for (const [, diagram] of diagrams.entries()) {
+    const gm = diagram.get("mxGraphModel") as Y.Map<unknown> | undefined;
+    if (!gm) continue;
+
+    const cellsMap = gm.get("mxCell") as Y.Map<Y.XmlElement> | undefined;
+    const cellsOrder = gm.get("mxCellOrder") as Y.Array<string> | undefined;
+    if (!cellsMap || !cellsOrder) continue;
+
+    // 1. 确保 cellsMap 中存在
+    if (!cellsMap.has("0")) {
+      const cell0 = new Y.XmlElement("mxCell");
+      cell0.setAttribute("id", "0");
+      cellsMap.set("0", cell0);
+    }
+    if (!cellsMap.has("1")) {
+      const cell1 = new Y.XmlElement("mxCell");
+      cell1.setAttribute("id", "1");
+      cell1.setAttribute("parent", "0");
+      cellsMap.set("1", cell1);
+    }
+
+    // 2. 确保 cellsOrder 中存在且位置正确
+    const order = cellsOrder.toArray();
+    const idx0 = order.indexOf("0");
+    const idx1 = order.indexOf("1");
+
+    // 如果 0 不在 order 中，插入到最前面
+    if (idx0 === -1) {
+      cellsOrder.insert(0, ["0"]);
+    }
+    // 如果 1 不在 order 中，插入到 0 后面
+    if (idx1 === -1) {
+      const currentIdx0 = cellsOrder.toArray().indexOf("0");
+      cellsOrder.insert(currentIdx0 >= 0 ? currentIdx0 + 1 : 0, ["1"]);
+    }
+
+    // 3. 确保顺序：0 必须在 1 前面
+    const finalOrder = cellsOrder.toArray();
+    const finalIdx0 = finalOrder.indexOf("0");
+    const finalIdx1 = finalOrder.indexOf("1");
+    if (finalIdx0 !== -1 && finalIdx1 !== -1 && finalIdx0 > finalIdx1) {
+      // 0 在 1 后面，需要调整：删除 1，插入到 0 后面
+      cellsOrder.delete(finalIdx1, 1);
+      const newIdx0 = cellsOrder.toArray().indexOf("0");
+      cellsOrder.insert(newIdx0 >= 0 ? newIdx0 + 1 : 0, ["1"]);
+    }
+
+    // 防止 CRDT 并发导致的重复条目
+    ensureUniqueOrder(cellsOrder);
+  }
+}
+
+/**
+ * 同步 cellsMap 和 cellsOrder：清理 order 中的孤儿 id，补回 map 中缺失的 id。
+ * 跳过受保护的 cell（"0" "1"）。
+ */
+export function syncCellsMapAndOrder(doc: Y.Doc): void {
+  const mxfile = doc.getMap("mxfile");
+  const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+  if (!diagrams) return;
+
+  for (const [, diagram] of diagrams.entries()) {
+    const gm = diagram.get("mxGraphModel") as Y.Map<unknown> | undefined;
+    if (!gm) continue;
+
+    const cellsMap = gm.get("mxCell") as Y.Map<Y.XmlElement> | undefined;
+    const cellsOrder = gm.get("mxCellOrder") as Y.Array<string> | undefined;
+    if (!cellsMap || !cellsOrder) continue;
+
+    const mapKeys = new Set(cellsMap.keys());
+    const currentOrder = cellsOrder.toArray();
+
+    // 移除 order 中不存在于 map 的 id（跳过受保护 cell）
+    const toRemove = currentOrder.filter(
+      (id) => !mapKeys.has(id) && !PROTECTED_CELLS.has(id),
+    );
+    if (toRemove.length > 0) {
+      for (const id of toRemove) {
+        const idx = cellsOrder.toArray().indexOf(id);
+        if (idx !== -1) cellsOrder.delete(idx, 1);
+      }
+    }
+
+    // 补回 map 中存在但 order 中缺失的 id（受保护 cell 放前面）
+    const orderSet = new Set(cellsOrder.toArray());
+    const toAdd = [...mapKeys].filter((id) => !orderSet.has(id));
+    if (toAdd.length > 0) {
+      const protectedToAdd = toAdd.filter((id) => PROTECTED_CELLS.has(id));
+      const normalToAdd = toAdd.filter((id) => !PROTECTED_CELLS.has(id));
+      // 受保护 cell 放最前面
+      if (protectedToAdd.length > 0) {
+        cellsOrder.insert(0, protectedToAdd);
+      }
+      // 普通 cell 放最后面
+      if (normalToAdd.length > 0) {
+        cellsOrder.push(normalToAdd);
+      }
+    }
+
+    // 防止 CRDT 并发导致的重复条目
+    ensureUniqueOrder(cellsOrder);
+  }
+}
+
+/**
+ * 在 transaction 内执行 ensureRootCells + syncCellsMapAndOrder。
+ * 使用 CELL_PROTECTION_ORIGIN 避免污染用户 undo 栈。
+ */
+export const CELL_PROTECTION_ORIGIN = "cell-protection";
+export function ensureRootCellsInTransaction(doc: Y.Doc): void {
+  doc.transact(() => {
+    ensureRootCells(doc);
+    syncCellsMapAndOrder(doc);
+  }, CELL_PROTECTION_ORIGIN);
+}
+
 type DocSnapshot = {
   diagramOrder: string[] | null;
   cellsOrder: Map<string, string[]>;
@@ -613,18 +741,21 @@ export function applyFilePatch(
             }
 
             // 删除单元格 - 按照 draw.io 原始实现，在最后处理
-            if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
+            const cellsToRemove = update.cells[DIFF_REMOVE]?.filter(
+              (cid: string) => !PROTECTED_CELLS.has(cid),
+            );
+            if (cellsToRemove && cellsToRemove.length) {
               if (orderArr) {
                 const orderIds = orderArr.toArray();
-                const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
+                const removeIndexList = cellsToRemove.map((cid: string) =>
                   orderIds.indexOf(cid),
                 )
                   .filter((i) => i !== -1)
                   .sort((a, b) => b - a);
-                removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
+                removeIndexList.forEach((idx: number) => orderArr.delete(idx, 1));
               }
               if (cellsMap) {
-                update.cells[DIFF_REMOVE].forEach((cid) => {
+                cellsToRemove.forEach((cid: string) => {
                   if (cellsMap.has(cid)) {
                     cellsMap.delete(cid);
                   }
@@ -699,6 +830,11 @@ export function initDocSnapshot(doc: Y.Doc, resetSnapshot = false) {
 
         if (cellsMap) {
           for (const cid of ids) {
+            // 跳过受保护的 cell（"0" "1"），即使暂时无效也不清理
+            if (PROTECTED_CELLS.has(cid)) {
+              validIds.push(cid);
+              continue;
+            }
             const el = cellsMap.get(cid) as Y.XmlElement | undefined;
             if (el && typeof el.getAttributes === "function") {
               validIds.push(cid);
@@ -897,7 +1033,9 @@ export function generatePatch(
     const prevSet = new Set(prevCells);
     const currSet = new Set(currCells);
 
-    const removed = prevCells.filter((cid: string) => !currSet.has(cid) && cid);
+    const removed = prevCells.filter(
+      (cid: string) => !currSet.has(cid) && cid && !PROTECTED_CELLS.has(cid),
+    );
     if (removed.length) {
       const cells = ensureCellSection(did);
       cells[DIFF_REMOVE] = (cells[DIFF_REMOVE] || []).concat(removed);
