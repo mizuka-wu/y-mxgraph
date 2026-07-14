@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
-import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
+import { applyFilePatch, generatePatch, initDocSnapshot, ensureRootCells, syncCellsMapAndOrder, PROTECTED_CELLS } from "./patch";
 import { xml2ydoc, ydoc2xml } from "../transform";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
@@ -381,6 +381,8 @@ export class Binding {
       );
       // doc 在 reconcile 后才确定有内容，需建立 snapshot 基线
       if (this.docInitialized) {
+        ensureRootCells(doc);
+        syncCellsMapAndOrder(doc);
         initDocSnapshot(doc, false);
       }
     } finally {
@@ -421,6 +423,7 @@ export class Binding {
       }
 
       applyFilePatch(doc, finalPatch, { origin: LOCAL_ORIGIN });
+      ensureRootCells(doc);
       file.setShadowPages(file.ui.clonePages(file.ui.pages));
       this.resetEditorStatus();
     };
@@ -455,6 +458,7 @@ export class Binding {
         try {
           applyFileData(file, xml);
           file.setShadowPages(file.ui.clonePages(file.ui.pages));
+          ensureRootCells(doc);
           initDocSnapshot(doc, false);
           this.docInitialized = true;
 
@@ -545,6 +549,7 @@ export class Binding {
       try {
         this.applyFileData(this.file, xml);
         this.file.setShadowPages(this.file.ui.clonePages(this.file.ui.pages));
+        ensureRootCells(this.doc);
         initDocSnapshot(this.doc, false);
         this.resetEditorStatus();
       } finally {
@@ -553,6 +558,7 @@ export class Binding {
     } else {
       this.doc.transact(() => {
         xml2ydoc(this.file.data, this.doc);
+        ensureRootCells(this.doc);
         initDocSnapshot(this.doc, false);
       }, LOCAL_ORIGIN);
     }
@@ -583,6 +589,8 @@ export class Binding {
       const invalidIds: string[] = [];
 
       for (const cid of ids) {
+        // 跳过受保护的 cell（"0" "1"），即使暂时无效也不删除
+        if (PROTECTED_CELLS.has(cid)) continue;
         const cell = cellsMap.get(cid);
         if (!cell || typeof cell.getAttributes !== "function") {
           invalidIds.push(cid);

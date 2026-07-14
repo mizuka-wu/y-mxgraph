@@ -24,7 +24,8 @@ export interface MxGraphModel extends ElementCompact {
 export type YMxGraphModel = Y.Map<unknown>;
 
 export function parse(object: MxGraphModel, doc?: Y.Doc) {
-  const mxCells = (object.root[mxCellKey] || []).map((cell: MxCellModel) => {
+  const mxCellsRaw = object.root[mxCellKey] || [];
+  const mxCells = (Array.isArray(mxCellsRaw) ? mxCellsRaw : [mxCellsRaw]).map((cell: MxCellModel) => {
     return {
       value: parseMxCell(cell),
       id: (cell._attributes?.id || "") as string,
@@ -40,7 +41,25 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
     cells.set(cell.id, cell.value);
   });
 
-  cellsOrder.push(mxCells.map((cell) => cell.id));
+  const ids = mxCells.map((cell) => cell.id);
+  cellsOrder.push(ids);
+
+  // 确保 cell 0（根节点）和 cell 1（默认图层）始终存在
+  // 注意：standalone Y.Map 的 has() 不可靠，用 ids 数组检查
+  if (!ids.includes("0")) {
+    const cell0 = new Y.XmlElement("mxCell");
+    cell0.setAttribute("id", "0");
+    cells.set("0", cell0);
+    cellsOrder.insert(0, ["0"]);
+  }
+  if (!ids.includes("1")) {
+    const cell1 = new Y.XmlElement("mxCell");
+    cell1.setAttribute("id", "1");
+    cell1.setAttribute("parent", "0");
+    cells.set("1", cell1);
+    const idx0 = cellsOrder.toArray().indexOf("0");
+    cellsOrder.insert(idx0 >= 0 ? idx0 + 1 : 0, ["1"]);
+  }
 
   mxGraphElement.set(mxCellKey, cells);
   mxGraphElement.set(mxCellOrderKey, cellsOrder);
@@ -143,10 +162,36 @@ export function serialize(map: YMxGraphModel) {
       `[y-mxgraph] serialize: cellsOrder contains invalid Y.XmlElement: ${invalidIds.join(",")}`,
     );
   }
+  // 确保输出中始终包含 cell 0 和 cell 1
+  const hasCell0 = ordered.some(
+    (c) => (c as Y.XmlElement).getAttribute("id") === "0",
+  );
+  const hasCell1 = ordered.some(
+    (c) => (c as Y.XmlElement).getAttribute("id") === "1",
+  );
+
+  // 序列化所有正常 cell
+  const serialized = ordered.map((cell) => serializeMxCell(cell));
+
+  // 补入缺失的 protected cell（直接构造序列化对象，不创建 Y.XmlElement）
+  if (!hasCell0) {
+    serialized.unshift({ _attributes: { id: "0" }, mxCell: [] });
+  }
+  if (!hasCell1) {
+    const idx0 = serialized.findIndex(
+      (c) => (c as any)?._attributes?.id === "0",
+    );
+    const insertIdx = idx0 >= 0 ? idx0 + 1 : 0;
+    serialized.splice(insertIdx, 0, {
+      _attributes: { id: "1", parent: "0" },
+      mxCell: [],
+    });
+  }
+
   return {
     _attributes,
     root: {
-      [mxCellKey]: ordered.map((cell) => serializeMxCell(cell)),
+      [mxCellKey]: serialized,
     },
   };
 }
