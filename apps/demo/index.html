@@ -112,6 +112,15 @@
       cursor: not-allowed;
     }
 
+    .tool-btn.danger {
+      background: #fff5f5;
+      color: #c92a2a;
+    }
+
+    .tool-btn.danger:hover {
+      background: #ffc9c9;
+    }
+
     /* ── 对比结果面板 ── */
     #compare-panel {
       position: fixed;
@@ -420,6 +429,13 @@
       <button class="tool-btn" id="btn-export-xml" title="下载当前 Y.Doc 序列化后的 XML">导出 Y.Doc XML</button>
       <button class="tool-btn" id="btn-compare-xml" title="上传 XML 并与当前 Y.Doc 对比统计信息">上传 XML 对比</button>
       <input type="file" id="xml-upload-input" accept=".xml" style="display:none" />
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <button class="tool-btn danger" id="btn-delete-cells" title="从 Y.Doc 中删除 cell 0 和 cell 1，触发自动恢复">模拟删除 Cell 0/1</button>
+      <button class="tool-btn" id="btn-reset-ydoc" title="从 file.data 强制重建 ydoc（止损失效时的手动恢复）">从 file 重建 ydoc</button>
     </div>
   </div>
 

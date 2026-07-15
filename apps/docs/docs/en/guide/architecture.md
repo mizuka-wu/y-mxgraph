@@ -332,6 +332,78 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
 }
 ```
 
+## Error Recovery
+
+### Cell 0/1 Protection
+
+Cell 0 (root node) and Cell 1 (default layer) are fundamental to draw.io's structure. If they are deleted from the Y.Doc, the entire diagram breaks. y-mxgraph provides multi-layer protection:
+
+| Defense Point | Mechanism | Scenario Covered |
+|---------------|-----------|-----------------|
+| `applyFilePatch` | Filters deletion list, skips `"0"` `"1"` | Accidental deletion in file→ydoc path |
+| `generatePatch` | Filters diff detection, won't mark `"0"` `"1"` as deleted | False positive in diff detection |
+| `docObserver` | Calls `ensureBasicCell()` after remote/undo-redo changes | Remote peer deletion |
+| `cleanInvalidCellOrder` | Skips `"0"` `"1"` during forceSync cleanup | Cleanup logic false positive |
+| `mxGraphModel.parse` | Fallback creation of cell 0/1 during XML parsing | Missing from XML |
+
+### `ensureBasicCell` Function
+
+```ts
+export function ensureBasicCell(doc: Y.Doc): void {
+  // Iterates all diagrams, ensures "0" and "1" exist in cellsMap and cellsOrder
+  // Creates them if missing and inserts at the beginning of cellsOrder
+  // Ensures 0 comes before 1
+}
+```
+
+**Idempotent**: If cell 0/1 already exist, no operation is performed. Safe to call at any time.
+
+### When It Runs
+
+1. **`initBinding`**: Immediately restores missing cells when loading an existing ydoc (fixes historical data)
+2. **`docObserver`**: Ensures cell 0/1 exist after remote sync or undo/redo changes
+3. **`mxGraphModel.parse`**: Fallback creation during XML→ydoc conversion
+
+### Protected Cells
+
+```ts
+export const PROTECTED_CELLS = new Set(["0", "1"]);
+```
+
+All deletion logic (`applyFilePatch`, `generatePatch`, `cleanInvalidCellOrder`) checks this set and skips protected cells.
+
+### Snapshot Recovery
+
+When the ydoc is corrupted (missing cell 0/1), recovering from a historical snapshot follows this flow:
+
+```
+snapshot (has cell 0/1) → reset file.data → initDocSnapshot rebuilds baseline → diff → patch
+```
+
+**Problem before the fix**: `generatePatch` would detect missing cell 0/1 as "removed", generating a deletion patch. Even though cell 0/1 already didn't exist, this detection would affect subsequent diff logic, causing recovery to fail.
+
+**After the fix**:
+- `generatePatch` filters `"0"` `"1"`, won't mark them as deleted
+- `applyFilePatch` filters `"0"` `"1"`, won't execute deletion
+- `ensureBasicCell` restores missing cells in `initBinding` and `docObserver`
+
+Therefore, the snapshot recovery path is safe: regardless of the ydoc's current state, as long as the snapshot is correct, recovery will succeed.
+
+### Manual Recovery: `resetYdocFromFile()`
+
+When automatic recovery fails (e.g., ydoc severely corrupted, remote sync unavailable), call `binding.resetYdocFromFile()` to force-rebuild the ydoc from file.data:
+
+```ts
+binding.resetYdocFromFile();
+```
+
+**Flow**: `file.data` (XML) → `xml2ydoc` → `mxGraphModel.parse` (fallback creates cell 0/1) → `ensureBasicCell` → ydoc complete
+
+**Difference from `forceSync("file-to-ydoc")`**:
+- `forceSync` is routine sync: cleans invalid cellOrder, resets drift counter
+- `resetYdocFromFile` is destructive recovery: discards all ydoc data, rebuilds from file XML
+- Use when ydoc is severely corrupted and other recovery methods have failed
+
 ## Performance
 
 1. **Batched patch apply**: multiple changes in a single transaction

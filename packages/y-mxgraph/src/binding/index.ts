@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
-import { applyFilePatch, generatePatch, initDocSnapshot } from "./patch";
+import { applyFilePatch, generatePatch, initDocSnapshot, ensureBasicCell, PROTECTED_CELLS } from "./patch";
 import { xml2ydoc, ydoc2xml } from "../transform";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
@@ -381,6 +381,7 @@ export class Binding {
       );
       // doc 在 reconcile 后才确定有内容，需建立 snapshot 基线
       if (this.docInitialized) {
+        ensureBasicCell(doc);
         initDocSnapshot(doc, false);
       }
     } finally {
@@ -443,6 +444,9 @@ export class Binding {
       if (transaction.local && !isUndoRedo) {
         return;
       }
+
+      // 远端/undo-redo 变更后，确保 cell 0/1 存在
+      ensureBasicCell(doc);
 
       const xml = ydoc2xml(doc);
       if (xml && xml.includes("<diagram")) {
@@ -563,6 +567,45 @@ export class Binding {
   }
 
   /**
+   * 从 file.data 强制重建 ydoc（止损失效时的手动恢复手段）。
+   *
+   * 与 forceSync("file-to-ydoc") 的区别：
+   * - forceSync 是常规同步，会清理异常 cellOrder、重置 drift 计数
+   * - resetYdocFromFile 是破坏性恢复：丢弃当前 ydoc 全部数据，从 file XML 重建
+   * - 适用于 ydoc 严重损坏（如缺少 cell 0/1）且其他恢复手段失效的场景
+   *
+   * 流程：file.data (XML) → xml2ydoc → mxGraphModel.parse（兜底创建 cell 0/1）→ ydoc 完整
+   */
+  resetYdocFromFile(): void {
+    const xml = this.file.data;
+    if (!xml || !xml.includes("<diagram")) {
+      console.warn("[y-mxgraph] resetYdocFromFile: file.data 为空或无 diagram");
+      return;
+    }
+
+    this.suppressLocalApply = true;
+    try {
+      this.doc.transact(() => {
+        xml2ydoc(xml, this.doc);
+        ensureBasicCell(this.doc);
+        initDocSnapshot(this.doc, true);
+      }, LOCAL_ORIGIN);
+
+      // 用重建后的 ydoc 覆盖 file（确保两端一致）
+      const rebuiltXml = ydoc2xml(this.doc);
+      if (rebuiltXml && rebuiltXml.includes("<diagram")) {
+        this.applyFileData(this.file, rebuiltXml);
+        this.file.setShadowPages(this.file.ui.clonePages(this.file.ui.pages));
+      }
+
+      this.resetEditorStatus();
+      console.log("[y-mxgraph] resetYdocFromFile: ydoc 已从 file.data 重建");
+    } finally {
+      this.suppressLocalApply = false;
+    }
+  }
+
+  /**
    * 清理 cellsMap 中不存在的 cell id，避免影响 undo 栈。
    * 只在 forceSync 时调用，因为这是用户主动触发的同步操作。
    */
@@ -583,6 +626,7 @@ export class Binding {
       const invalidIds: string[] = [];
 
       for (const cid of ids) {
+        if (PROTECTED_CELLS.has(cid)) continue;
         const cell = cellsMap.get(cid);
         if (!cell || typeof cell.getAttributes !== "function") {
           invalidIds.push(cid);

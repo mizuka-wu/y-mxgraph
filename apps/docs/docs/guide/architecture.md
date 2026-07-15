@@ -339,6 +339,78 @@ function ensureUniqueOrder(orderArr: Y.Array<string>) {
 }
 ```
 
+## 错误恢复机制
+
+### Cell 0/1 保护
+
+Cell 0（根节点）和 Cell 1（默认图层）是 draw.io 的基础结构。如果它们从 Y.Doc 中被删除，整个图表会崩溃。y-mxgraph 在多个层级提供保护：
+
+| 防御点 | 机制 | 覆盖场景 |
+|--------|------|----------|
+| `applyFilePatch` | 过滤删除列表，跳过 `"0"` `"1"` | file→ydoc 路径误删 |
+| `generatePatch` | 过滤差异检测，不将 `"0"` `"1"` 标记为删除 | diff 检测误判 |
+| `docObserver` | 远端/undo-redo 变更后调用 `ensureBasicCell()` | 远端 peer 删除 |
+| `cleanInvalidCellOrder` | forceSync 清理时跳过 `"0"` `"1"` | 清理逻辑误删 |
+| `mxGraphModel.parse` | XML 解析兜底创建 cell 0/1 | XML 缺失 |
+
+### `ensureBasicCell` 函数
+
+```ts
+export function ensureBasicCell(doc: Y.Doc): void {
+  // 遍历所有 diagram，确保 cellsMap 和 cellsOrder 中存在 "0" 和 "1"
+  // 如果缺失则创建并插入到 cellsOrder 开头
+  // 确保 0 在 1 前面
+}
+```
+
+**幂等**：如果 cell 0/1 已存在，不做任何操作。可在任何时机安全调用。
+
+### 调用时机
+
+1. **`initBinding`**：加载已有 ydoc 时立即补（修复历史缺失）
+2. **`docObserver`**：远端同步或 undo/redo 后确保 cell 0/1 存在
+3. **`mxGraphModel.parse`**：XML→ydoc 转换时兜底创建
+
+### 受保护的 Cell
+
+```ts
+export const PROTECTED_CELLS = new Set(["0", "1"]);
+```
+
+所有删除逻辑（`applyFilePatch`、`generatePatch`、`cleanInvalidCellOrder`）都会检查此集合，跳过受保护的 cell。
+
+### 从 Snapshot 恢复
+
+当 ydoc 已损坏（缺少 cell 0/1）时，从历史 snapshot 恢复的流程：
+
+```
+snapshot（有 cell 0/1）→ 重设 file.data → initDocSnapshot 重建 baseline → diff → patch
+```
+
+**修复前的问题**：`generatePatch` 会将缺失的 cell 0/1 检测为「删除」，生成删除 patch。即使 cell 0/1 已经不存在，这个检测结果仍然会影响后续的 diff 逻辑，导致恢复失败。
+
+**修复后**：
+- `generatePatch` 过滤 `"0"` `"1"`，不会将它们标记为删除
+- `applyFilePatch` 过滤 `"0"` `"1"`，不会执行删除
+- `ensureBasicCell` 在 `initBinding` 和 `docObserver` 中补回缺失的 cell
+
+因此从 snapshot 恢复的路径是安全的：无论 ydoc 当前状态如何，只要 snapshot 是好的，就能正确恢复。
+
+### 手动恢复：`resetYdocFromFile()`
+
+当自动恢复手段失效时（如 ydoc 严重损坏、远端同步无法触发），可调用 `binding.resetYdocFromFile()` 强制从 file.data 重建 ydoc：
+
+```ts
+binding.resetYdocFromFile();
+```
+
+**流程**：`file.data` (XML) → `xml2ydoc` → `mxGraphModel.parse`（兜底创建 cell 0/1）→ `ensureBasicCell` → ydoc 完整
+
+**与 `forceSync("file-to-ydoc")` 的区别**：
+- `forceSync` 是常规同步，会清理异常 cellOrder、重置 drift 计数
+- `resetYdocFromFile` 是破坏性恢复：丢弃当前 ydoc 全部数据，从 file XML 重建
+- 适用于 ydoc 严重损坏且其他恢复手段失效的场景
+
 ## 性能优化
 
 1. **patch 批量应用**: 单次事务包含多个变更
