@@ -426,4 +426,74 @@ xmlUploadInput.addEventListener("change", (e) => {
 comparePanelClose.addEventListener("click", hideComparePanel);
 comparePanelOverlay.addEventListener("click", hideComparePanel);
 
+// === 模拟删除 Cell 0/1 ===
+const btnDeleteCells = document.getElementById(
+  "btn-delete-cells",
+) as HTMLButtonElement;
+
+btnDeleteCells.addEventListener("click", () => {
+  const doc = getCurrentDoc();
+  if (!doc) {
+    alert("Y.Doc 尚未初始化，请等待 draw.io 加载完成");
+    return;
+  }
+
+  const mxfile = doc.getMap("mxfile");
+  const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+  if (!diagrams) {
+    alert("Y.Doc 中没有 diagram");
+    return;
+  }
+
+  let deletedCount = 0;
+  for (const [, diagram] of diagrams.entries()) {
+    const gm = diagram.get("mxGraphModel") as Y.Map<unknown> | undefined;
+    if (!gm) continue;
+    const cellsMap = gm.get("mxCell") as Y.Map<Y.XmlElement> | undefined;
+    const cellsOrder = gm.get("mxCellOrder") as Y.Array<string> | undefined;
+    if (!cellsMap || !cellsOrder) continue;
+
+    for (const id of ["0", "1"]) {
+      if (cellsMap.has(id)) {
+        cellsMap.delete(id);
+        deletedCount++;
+      }
+      const order = cellsOrder.toArray();
+      const idx = order.indexOf(id);
+      if (idx !== -1) {
+        cellsOrder.delete(idx, 1);
+        deletedCount++;
+      }
+    }
+  }
+
+  if (deletedCount === 0) {
+    alert("Cell 0/1 已经不存在了");
+    return;
+  }
+
+  console.warn(`[y-mxgraph] 已删除 ${deletedCount} 个 cell 0/1 条目，图表将损坏`);
+  alert(`已删除 cell 0/1（${deletedCount} 条）\n\n恢复方式：\n• 远端协作者同步时自动恢复\n• 刷新页面时 initBinding 自动恢复\n• 点击「从 file 重建 ydoc」手动恢复`);
+});
+
+// === 从 file 重建 ydoc ===
+const btnResetYdoc = document.getElementById(
+  "btn-reset-ydoc",
+) as HTMLButtonElement;
+
+btnResetYdoc.addEventListener("click", () => {
+  const binding = collabState.binding;
+  if (!binding) {
+    alert("Binding 尚未初始化，请等待 draw.io 加载完成");
+    return;
+  }
+
+  try {
+    (binding as any).resetYdocFromFile();
+    alert("✓ ydoc 已从 file.data 重建");
+  } catch (e) {
+    alert("重建失败: " + (e as Error).message);
+  }
+});
+
 window.addEventListener("DOMContentLoaded", init);

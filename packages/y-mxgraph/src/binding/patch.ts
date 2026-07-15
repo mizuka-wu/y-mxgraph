@@ -28,6 +28,52 @@ const DIFF_INSERT = "i";
 const DIFF_REMOVE = "r";
 const DIFF_UPDATE = "u";
 
+/** 受保护的 cell id：始终存在，不可被删除 */
+export const PROTECTED_CELLS = new Set(["0", "1"]);
+
+/**
+ * 确保指定 diagram 的 cellsMap 和 cellsOrder 中存在 cell 0 和 cell 1。
+ * 如果缺失则创建并插入到 cellsOrder 开头。
+ */
+export function ensureBasicCell(doc: Y.Doc): void {
+  const mxfile = doc.getMap("mxfile");
+  const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+  if (!diagrams) return;
+  for (const [, diagram] of diagrams.entries()) {
+    const gm = diagram.get("mxGraphModel") as Y.Map<unknown> | undefined;
+    if (!gm) continue;
+    const cellsMap = gm.get("mxCell") as Y.Map<Y.XmlElement> | undefined;
+    const cellsOrder = gm.get("mxCellOrder") as Y.Array<string> | undefined;
+    if (!cellsMap || !cellsOrder) continue;
+
+    let order = cellsOrder.toArray();
+    if (!cellsMap.has("0")) {
+      const c = new Y.XmlElement("mxCell");
+      c.setAttribute("id", "0");
+      cellsMap.set("0", c);
+      if (!order.includes("0")) cellsOrder.insert(0, ["0"]);
+      order = cellsOrder.toArray();
+    }
+    if (!cellsMap.has("1")) {
+      const c = new Y.XmlElement("mxCell");
+      c.setAttribute("id", "1");
+      c.setAttribute("parent", "0");
+      cellsMap.set("1", c);
+      const idx0 = cellsOrder.toArray().indexOf("0");
+      cellsOrder.insert(idx0 >= 0 ? idx0 + 1 : 0, ["1"]);
+      order = cellsOrder.toArray();
+    }
+    // 确保 0 在 1 前面
+    const i0 = order.indexOf("0");
+    const i1 = order.indexOf("1");
+    if (i0 !== -1 && i1 !== -1 && i0 > i1) {
+      cellsOrder.delete(i1, 1);
+      const newI0 = cellsOrder.toArray().indexOf("0");
+      cellsOrder.insert(newI0 >= 0 ? newI0 + 1 : 0, ["1"]);
+    }
+  }
+}
+
 type DocSnapshot = {
   diagramOrder: string[] | null;
   cellsOrder: Map<string, string[]>;
@@ -613,18 +659,22 @@ export function applyFilePatch(
             }
 
             // 删除单元格 - 按照 draw.io 原始实现，在最后处理
-            if (update.cells[DIFF_REMOVE] && update.cells[DIFF_REMOVE].length) {
+            // 跳过受保护 cell（"0" "1"）
+            const cellsToRemove = update.cells[DIFF_REMOVE]?.filter(
+              (cid: string) => !PROTECTED_CELLS.has(cid),
+            );
+            if (cellsToRemove && cellsToRemove.length) {
               if (orderArr) {
                 const orderIds = orderArr.toArray();
-                const removeIndexList = update.cells[DIFF_REMOVE].map((cid) =>
+                const removeIndexList = cellsToRemove.map((cid: string) =>
                   orderIds.indexOf(cid),
                 )
                   .filter((i) => i !== -1)
                   .sort((a, b) => b - a);
-                removeIndexList.forEach((idx) => orderArr.delete(idx, 1));
+                removeIndexList.forEach((idx: number) => orderArr.delete(idx, 1));
               }
               if (cellsMap) {
-                update.cells[DIFF_REMOVE].forEach((cid) => {
+                cellsToRemove.forEach((cid: string) => {
                   if (cellsMap.has(cid)) {
                     cellsMap.delete(cid);
                   }
@@ -897,7 +947,9 @@ export function generatePatch(
     const prevSet = new Set(prevCells);
     const currSet = new Set(currCells);
 
-    const removed = prevCells.filter((cid: string) => !currSet.has(cid) && cid);
+    const removed = prevCells.filter(
+      (cid: string) => !currSet.has(cid) && cid && !PROTECTED_CELLS.has(cid),
+    );
     if (removed.length) {
       const cells = ensureCellSection(did);
       cells[DIFF_REMOVE] = (cells[DIFF_REMOVE] || []).concat(removed);
