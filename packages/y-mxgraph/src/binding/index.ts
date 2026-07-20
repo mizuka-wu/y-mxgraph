@@ -375,7 +375,8 @@ export class Binding {
     try {
       // doc 可能从远端同步过来但缺 cell 0/1，先修复再 reconcile
       ensureBasicCell(doc);
-      validateDocIntegrity(doc);
+      // 校验数据完整性并自动修复（order 去重、order/map 同步等）
+      this.validateDocIntegrity();
       this.docInitialized = reconcileInitialContent(
         doc,
         file,
@@ -567,7 +568,8 @@ export class Binding {
     }
     // 在 forceSync 后清理异常 cellOrder，避免影响 undo 栈
     this.cleanInvalidCellOrder();
-    validateDocIntegrity(this.doc);
+    // 校验数据完整性并自动修复
+    this.validateDocIntegrity();
     // forceSync 成功后重置 drift 计数
     this.consistencyChecker?.resetDriftCount();
   }
@@ -694,9 +696,9 @@ export class Binding {
   }
 
   /**
-   * 手动触发一次文档完整性校验与自愈。
+   * 校验文档完整性并自动修复。
    * 自愈操作使用 INTEGRITY_ORIGIN，不进 undo 栈。
-   * @returns 修复的问题数量，0 表示文档正常
+   * @returns 发现的问题数量，0 表示文档正常
    */
   validateDocIntegrity(): number {
     return validateDocIntegrity(this.doc);
