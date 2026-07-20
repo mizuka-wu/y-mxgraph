@@ -36,25 +36,28 @@ export function parse(object: MxGraphModel, doc?: Y.Doc) {
   const cells = new Y.Map<Y.XmlElement>();
   const cellsOrder = new Y.Array<string>();
 
+  // 用普通 Set 追踪已有的 cell id，避免在独立 Y 类型上做读操作
+  const cellIds = new Set<string>();
   mxCells.forEach((cell) => {
     cells.set(cell.id, cell.value);
+    cellIds.add(cell.id);
   });
 
   cellsOrder.push(mxCells.map((cell) => cell.id));
 
   // 兜底：确保 cell 0（根节点）和 cell 1（默认图层）存在
-  if (!cells.has("0")) {
+  if (!cellIds.has("0")) {
     const c = new Y.XmlElement("mxCell");
     c.setAttribute("id", "0");
     cells.set("0", c);
     cellsOrder.insert(0, ["0"]);
   }
-  if (!cells.has("1")) {
+  if (!cellIds.has("1")) {
     const c = new Y.XmlElement("mxCell");
     c.setAttribute("id", "1");
     c.setAttribute("parent", "0");
     cells.set("1", c);
-    const i0 = cellsOrder.toArray().indexOf("0");
+    const i0 = mxCells.findIndex((cell) => cell.id === "0");
     cellsOrder.insert(i0 >= 0 ? i0 + 1 : 0, ["1"]);
   }
 
