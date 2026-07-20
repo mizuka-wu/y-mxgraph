@@ -93,44 +93,9 @@ export function serialize(map: YMxGraphModel) {
   const visited = new Set<string>();
 
   // 预构建 parent → children 映射（避免 O(n²)）
-  // 使用 localCells 来支持对缺失 0/1 的兜底合成（不直接修改 Y.Doc）
-  const localCells = new Map<string, Y.XmlElement>();
-  for (const id of orderIds) {
-    const cell = cells.get(id);
-    if (cell) localCells.set(id, cell);
-  }
-
-  // 如果缺失根节点或默认图层，合成占位元素以保证序列化输出包含 0 和 1
-  let synthesized = false;
-  if (!localCells.has("0")) {
-    const c0 = new Y.XmlElement("mxCell");
-    c0.setAttribute("id", "0");
-    localCells.set("0", c0);
-    if (!orderIds.includes("0")) {
-      orderIds.unshift("0");
-    }
-    synthesized = true;
-  }
-  if (!localCells.has("1")) {
-    const c1 = new Y.XmlElement("mxCell");
-    c1.setAttribute("id", "1");
-    c1.setAttribute("parent", "0");
-    localCells.set("1", c1);
-    // 确保 1 紧跟在 0 之后（若 0 存在于 orderIds）
-    if (!orderIds.includes("1")) {
-      const i0 = orderIds.indexOf("0");
-      if (i0 >= 0) orderIds.splice(i0 + 1, 0, "1");
-      else orderIds.unshift("1");
-    }
-    synthesized = true;
-  }
-  if (synthesized) {
-    console.warn("[y-mxgraph] serialize: synthesized missing root/layer cells 0/1 for output");
-  }
-
   const childrenMap = new Map<string, string[]>();
   for (const id of orderIds) {
-    const cell = localCells.get(id);
+    const cell = cells.get(id);
     if (!cell || typeof cell.getAttributes !== "function") continue;
     const parent = cell.getAttribute("parent") ?? "";
     if (!childrenMap.has(parent)) {
@@ -143,11 +108,11 @@ export function serialize(map: YMxGraphModel) {
     if (visited.has(id)) return;
     visited.add(id);
 
-    if (!localCells) {
+    if (!cells || typeof cells.get !== "function") {
       return console.warn("cells is not defined or not ymap");
     }
 
-    const cell = localCells.get(id);
+    const cell = cells.get(id);
     if (cell && typeof cell.getAttributes === "function") {
       ordered.push(cell);
 
