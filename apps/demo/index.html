@@ -437,6 +437,16 @@
       <button class="tool-btn danger" id="btn-delete-cells" title="从 Y.Doc 中删除 cell 0 和 cell 1，触发自动恢复">模拟删除 Cell 0/1</button>
       <button class="tool-btn" id="btn-reset-ydoc" title="从 file.data 强制重建 ydoc（止损失效时的手动恢复）">从 file 重建 ydoc</button>
     </div>
+
+    <div class="separator"></div>
+
+    <div class="toolbar-group">
+      <button class="tool-btn danger" id="btn-corrupt-order-dup" title="在 cellsOrder 中插入重复 id">order 重复</button>
+      <button class="tool-btn danger" id="btn-corrupt-ghost-id" title="在 cellsOrder 中加入 map 不存在的 id">幽灵 id</button>
+      <button class="tool-btn danger" id="btn-corrupt-map-orphan" title="在 cellsMap 中加 cell 但不加到 order">map 孤儿</button>
+      <button class="tool-btn danger" id="btn-corrupt-parent-break" title="让某个 cell 的 parent 指向不存在的 id">parent 断裂</button>
+      <button class="tool-btn" id="btn-validate-integrity" title="调用 validateDocIntegrity 校验并自愈">验证完整性</button>
+    </div>
   </div>
 
   <div id="status-bar">

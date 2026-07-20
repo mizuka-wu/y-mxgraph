@@ -496,4 +496,125 @@ btnResetYdoc.addEventListener("click", () => {
   }
 });
 
+// === 数据损坏模拟 & 完整性校验 ===
+
+function withDiagram(
+  fn: (
+    cellsMap: Y.Map<Y.XmlElement>,
+    cellsOrder: Y.Array<string>,
+    did: string,
+  ) => void,
+) {
+  const doc = getCurrentDoc();
+  if (!doc) {
+    alert("Y.Doc 尚未初始化，请等待 draw.io 加载完成");
+    return;
+  }
+  const mxfile = doc.getMap("mxfile");
+  const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+  if (!diagrams) {
+    alert("Y.Doc 中没有 diagram");
+    return;
+  }
+  for (const [did, diagram] of diagrams.entries()) {
+    const gm = diagram.get("mxGraphModel") as Y.Map<unknown> | undefined;
+    if (!gm) continue;
+    const cellsMap = gm.get("mxCell") as Y.Map<Y.XmlElement> | undefined;
+    const cellsOrder = gm.get("mxCellOrder") as Y.Array<string> | undefined;
+    if (!cellsMap || !cellsOrder) continue;
+    fn(cellsMap, cellsOrder, did);
+  }
+}
+
+// order 重复
+const btnCorruptOrderDup = document.getElementById(
+  "btn-corrupt-order-dup",
+) as HTMLButtonElement;
+
+btnCorruptOrderDup.addEventListener("click", () => {
+  withDiagram((_cellsMap, cellsOrder, did) => {
+    const order = cellsOrder.toArray();
+    // 在末尾重复插入第一个非 0/1 的 cell id
+    const target = order.find((id) => id !== "0" && id !== "1") || "1";
+    cellsOrder.push([target]);
+    console.warn(`[debug] diagram ${did}: 已插入重复 id "${target}"，当前 order:`, cellsOrder.toArray());
+    alert(`已向 diagram ${did} 的 cellsOrder 末尾重复插入 "${target}"\n\n当前 order: [${cellsOrder.toArray().join(", ")}]`);
+  });
+});
+
+// 幽灵 id
+const btnCorruptGhostId = document.getElementById(
+  "btn-corrupt-ghost-id",
+) as HTMLButtonElement;
+
+btnCorruptGhostId.addEventListener("click", () => {
+  withDiagram((_cellsMap, cellsOrder, did) => {
+    const ghostId = `ghost-${Date.now()}`;
+    cellsOrder.push([ghostId]);
+    console.warn(`[debug] diagram ${did}: 已插入幽灵 id "${ghostId}"，当前 order:`, cellsOrder.toArray());
+    alert(`已向 diagram ${did} 的 cellsOrder 末尾插入幽灵 id "${ghostId}"\n\n当前 order: [${cellsOrder.toArray().join(", ")}]`);
+  });
+});
+
+// map 孤儿
+const btnCorruptMapOrphan = document.getElementById(
+  "btn-corrupt-map-orphan",
+) as HTMLButtonElement;
+
+btnCorruptMapOrphan.addEventListener("click", () => {
+  withDiagram((cellsMap, _cellsOrder, did) => {
+    const orphanId = `orphan-${Date.now()}`;
+    const cell = new Y.XmlElement("mxCell");
+    cell.setAttribute("id", orphanId);
+    cell.setAttribute("parent", "1");
+    cell.setAttribute("value", "I exist in map but not in order");
+    cellsMap.set(orphanId, cell);
+    console.warn(`[debug] diagram ${did}: 已在 cellsMap 中添加孤儿 cell "${orphanId}"（不在 order 中）`);
+    alert(`已向 diagram ${did} 的 cellsMap 添加孤儿 cell "${orphanId}"\n\n此 cell 在 map 中但不在 order 中`);
+  });
+});
+
+// parent 断裂
+const btnCorruptParentBreak = document.getElementById(
+  "btn-corrupt-parent-break",
+) as HTMLButtonElement;
+
+btnCorruptParentBreak.addEventListener("click", () => {
+  withDiagram((cellsMap, cellsOrder, did) => {
+    const order = cellsOrder.toArray();
+    // 找一个非 0 的 cell，把它的 parent 改成不存在的 id
+    const target = order.find((id) => id !== "0");
+    if (!target) {
+      alert("没有可修改的 cell");
+      return;
+    }
+    const cell = cellsMap.get(target);
+    if (!cell) {
+      alert(`cell ${target} 不在 cellsMap 中`);
+      return;
+    }
+    cell.setAttribute("parent", "nonexistent-parent");
+    console.warn(`[debug] diagram ${did}: cell "${target}" 的 parent 已改为 "nonexistent-parent"`);
+    alert(`已将 diagram ${did} 的 cell "${target}" 的 parent 改为 "nonexistent-parent"`);
+  });
+});
+
+// 验证完整性
+const btnValidateIntegrity = document.getElementById(
+  "btn-validate-integrity",
+) as HTMLButtonElement;
+
+btnValidateIntegrity.addEventListener("click", () => {
+  const binding = collabState.binding;
+  if (!binding) {
+    alert("Binding 尚未初始化，请等待 draw.io 加载完成");
+    return;
+  }
+
+  console.log("[debug] === 开始 validateDocIntegrity ===");
+  const issues = (binding as any).validateDocIntegrity();
+  console.log(`[debug] === validateDocIntegrity 完成，修复了 ${issues} 个问题 ===`);
+  alert(issues === 0 ? "✓ 文档完整，未发现问题" : `已修复 ${issues} 个问题（查看控制台日志）`);
+});
+
 window.addEventListener("DOMContentLoaded", init);
