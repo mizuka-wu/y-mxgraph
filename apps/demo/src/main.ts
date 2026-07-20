@@ -614,7 +614,15 @@ btnValidateIntegrity.addEventListener("click", () => {
   console.log("[debug] === 开始 validateDocIntegrity ===");
   const issues = (binding as any).validateDocIntegrity();
   console.log(`[debug] === validateDocIntegrity 完成，修复了 ${issues} 个问题 ===`);
-  alert(issues === 0 ? "✓ 文档完整，未发现问题" : `已修复 ${issues} 个问题（查看控制台日志）`);
+
+  // 自愈后同步 ydoc → file → draw.io UI
+  if (issues > 0) {
+    console.log("[debug] === forceSync ydoc-to-file ===");
+    (binding as any).forceSync("ydoc-to-file");
+    console.log("[debug] === forceSync 完成 ===");
+  }
+
+  alert(issues === 0 ? "✓ 文档完整，未发现问题" : `已修复 ${issues} 个问题，页面已同步`);
 });
 
 window.addEventListener("DOMContentLoaded", init);
