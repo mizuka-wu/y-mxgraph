@@ -417,8 +417,9 @@ export class Binding {
 
       // 第一次有实际本地编辑时才初始化 Y.Doc
       if (!this.docInitialized) {
+        const fileXml = file.ui.getFileData();
         doc.transact(() => {
-          xml2ydoc(file.data, doc);
+          xml2ydoc(fileXml, doc);
           initDocSnapshot(doc, false);
         });
         this.docInitialized = true;
@@ -506,7 +507,7 @@ export class Binding {
     // 一致性检查器
     const { consistencyCheckInterval, onDrift } = options;
     if (consistencyCheckInterval && consistencyCheckInterval > 0) {
-      this.consistencyChecker = new ConsistencyChecker(doc, () => file.data, {
+      this.consistencyChecker = new ConsistencyChecker(doc, () => file.ui.getFileData(), {
         source: "binding",
       });
       if (onDrift) {
@@ -558,8 +559,9 @@ export class Binding {
         this.suppressLocalApply = false;
       }
     } else {
+      const fileXml = this.file.ui.getFileData();
       this.doc.transact(() => {
-        xml2ydoc(this.file.data, this.doc);
+        xml2ydoc(fileXml, this.doc);
         initDocSnapshot(this.doc, false);
       }, LOCAL_ORIGIN);
     }
@@ -571,19 +573,19 @@ export class Binding {
   }
 
   /**
-   * 从 file.data 强制重建 ydoc（止损失效时的手动恢复手段）。
+   * 从 file.ui 强制重建 ydoc（止损失效时的手动恢复手段）。
    *
    * 与 forceSync("file-to-ydoc") 的区别：
    * - forceSync 是常规同步，会清理异常 cellOrder、重置 drift 计数
-   * - resetYdocFromFile 是破坏性恢复：丢弃当前 ydoc 全部数据，从 file XML 重建
+   * - resetYdocFromFile 是破坏性恢复：丢弃当前 ydoc 全部数据，从 file UI 重建
    * - 适用于 ydoc 严重损坏（如缺少 cell 0/1）且其他恢复手段失效的场景
    *
-   * 流程：file.data (XML) → xml2ydoc → mxGraphModel.parse（兜底创建 cell 0/1）→ ydoc 完整
+   * 流程：file.ui (XML) → xml2ydoc → mxGraphModel.parse（兜底创建 cell 0/1）→ ydoc 完整
    */
   resetYdocFromFile(): void {
-    const xml = this.file.data;
+    const xml = this.file.ui.getFileData();
     if (!xml || !xml.includes("<diagram")) {
-      console.warn("[y-mxgraph] resetYdocFromFile: file.data 为空或无 diagram");
+      console.warn("[y-mxgraph] resetYdocFromFile: file.ui.getFileData() 为空或无 diagram");
       return;
     }
 
@@ -603,7 +605,7 @@ export class Binding {
       }
 
       this.resetEditorStatus();
-      console.log("[y-mxgraph] resetYdocFromFile: ydoc 已从 file.data 重建");
+      console.log("[y-mxgraph] resetYdocFromFile: ydoc 已从 file.ui 重建");
     } finally {
       this.suppressLocalApply = false;
     }
