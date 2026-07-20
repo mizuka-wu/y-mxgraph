@@ -99,7 +99,7 @@ export function validateDocIntegrity(doc: Y.Doc): number {
 
       // 1. cell 0/1 存在（ensureBasicCell 已修复，这里做二次确认）
       if (!cellsMap.has("0") || !cellsMap.has("1")) {
-        console.warn(`[y-mxgraph][integrity][warn] diagram ${did}: cell 0/1 缺失（ensureBasicCell 后仍缺失）`);
+        ensureBasicCell(doc);
         issues++;
       }
 
@@ -142,7 +142,7 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         issues++;
       }
 
-      // 4. parent 链完整（只 warn，不自动修复 — 修改 parent 语义风险大）
+      // 4. parent 链完整（parent 不存在时降级为 0）
       const finalOrder = cellsOrder.toArray();
       for (const id of finalOrder) {
         if (id === "0") continue;
@@ -150,7 +150,7 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         if (!cell || typeof cell.getAttribute !== "function") continue;
         const parent = cell.getAttribute("parent");
         if (parent && parent !== "0" && !cellsMap.has(parent)) {
-          console.warn(`[y-mxgraph][integrity][warn] diagram ${did}: cell ${id} 引用了不存在的 parent ${parent}`);
+          cell.setAttribute("parent", "0");
           issues++;
         }
       }
