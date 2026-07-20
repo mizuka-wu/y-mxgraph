@@ -9,6 +9,7 @@
 | `xml2ydoc` | function | Convert draw.io XML → Y.Doc |
 | `ydoc2xml` | function | Convert Y.Doc → draw.io XML |
 | `LOCAL_ORIGIN` | object | Origin marker for local transactions |
+| `INTEGRITY_ORIGIN` | object | Origin marker for integrity self-healing transactions, excluded from undo stack |
 | `DEFAULT_USER_NAME_KEY` | string | Default awareness field for the user's display name |
 | `DEFAULT_USER_COLOR_KEY` | string | Default awareness field for the user's color |
 
@@ -18,6 +19,7 @@ import {
   xml2ydoc,
   ydoc2xml,
   LOCAL_ORIGIN,
+  INTEGRITY_ORIGIN,
   DEFAULT_USER_NAME_KEY,
   DEFAULT_USER_COLOR_KEY,
 } from 'y-mxgraph';

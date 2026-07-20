@@ -379,6 +379,24 @@ export const PROTECTED_CELLS = new Set(["0", "1"]);
 
 所有删除逻辑（`applyFilePatch`、`generatePatch`、`cleanInvalidCellOrder`）都会检查此集合，跳过受保护的 cell。
 
+### `validateDocIntegrity` 函数
+
+```ts
+export function validateDocIntegrity(doc: Y.Doc): number {
+  // 遍历所有 diagram，检查 cellsOrder 与 cellsMap 的一致性
+  // 自动修复：去重、补齐缺失 id、移除孤立 id
+  // 所有修改使用 INTEGRITY_ORIGIN 事务，不进 undo 栈
+}
+```
+
+**检查项**:
+1. cell 0/1 是否存在（二次确认）
+2. cellsOrder 是否有重复 id → 自动去重
+3. cellsOrder 与 cellsMap 是否一致 → 自动补齐/移除
+4. parent 链是否完整 → 仅警告，不自动修复
+
+**使用方式**: 通过 `binding.validateDocIntegrity()` 公共方法调用，由外部决定何时触发。
+
 ### 从 Snapshot 恢复
 
 当 ydoc 已损坏（缺少 cell 0/1）时，从历史 snapshot 恢复的流程：

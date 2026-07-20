@@ -23,6 +23,7 @@ import {
   getBackground,
 } from "../models/view";
 import * as Y from "yjs";
+import { INTEGRITY_ORIGIN } from "../helper/origin";
 
 const DIFF_INSERT = "i";
 const DIFF_REMOVE = "r";
@@ -74,6 +75,89 @@ export function ensureBasicCell(doc: Y.Doc): void {
       cellsOrder.insert(newI0 >= 0 ? newI0 + 1 : 0, ["1"]);
     }
   }
+}
+
+/**
+ * 校验 doc 中所有 diagram 的数据完整性，并自动修复可修复的问题。
+ * 返回发现的问题数量（0 = 完全健康）。
+ */
+export function validateDocIntegrity(doc: Y.Doc): number {
+  let issues = 0;
+
+  // 所有自愈操作包在 INTEGRITY_ORIGIN 事务中，不进 undo 栈
+  doc.transact(() => {
+    const mxfile = doc.getMap("mxfile");
+    const diagrams = mxfile?.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+    if (!diagrams) return;
+
+    for (const [did, diagram] of diagrams.entries()) {
+      const gm = diagram.get("mxGraphModel") as Y.Map<unknown> | undefined;
+      if (!gm) continue;
+      const cellsMap = gm.get("mxCell") as Y.Map<Y.XmlElement> | undefined;
+      const cellsOrder = gm.get("mxCellOrder") as Y.Array<string> | undefined;
+      if (!cellsMap || !cellsOrder) continue;
+
+      // 1. cell 0/1 存在（ensureBasicCell 已修复，这里做二次确认）
+      if (!cellsMap.has("0") || !cellsMap.has("1")) {
+        console.warn(`[y-mxgraph][integrity][warn] diagram ${did}: cell 0/1 缺失（ensureBasicCell 后仍缺失）`);
+        issues++;
+      }
+
+      // 2. cellsOrder 去重
+      const orderArr = cellsOrder.toArray();
+      const seen = new Set<string>();
+      const duplicates: string[] = [];
+      for (const id of orderArr) {
+        if (seen.has(id)) duplicates.push(id);
+        else seen.add(id);
+      }
+      if (duplicates.length > 0) {
+        console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: cellsOrder 有重复 id [${[...new Set(duplicates)].join(",")}]，执行去重`);
+        const deduped: string[] = [];
+        for (const id of orderArr) {
+          if (!deduped.includes(id)) deduped.push(id);
+        }
+        cellsOrder.delete(0, cellsOrder.length);
+        if (deduped.length > 0) cellsOrder.insert(0, deduped);
+        issues++;
+      }
+
+      // 3. cellsOrder 和 cellsMap 一致
+      const currentOrder = cellsOrder.toArray();
+      const mapIds = new Set(cellsMap.keys());
+      const inOrderNotMap = currentOrder.filter((id) => !mapIds.has(id));
+      const inMapNotOrder = [...mapIds].filter((id) => !currentOrder.includes(id));
+
+      if (inOrderNotMap.length > 0) {
+        console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: cellsOrder 中有 map 不存在的 id [${inOrderNotMap.join(",")}]，从 order 移除`);
+        for (const id of inOrderNotMap) {
+          const idx = cellsOrder.toArray().indexOf(id);
+          if (idx !== -1) cellsOrder.delete(idx, 1);
+        }
+        issues++;
+      }
+      if (inMapNotOrder.length > 0) {
+        console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: map 中有 order 缺失的 id [${inMapNotOrder.join(",")}]，补充到 order 末尾`);
+        cellsOrder.push(inMapNotOrder);
+        issues++;
+      }
+
+      // 4. parent 链完整（只 warn，不自动修复 — 修改 parent 语义风险大）
+      const finalOrder = cellsOrder.toArray();
+      for (const id of finalOrder) {
+        if (id === "0") continue;
+        const cell = cellsMap.get(id);
+        if (!cell || typeof cell.getAttribute !== "function") continue;
+        const parent = cell.getAttribute("parent");
+        if (parent && parent !== "0" && !cellsMap.has(parent)) {
+          console.warn(`[y-mxgraph][integrity][warn] diagram ${did}: cell ${id} 引用了不存在的 parent ${parent}`);
+          issues++;
+        }
+      }
+    }
+  }, INTEGRITY_ORIGIN);
+
+  return issues;
 }
 
 type DocSnapshot = {

@@ -102,7 +102,7 @@ y-mxgraph does not replace draw.io's drawing engine, nor does it replace Yjs's c
 
 | Package | Description |
 |---------|-------------|
-| `y-mxgraph` | Core binding library, exports `Binding`, `xml2ydoc`, `ydoc2xml`, `LOCAL_ORIGIN` |
+| `y-mxgraph` | Core binding library, exports `Binding`, `xml2ydoc`, `ydoc2xml`, `LOCAL_ORIGIN`, `INTEGRITY_ORIGIN` |
 | `@y-mxgraph/iframe-bridge` | For iframe isolation scenarios, includes `createIframeBridgeServer` / `createIframeBridgeProvider` |
 | `@y-mxgraph/demo` | WebRTC real-time collaboration demo (with Playwright E2E tests) |
 | `@y-mxgraph/ws-demo` | WebSocket server demo (with file persistence) |

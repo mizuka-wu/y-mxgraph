@@ -372,6 +372,24 @@ export const PROTECTED_CELLS = new Set(["0", "1"]);
 
 All deletion logic (`applyFilePatch`, `generatePatch`, `cleanInvalidCellOrder`) checks this set and skips protected cells.
 
+### `validateDocIntegrity` Function
+
+```ts
+export function validateDocIntegrity(doc: Y.Doc): number {
+  // Iterates all diagrams, checks cellsOrder vs cellsMap consistency
+  // Auto-heals: deduplicates, patches missing ids, removes orphan ids
+  // All modifications use INTEGRITY_ORIGIN transactions, excluded from undo stack
+}
+```
+
+**Checks**:
+1. Cell 0/1 existence (double-check after ensureBasicCell)
+2. Duplicate ids in cellsOrder → auto-deduplicate
+3. cellsOrder vs cellsMap consistency → auto-patch
+4. Parent chain completeness → warn only, no auto-fix
+
+**Usage**: Call via `binding.validateDocIntegrity()` public method. The caller decides when to trigger.
+
 ### Snapshot Recovery
 
 When the ydoc is corrupted (missing cell 0/1), recovering from a historical snapshot follows this flow:

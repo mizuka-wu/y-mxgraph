@@ -9,6 +9,7 @@
 | `xml2ydoc` | function | draw.io XML → Y.Doc |
 | `ydoc2xml` | function | Y.Doc → draw.io XML |
 | `LOCAL_ORIGIN` | object | 标记本地事务的 origin 标识 |
+| `INTEGRITY_ORIGIN` | object | 标记完整性自愈事务的 origin 标识，不进 undo 栈 |
 | `DEFAULT_USER_NAME_KEY` | string | Awareness 中用户名的默认字段 |
 | `DEFAULT_USER_COLOR_KEY` | string | Awareness 中颜色的默认字段 |
 
@@ -18,6 +19,7 @@ import {
   xml2ydoc,
   ydoc2xml,
   LOCAL_ORIGIN,
+  INTEGRITY_ORIGIN,
   DEFAULT_USER_NAME_KEY,
   DEFAULT_USER_COLOR_KEY,
 } from 'y-mxgraph';

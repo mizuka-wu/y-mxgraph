@@ -161,6 +161,28 @@ binding.forceSync("ydoc-to-file");
 binding.forceSync("file-to-ydoc");
 ```
 
+### `validateDocIntegrity(): number`
+
+Manually trigger a document integrity check with self-healing. Checks consistency between cellsOrder and cellsMap, automatically fixing issues when found.
+
+**Returns**: Number of issues fixed, `0` means the document is healthy.
+
+**Checks**:
+
+1. Cell 0/1 existence
+2. Duplicate ids in cellsOrder (auto-deduplicated)
+3. cellsOrder vs cellsMap consistency (auto-patched)
+4. Parent chain completeness (warn only, no auto-fix)
+
+**Excluded from undo stack**: All self-healing operations use `INTEGRITY_ORIGIN` for their transaction origin, which is not in `trackedOrigins` and won't be recorded by the UndoManager.
+
+```ts
+const issues = binding.validateDocIntegrity();
+if (issues > 0) {
+  console.log(`Fixed ${issues} issues`);
+}
+```
+
 ### `destroy(deep?: boolean): void`
 
 Destroys the binding and removes all listeners.

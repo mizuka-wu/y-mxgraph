@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { type Awareness } from "y-protocols/awareness";
-import { applyFilePatch, generatePatch, initDocSnapshot, ensureBasicCell, PROTECTED_CELLS } from "./patch";
+import { applyFilePatch, generatePatch, initDocSnapshot, ensureBasicCell, validateDocIntegrity, PROTECTED_CELLS } from "./patch";
 import { xml2ydoc, ydoc2xml } from "../transform";
 import { bindUndoManager } from "./undoManager";
 import { bindCollaborator } from "./collaborator";
@@ -327,7 +327,7 @@ export class Binding {
   private applyFileData: (file: DrawioFile, xml: string) => void;
   /** debounce 后的 forceSync，用于 patch 后保底 */
   private debouncedForceSync: ReturnType<typeof setTimeout> | null = null;
-  /** patch 后检查顺序一致性 */
+
   private syncOnOrderMismatch: boolean;
 
   /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
@@ -375,6 +375,7 @@ export class Binding {
     try {
       // doc 可能从远端同步过来但缺 cell 0/1，先修复再 reconcile
       ensureBasicCell(doc);
+      validateDocIntegrity(doc);
       this.docInitialized = reconcileInitialContent(
         doc,
         file,
@@ -564,6 +565,7 @@ export class Binding {
     }
     // 在 forceSync 后清理异常 cellOrder，避免影响 undo 栈
     this.cleanInvalidCellOrder();
+    validateDocIntegrity(this.doc);
     // forceSync 成功后重置 drift 计数
     this.consistencyChecker?.resetDriftCount();
   }
@@ -687,6 +689,15 @@ export class Binding {
   checkConsistency(): boolean {
     if (!this.consistencyChecker) return true;
     return this.consistencyChecker.check();
+  }
+
+  /**
+   * 手动触发一次文档完整性校验与自愈。
+   * 自愈操作使用 INTEGRITY_ORIGIN，不进 undo 栈。
+   * @returns 修复的问题数量，0 表示文档正常
+   */
+  validateDocIntegrity(): number {
+    return validateDocIntegrity(this.doc);
   }
 
   /**

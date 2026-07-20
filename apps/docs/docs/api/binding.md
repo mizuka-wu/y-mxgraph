@@ -186,6 +186,29 @@ binding.forceSync("ydoc-to-file");
 binding.forceSync("file-to-ydoc");
 ```
 
+### `validateDocIntegrity(): number`
+
+手动触发一次文档完整性校验与自愈。检查 cellsOrder 和 cellsMap 的一致性，发现问题时自动修复。
+
+**返回值**: 修复的问题数量，`0` 表示文档正常
+
+**检查项**:
+
+1. cell 0/1 是否存在
+2. cellsOrder 是否有重复 id（自动去重）
+3. cellsOrder 与 cellsMap 是否一致（自动补齐/移除）
+4. 所有 cell 的 parent 链是否完整（仅警告，不自动修复）
+
+**不进 undo 栈**: 所有自愈操作使用 `INTEGRITY_ORIGIN` 提交事务，不在 `trackedOrigins` 中，不会被 UndoManager 记录。
+
+```ts
+// 手动触发完整性校验
+const issues = binding.validateDocIntegrity();
+if (issues > 0) {
+  console.log(`修复了 ${issues} 个问题`);
+}
+```
+
 ### `destroy(deep?: boolean): void`
 
 销毁绑定，解除所有监听器。

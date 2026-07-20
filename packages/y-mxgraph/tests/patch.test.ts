@@ -6,6 +6,7 @@ import {
   generatePatch,
   initDocSnapshot,
   ensureBasicCell,
+  validateDocIntegrity,
 } from "../src/binding/patch";
 
 const BASE_XML = `<mxfile pages="1"><diagram name="Page-1" id="p1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`;
@@ -221,5 +222,110 @@ describe("ensureBasicCell", () => {
 
     ensureBasicCell(doc);
     expect(cellsOrder.toArray()).toEqual(["0", "1"]);
+  });
+});
+
+describe("validateDocIntegrity", () => {
+  function makeRawDoc() {
+    const doc = new Y.Doc();
+    const mxfile = doc.getMap("mxfile");
+    const diagrams = new Y.Map<Y.Map<unknown>>();
+    mxfile.set("diagram", diagrams);
+
+    const diagram = new Y.Map<unknown>();
+    diagrams.set("p1", diagram);
+
+    const gm = new Y.Map<unknown>();
+    diagram.set("mxGraphModel", gm);
+
+    const cellsMap = new Y.Map<Y.XmlElement>();
+    const c0 = new Y.XmlElement("mxCell");
+    c0.setAttribute("id", "0");
+    cellsMap.set("0", c0);
+
+    const c1 = new Y.XmlElement("mxCell");
+    c1.setAttribute("id", "1");
+    c1.setAttribute("parent", "0");
+    cellsMap.set("1", c1);
+
+    gm.set("mxCell", cellsMap);
+
+    const cellsOrder = new Y.Array<string>();
+    cellsOrder.insert(0, ["0", "1"]);
+    gm.set("mxCellOrder", cellsOrder);
+
+    return { doc, cellsMap, cellsOrder };
+  }
+
+  it("健康 doc 返回 0", () => {
+    const { doc } = makeRawDoc();
+    expect(validateDocIntegrity(doc)).toBe(0);
+  });
+
+  it("检测并修复 order 重复", () => {
+    const { cellsOrder, doc } = makeRawDoc();
+    // 人造重复
+    cellsOrder.insert(1, ["1"]);
+    expect(cellsOrder.toArray()).toEqual(["0", "1", "1"]);
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThan(0);
+    // 去重后只有一个 "1"
+    const count = cellsOrder.toArray().filter((id) => id === "1").length;
+    expect(count).toBe(1);
+  });
+
+  it("检测 order 有 map 里不存在的 id 并清理", () => {
+    const { cellsOrder, doc } = makeRawDoc();
+    // 插入一个不存在的 id
+    cellsOrder.push(["ghost"]);
+    expect(cellsOrder.toArray()).toContain("ghost");
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThan(0);
+    expect(cellsOrder.toArray()).not.toContain("ghost");
+  });
+
+  it("检测 map 有但 order 没有的 id 并补充", () => {
+    const { cellsMap, cellsOrder, doc } = makeRawDoc();
+    // map 里加一个 cell 但不加到 order
+    const c2 = new Y.XmlElement("mxCell");
+    c2.setAttribute("id", "2");
+    c2.setAttribute("parent", "1");
+    cellsMap.set("2", c2);
+    expect(cellsOrder.toArray()).not.toContain("2");
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThan(0);
+    expect(cellsOrder.toArray()).toContain("2");
+  });
+
+  it("检测 parent 链断裂并 warn", () => {
+    const { cellsMap, cellsOrder, doc } = makeRawDoc();
+    // 加一个 cell 指向不存在的 parent
+    const c2 = new Y.XmlElement("mxCell");
+    c2.setAttribute("id", "2");
+    c2.setAttribute("parent", "nonexistent");
+    cellsMap.set("2", c2);
+    cellsOrder.push(["2"]);
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThan(0);
+  });
+
+  it("多种问题同时存在", () => {
+    const { cellsMap, cellsOrder, doc } = makeRawDoc();
+    // 重复
+    cellsOrder.insert(1, ["1"]);
+    // 幽灵 id
+    cellsOrder.push(["ghost"]);
+    // map 有 order 没有
+    const c2 = new Y.XmlElement("mxCell");
+    c2.setAttribute("id", "2");
+    c2.setAttribute("parent", "1");
+    cellsMap.set("2", c2);
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThanOrEqual(3);
   });
 });
