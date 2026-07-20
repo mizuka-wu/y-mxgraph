@@ -90,6 +90,7 @@ function createMockFile(initialData = ""): DrawioFile {
     diffPages: vi.fn(() => ({})),
     clonePages: vi.fn((p: unknown[]) => [...p]),
     setFileData: vi.fn(),
+    getFileData: vi.fn(() => initialData),
   };
   const file = {
     data: initialData,

@@ -35,6 +35,7 @@ function createMockFile(initialData = ""): DrawioFile & { _ui: any } {
     diffPages: vi.fn(() => ({})),
     clonePages: vi.fn((p: unknown[]) => [...p]),
     setFileData: vi.fn((xml: string) => { (file as any).data = xml; }),
+    getFileData: vi.fn(() => (file as any).data),
   };
   const file = {
     data: initialData,
