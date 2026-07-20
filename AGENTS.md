@@ -66,6 +66,8 @@ pnpm format
 ## Core Library Architecture (`packages/y-mxgraph`)
 
 - **Entry**: `src/index.ts` — exports `Binding`, `xml2ydoc`, `ydoc2xml`, `LOCAL_ORIGIN`
+- **Origin**: `src/helper/origin.ts` — `LOCAL_ORIGIN`（本地事务）和 `INTEGRITY_ORIGIN`（自愈事务，不进 undo 栈）
+- **Integrity**: `src/binding/patch.ts` 中的 `ensureBasicCell()` 和 `validateDocIntegrity()` — Cell 0/1 保护与文档完整性自愈
 - **Binding** (`src/binding/`): Main class. Binds draw.io `file` to `Y.Doc`. Handles bidirectional sync, undo/redo, collaborator cursors.
 - **transform** (`src/transform/`): `xml2ydoc(xml, doc)` and `ydoc2xml(doc)` — converts between draw.io XML and Y.Doc structure.
 - **Models** (`src/models/`): Y.Doc data structure — `mxfile` → `diagram` map + `diagramOrder` array → `mxGraphModel` per diagram.
@@ -88,6 +90,50 @@ Y.Doc
 - `disableBeforeUnload` defaults to `true` — Yjs handles persistence, draw.io's native save prompts are suppressed
 - Initial content strategies: `replace` (default), `merge-remote`, `merge-client`
 - `Binding.generateFileTemplate(diagramId)` produces deterministic XML with fixed diagram id — prevents multi-client id mismatch
+
+### Origin 体系
+
+Yjs `UndoManager` 通过 `trackedOrigins` 决定哪些事务进 undo 栈：
+
+```ts
+new Y.UndoManager([], { trackedOrigins: new Set([LOCAL_ORIGIN]) })
+```
+
+- **`LOCAL_ORIGIN`** — 本地编辑事务（用户操作、forceSync file→ydoc）。加入 `trackedOrigins`，进 undo 栈
+- **`INTEGRITY_ORIGIN`** — 自愈事务（validateDocIntegrity 的修复操作）。不加入 `trackedOrigins`，不进 undo 栈
+- **远端事务**（origin 为 null/undefined 或其他 peer 的 origin）— 不在 `trackedOrigins` 中，不进 undo 栈
+
+使用时必须将 `LOCAL_ORIGIN` 加入 `trackedOrigins`，否则本地操作无法撤销：
+
+```ts
+import { LOCAL_ORIGIN } from 'y-mxgraph';
+const undoManager = new Y.UndoManager([], {
+  trackedOrigins: new Set([LOCAL_ORIGIN]),
+});
+```
+
+### Cell 0/1 保护
+
+Cell 0（根节点）和 Cell 1（默认图层）是 draw.io 的基础结构。缺失会导致图表崩溃。
+
+**实时保护**（每次变更触发）：
+- `ensureBasicCell(doc)` — 在 `docObserver` 中远端/undo-redo 变更后自动调用
+- `applyFilePatch` / `generatePatch` — 过滤删除列表，跳过 `"0"` `"1"`
+
+**全量校验**（外部按需调用）：
+- `validateDocIntegrity(doc)` — 遍历所有 diagram，检查 cellsOrder/cellsMap 一致性
+  - 自动修复：去重、补齐缺失 id、移除孤立 id
+  - 使用 `INTEGRITY_ORIGIN` 事务，不进 undo 栈
+  - 通过 `binding.validateDocIntegrity()` 公共方法调用
+- `PROTECTED_CELLS = new Set(["0", "1"])` — 所有删除逻辑检查此集合
+
+**调用链**：
+```
+用户操作 / 远端同步
+  → docObserver 触发
+  → ensureBasicCell() 实时保护
+  → validateDocIntegrity() 外部按需调用（自愈 + forceSync 同步页面）
+```
 
 ## iframe-bridge Package (`packages/iframe-bridge`)
 
@@ -163,6 +209,22 @@ Config: `apps/demo/playwright.config.ts` — Chromium only, port 5174, sequentia
 - draw.io v26+ uses CSS Grid layout (`.geEditor { display: grid }`) — never set `display: block/none` on containers, use `style.removeProperty("display")`
 - `file.patch()` updates internal data but does NOT trigger UI re-render — manual `file.ui.setFileData(xml)` needed after patch
 - Demo apps use `App.main()` double-callback pattern: second callback creates Editor/App, first callback receives ready app
+
+### Demo 调试工具
+
+Demo toolbar 提供数据损坏模拟和完整性校验按钮（开发调试用）：
+
+| 按钮 | 作用 |
+|------|------|
+| 模拟删除 Cell 0/1 | 从 cellsMap 和 cellsOrder 中删除 cell 0/1 |
+| 从 file 重建 ydoc | 调用 `resetYdocFromFile()` 从 file.data 恢复 |
+| order 重复 | 在 cellsOrder 末尾插入重复 id |
+| 幽灵 id | 在 cellsOrder 中加入 cellsMap 不存在的 id |
+| map 孤儿 | 在 cellsMap 中加 cell 但不加到 order |
+| parent 断裂 | 让某个 cell 的 parent 指向不存在的 id |
+| 验证完整性 | 调用 `validateDocIntegrity()` + `forceSync()` 同步页面 |
+
+使用流程：点损坏按钮 → 控制台看 `[debug]` 日志 → 点"验证完整性" → 看 `[integrity][heal]` 自愈日志
 
 ## What NOT to Do
 
