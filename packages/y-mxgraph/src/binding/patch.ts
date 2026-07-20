@@ -59,6 +59,8 @@ export function ensureBasicCell(doc: Y.Doc): void {
       c.setAttribute("id", "1");
       c.setAttribute("parent", "0");
       cellsMap.set("1", c);
+    }
+    if (!order.includes("1")) {
       const idx0 = cellsOrder.toArray().indexOf("0");
       cellsOrder.insert(idx0 >= 0 ? idx0 + 1 : 0, ["1"]);
       order = cellsOrder.toArray();

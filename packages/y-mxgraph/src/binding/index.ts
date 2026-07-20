@@ -373,6 +373,8 @@ export class Binding {
     // 业务方不再需要在外部手动同步。
     this.suppressLocalApply = true;
     try {
+      // doc 可能从远端同步过来但缺 cell 0/1，先修复再 reconcile
+      ensureBasicCell(doc);
       this.docInitialized = reconcileInitialContent(
         doc,
         file,

@@ -5,6 +5,7 @@ import {
   applyFilePatch,
   generatePatch,
   initDocSnapshot,
+  ensureBasicCell,
 } from "../src/binding/patch";
 
 const BASE_XML = `<mxfile pages="1"><diagram name="Page-1" id="p1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`;
@@ -106,5 +107,119 @@ describe("initDocSnapshot", () => {
     const doc = makeDoc();
     expect(() => initDocSnapshot(doc)).not.toThrow();
     expect(() => initDocSnapshot(doc)).not.toThrow();
+  });
+});
+
+describe("ensureBasicCell", () => {
+  /** 构造一个有 mxfile 结构的 doc，不经过 xml2ydoc/initDocSnapshot（无 observer） */
+  function makeRawDoc() {
+    const doc = new Y.Doc();
+    const mxfile = doc.getMap("mxfile");
+    const diagrams = new Y.Map<Y.Map<unknown>>();
+    mxfile.set("diagram", diagrams);
+
+    const diagram = new Y.Map<unknown>();
+    diagrams.set("p1", diagram);
+
+    const gm = new Y.Map<unknown>();
+    diagram.set("mxGraphModel", gm);
+
+    const cellsMap = new Y.Map<Y.XmlElement>();
+    const c0 = new Y.XmlElement("mxCell");
+    c0.setAttribute("id", "0");
+    cellsMap.set("0", c0);
+
+    const c1 = new Y.XmlElement("mxCell");
+    c1.setAttribute("id", "1");
+    c1.setAttribute("parent", "0");
+    cellsMap.set("1", c1);
+
+    gm.set("mxCell", cellsMap);
+
+    const cellsOrder = new Y.Array<string>();
+    cellsOrder.insert(0, ["0", "1"]);
+    gm.set("mxCellOrder", cellsOrder);
+
+    return { doc, cellsMap, cellsOrder };
+  }
+
+  it("正常 doc 调用多次不产生重复", () => {
+    const { cellsOrder, doc } = makeRawDoc();
+    expect(cellsOrder.toArray()).toEqual(["0", "1"]);
+
+    ensureBasicCell(doc);
+    expect(cellsOrder.toArray()).toEqual(["0", "1"]);
+
+    ensureBasicCell(doc);
+    expect(cellsOrder.toArray()).toEqual(["0", "1"]);
+  });
+
+  it("缺失 cell 0 时补回", () => {
+    const { cellsMap, cellsOrder, doc } = makeRawDoc();
+
+    cellsMap.delete("0");
+    cellsOrder.delete(cellsOrder.toArray().indexOf("0"), 1);
+    expect(cellsOrder.toArray()).toEqual(["1"]);
+
+    ensureBasicCell(doc);
+    expect(cellsOrder.toArray().includes("0")).toBe(true);
+    expect(cellsOrder.toArray().indexOf("0")).toBeLessThan(cellsOrder.toArray().indexOf("1"));
+  });
+
+  it("缺失 cell 1 时补回", () => {
+    const { cellsMap, cellsOrder, doc } = makeRawDoc();
+
+    cellsMap.delete("1");
+    cellsOrder.delete(cellsOrder.toArray().indexOf("1"), 1);
+    expect(cellsOrder.toArray()).toEqual(["0"]);
+
+    ensureBasicCell(doc);
+    expect(cellsOrder.toArray().includes("1")).toBe(true);
+    expect(cellsOrder.toArray().indexOf("0")).toBeLessThan(cellsOrder.toArray().indexOf("1"));
+  });
+
+  it("cell 存在但 order 缺失时补回，不重复", () => {
+    const { cellsMap, cellsOrder, doc } = makeRawDoc();
+
+    // cell map 里有 "1"，但从 order 里移除
+    expect(cellsMap.has("1")).toBe(true);
+    const idx = cellsOrder.toArray().indexOf("1");
+    cellsOrder.delete(idx, 1);
+    expect(cellsOrder.toArray()).toEqual(["0"]);
+    expect(cellsMap.has("1")).toBe(true);
+
+    // ensureBasicCell 应该把 "1" 加回 order
+    ensureBasicCell(doc);
+    expect(cellsOrder.toArray().includes("1")).toBe(true);
+    expect(cellsOrder.toArray().indexOf("0")).toBeLessThan(cellsOrder.toArray().indexOf("1"));
+
+    // 多次调用不重复
+    ensureBasicCell(doc);
+    const count = cellsOrder.toArray().filter((id) => id === "1").length;
+    expect(count).toBe(1);
+  });
+
+  it("两个都缺失时正确恢复", () => {
+    const { cellsMap, cellsOrder, doc } = makeRawDoc();
+
+    cellsMap.delete("0");
+    cellsMap.delete("1");
+    cellsOrder.delete(0, cellsOrder.length);
+
+    ensureBasicCell(doc);
+    expect(cellsOrder.toArray()).toEqual(["0", "1"]);
+    expect(cellsMap.has("0")).toBe(true);
+    expect(cellsMap.has("1")).toBe(true);
+  });
+
+  it("顺序打乱时纠正", () => {
+    const { cellsOrder, doc } = makeRawDoc();
+
+    // 人造错误顺序：1 在 0 前面
+    cellsOrder.delete(0, cellsOrder.length);
+    cellsOrder.insert(0, ["1", "0"]);
+
+    ensureBasicCell(doc);
+    expect(cellsOrder.toArray()).toEqual(["0", "1"]);
   });
 });
