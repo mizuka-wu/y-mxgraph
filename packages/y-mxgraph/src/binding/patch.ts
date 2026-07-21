@@ -133,8 +133,15 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         issues++;
       }
 
-      // 3. 每个 diagram 必须有 mxGraphModel
+      // 3. 每个 diagram 必须有 mxGraphModel 和 id 属性
       for (const [did, diagram] of diagrams.entries()) {
+        // 确保 diagram 有 id 属性（与 map key 一致）
+        if (!diagram.get("id")) {
+          diagram.set("id", did);
+        }
+        if (!diagram.get("name")) {
+          diagram.set("name", did);
+        }
         if (!diagram.get("mxGraphModel")) {
           console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: 缺少 mxGraphModel，补建空结构`);
           const gm = new Y.Map<unknown>();

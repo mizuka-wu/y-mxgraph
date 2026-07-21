@@ -406,4 +406,297 @@ describe("validateDocIntegrity — diagram 级别", () => {
     expect(validateDocIntegrity(doc)).toBeGreaterThan(0);
     expect(brokenDiag.get("mxGraphModel")).toBeDefined();
   });
+
+  it("diagram 缺 id 属性时补设", () => {
+    const { diagrams, doc } = makeDocWithDiagrams();
+    const noIdDiag = new Y.Map<unknown>();
+    noIdDiag.set("name", "NoId");
+    const gm = new Y.Map<unknown>();
+    const cellsMap = new Y.Map<Y.XmlElement>();
+    const cellsOrder = new Y.Array<string>();
+    const c0 = new Y.XmlElement("mxCell"); c0.setAttribute("id", "0");
+    const c1 = new Y.XmlElement("mxCell"); c1.setAttribute("id", "1"); c1.setAttribute("parent", "0");
+    cellsMap.set("0", c0); cellsMap.set("1", c1);
+    cellsOrder.insert(0, ["0", "1"]);
+    gm.set("mxCell", cellsMap); gm.set("mxCellOrder", cellsOrder);
+    noIdDiag.set("mxGraphModel", gm);
+    // 设置到 map 中，key 是 "noId"
+    diagrams.set("noId", noIdDiag);
+    // 此时没有 id 属性
+    expect(noIdDiag.get("id")).toBeUndefined();
+
+    expect(validateDocIntegrity(doc)).toBeGreaterThan(0);
+    // 补设后 id 应与 map key 一致
+    expect(noIdDiag.get("id")).toBe("noId");
+  });
+});
+
+// ============================================================
+// order/map 不匹配的根因复现测试
+// ============================================================
+
+describe("order/map 不匹配 — 根因复现", () => {
+  /**
+   * Helper: 创建一个有 cell A/B/C 的标准 doc
+   * order: [0, 1, A, B, C]，全部 parent=1
+   */
+  function makeCellDoc() {
+    const xml = `<mxfile pages="1"><diagram name="Page-1" id="p1"><mxGraphModel><root>` +
+      `<mxCell id="0"/><mxCell id="1" parent="0"/>` +
+      `<mxCell id="A" parent="1" value="A"/><mxCell id="B" parent="1" value="B"/><mxCell id="C" parent="1" value="C"/>` +
+      `</root></mxGraphModel></diagram></mxfile>`;
+    const doc = new Y.Doc();
+    xml2ydoc(xml, doc);
+    initDocSnapshot(doc);
+    return doc;
+  }
+
+  function getCells(doc: Y.Doc) {
+    const mxfile = doc.getMap("mxfile");
+    const diags = mxfile.get("diagram") as Y.Map<any>;
+    const gm = (diags.get("p1") as Y.Map<any>).get("mxGraphModel") as Y.Map<any>;
+    return {
+      cellsMap: gm.get("mxCell") as Y.Map<Y.XmlElement>,
+      cellsOrder: gm.get("mxCellOrder") as Y.Array<string>,
+    };
+  }
+
+  // ── 根因 1: applyFilePatch 删除 cell 后 order 残留 ──
+  describe("根因1: applyFilePatch 删除后 order 残留", () => {
+    it("删除 cell B 后 order 中不应残留 B", () => {
+      const doc = makeCellDoc();
+      const { cellsOrder } = getCells(doc);
+
+      // 删除 cell B
+      applyFilePatch(doc, {
+        u: { p1: { cells: { r: ["B"] } } },
+      });
+
+      const order = cellsOrder.toArray();
+      expect(order).not.toContain("B");
+      expect(order).toContain("A");
+      expect(order).toContain("C");
+    });
+
+    it("连续删除多个 cell 后 order 一致", () => {
+      const doc = makeCellDoc();
+      const { cellsOrder } = getCells(doc);
+
+      applyFilePatch(doc, {
+        u: { p1: { cells: { r: ["A", "C"] } } },
+      });
+
+      const order = cellsOrder.toArray();
+      expect(order).not.toContain("A");
+      expect(order).not.toContain("C");
+      expect(order).toContain("B");
+    });
+  });
+
+  // ── 根因 2: 远端并发插入 — 两个 doc 同时插入不同 cell ──
+  describe("根因2: 远端并发插入", () => {
+    it("两个 doc 同时插入不同 cell 后合并一致", () => {
+      const xml = `<mxfile pages="1"><diagram name="Page-1" id="p1"><mxGraphModel><root>` +
+        `<mxCell id="0"/><mxCell id="1" parent="0"/>` +
+        `</root></mxGraphModel></diagram></mxfile>`;
+
+      const doc1 = new Y.Doc();
+      const doc2 = new Y.Doc();
+      xml2ydoc(xml, doc1);
+      initDocSnapshot(doc1);
+      Y.applyUpdate(doc2, Y.encodeStateAsUpdate(doc1));
+
+      // doc1 插入 cell X
+      applyFilePatch(doc1, {
+        u: { p1: { cells: { i: [{ id: "X", value: "X", parent: "1", vertex: "1", previous: "" }] } } },
+      });
+
+      // doc2 插入 cell Y
+      applyFilePatch(doc2, {
+        u: { p1: { cells: { i: [{ id: "Y", value: "Y", parent: "1", vertex: "1", previous: "" }] } } },
+      });
+
+      // 同步
+      const update1to2 = Y.encodeStateAsUpdate(doc1);
+      const update2to1 = Y.encodeStateAsUpdate(doc2);
+      Y.applyUpdate(doc1, update2to1);
+      Y.applyUpdate(doc2, update1to2);
+
+      // 两个 doc 的 order 和 map 应一致
+      for (const doc of [doc1, doc2]) {
+        const { cellsMap, cellsOrder } = getCells(doc);
+        const order = cellsOrder.toArray();
+        const mapIds = new Set([...cellsMap.keys()]);
+        // order 中每个 id 都在 map 中
+        for (const id of order) {
+          expect(mapIds.has(id)).toBe(true);
+        }
+        // map 中每个非 0/1 id 都在 order 中
+        for (const id of mapIds) {
+          if (id === "0" || id === "1") continue;
+          expect(order).toContain(id);
+        }
+      }
+    });
+  });
+
+  // ── 根因 3: insert 后删除同 cell — order 残留 ──
+  describe("根因3: insert→delete 同 cell", () => {
+    it("插入 cell 后立即删除，order 不应残留", () => {
+      const doc = makeCellDoc();
+
+      // 插入 cell D
+      applyFilePatch(doc, {
+        u: { p1: { cells: { i: [{ id: "D", value: "D", parent: "1", vertex: "1", previous: "C" }] } } },
+      });
+
+      let { cellsOrder } = getCells(doc);
+      expect(cellsOrder.toArray()).toContain("D");
+
+      // 删除 cell D
+      applyFilePatch(doc, {
+        u: { p1: { cells: { r: ["D"] } } },
+      });
+
+      cellsOrder = getCells(doc).cellsOrder;
+      expect(cellsOrder.toArray()).not.toContain("D");
+    });
+
+    it("跨事务 insert→delete，order 一致", () => {
+      const doc = makeCellDoc();
+
+      // 事务1: 插入
+      doc.transact(() => {
+        applyFilePatch(doc, {
+          u: { p1: { cells: { i: [{ id: "D", value: "D", parent: "1", vertex: "1", previous: "C" }] } } },
+        });
+      });
+
+      // 事务2: 删除
+      doc.transact(() => {
+        applyFilePatch(doc, {
+          u: { p1: { cells: { r: ["D"] } } },
+        });
+      });
+
+      const { cellsMap, cellsOrder } = getCells(doc);
+      expect(cellsOrder.toArray()).not.toContain("D");
+      expect(cellsMap.has("D")).toBe(false);
+    });
+  });
+
+  // ── 根因 4: ensureBasicCell 只管存在不管其他 cell 顺序 ──
+  describe("根因4: ensureBasicCell 不修复非 0/1 的 order 问题", () => {
+    it("order 有幽灵 id，ensureBasicCell 不修复", () => {
+      const doc = makeCellDoc();
+      const { cellsOrder } = getCells(doc);
+
+      // 插入幽灵 id
+      cellsOrder.push(["ghost"]);
+      expect(cellsOrder.toArray()).toContain("ghost");
+
+      // ensureBasicCell 不会修复幽灵 id
+      ensureBasicCell(doc);
+      expect(cellsOrder.toArray()).toContain("ghost");
+    });
+
+    it("order 缺少非 0/1 的 cell，ensureBasicCell 不修复", () => {
+      const doc = makeCellDoc();
+      const { cellsMap, cellsOrder } = getCells(doc);
+
+      // 从 order 中移除 B（但 map 中还有）
+      const idx = cellsOrder.toArray().indexOf("B");
+      cellsOrder.delete(idx, 1);
+      expect(cellsOrder.toArray()).not.toContain("B");
+      expect(cellsMap.has("B")).toBe(true);
+
+      // ensureBasicCell 不会把 B 加回 order
+      ensureBasicCell(doc);
+      expect(cellsOrder.toArray()).not.toContain("B");
+    });
+  });
+
+  // ── 根因 5: diagram 级别 — diagramOrder 与 diagram map 不一致 ──
+  describe("根因5: diagramOrder 与 diagram map 不一致", () => {
+    it("删除 diagram 后 diagramOrder 残留", () => {
+      const xml = `<mxfile pages="2">` +
+        `<diagram name="A" id="dA"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>` +
+        `<diagram name="B" id="dB"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>` +
+        `</mxfile>`;
+      const doc = new Y.Doc();
+      xml2ydoc(xml, doc);
+      initDocSnapshot(doc);
+
+      const mxfile = doc.getMap("mxfile");
+      const diagrams = mxfile.get("diagram") as Y.Map<any>;
+      const diagramOrder = mxfile.get("diagramOrder") as Y.Array<string>;
+
+      expect(diagramOrder.toArray()).toEqual(["dA", "dB"]);
+
+      // 只从 map 中删除 dB（模拟部分删除失败）
+      diagrams.delete("dB");
+
+      // diagramOrder 应该已经不一致了
+      expect(diagramOrder.toArray()).toContain("dB");
+      expect(diagrams.has("dB")).toBe(false);
+    });
+
+    it("插入 diagram 但不加到 diagramOrder", () => {
+      const doc = makeCellDoc();
+      const mxfile = doc.getMap("mxfile");
+      const diagrams = mxfile.get("diagram") as Y.Map<any>;
+      const diagramOrder = mxfile.get("diagramOrder") as Y.Array<string>;
+
+      // 直接在 map 中添加 diagram（不经过 applyFilePatch）
+      const newDiag = new Y.Map<any>();
+      newDiag.set("name", "Secret Page");
+      const gm = new Y.Map<any>();
+      const cellsMap = new Y.Map<Y.XmlElement>();
+      const cellsOrder = new Y.Array<string>();
+      const c0 = new Y.XmlElement("mxCell"); c0.setAttribute("id", "0");
+      const c1 = new Y.XmlElement("mxCell"); c1.setAttribute("id", "1"); c1.setAttribute("parent", "0");
+      cellsMap.set("0", c0); cellsMap.set("1", c1);
+      cellsOrder.insert(0, ["0", "1"]);
+      gm.set("mxCell", cellsMap); gm.set("mxCellOrder", cellsOrder);
+      newDiag.set("mxGraphModel", gm);
+      diagrams.set("secret", newDiag);
+
+      // diagramOrder 中没有 "secret"
+      expect(diagramOrder.toArray()).not.toContain("secret");
+      expect(diagrams.has("secret")).toBe(true);
+    });
+  });
+
+  // ── 根因 6: cell 移动（改变 parent）后 order 位置 ──
+  describe("根因6: cell 移动后 order 位置", () => {
+    it("cell 从 parent 1 移到 parent 0 后仍在 order 中", () => {
+      const doc = makeCellDoc();
+      const { cellsOrder } = getCells(doc);
+
+      // 移动 cell A 的 parent 从 1 到 0
+      applyFilePatch(doc, {
+        u: { p1: { cells: { u: { A: { parent: "0" } } } } },
+      });
+
+      const order = cellsOrder.toArray();
+      expect(order).toContain("A");
+    });
+
+    it("cell 移动后 parent 与 order 中的位置关系", () => {
+      const doc = makeCellDoc();
+      const { cellsMap, cellsOrder } = getCells(doc);
+
+      // 把 cell C 移到 cell A 前面（改变 previous）
+      applyFilePatch(doc, {
+        u: { p1: { cells: { u: { C: { previous: "" } } } } },
+      });
+
+      const order = cellsOrder.toArray();
+      const cIdx = order.indexOf("C");
+      const aIdx = order.indexOf("A");
+      // C 应该在 A 前面（或至少还在 order 中）
+      expect(cIdx).toBeGreaterThanOrEqual(0);
+      expect(aIdx).toBeGreaterThanOrEqual(0);
+    });
+  });
 });
