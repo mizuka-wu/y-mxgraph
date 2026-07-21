@@ -329,3 +329,81 @@ describe("validateDocIntegrity", () => {
     expect(issues).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("validateDocIntegrity — diagram 级别", () => {
+  function makeDocWithDiagrams() {
+    const doc = new Y.Doc();
+    const mxfile = doc.getMap("mxfile");
+    const diagrams = new Y.Map<Y.Map<unknown>>();
+    const diagramOrder = new Y.Array<string>();
+    mxfile.set("diagram", diagrams);
+    mxfile.set("diagramOrder", diagramOrder);
+
+    // 两个正常 diagram
+    for (const did of ["d1", "d2"]) {
+      const diag = new Y.Map<unknown>();
+      diag.set("name", `Page ${did}`);
+      const gm = new Y.Map<unknown>();
+      const cellsMap = new Y.Map<Y.XmlElement>();
+      const cellsOrder = new Y.Array<string>();
+      const c0 = new Y.XmlElement("mxCell"); c0.setAttribute("id", "0");
+      const c1 = new Y.XmlElement("mxCell"); c1.setAttribute("id", "1"); c1.setAttribute("parent", "0");
+      cellsMap.set("0", c0); cellsMap.set("1", c1);
+      cellsOrder.insert(0, ["0", "1"]);
+      gm.set("mxCell", cellsMap); gm.set("mxCellOrder", cellsOrder);
+      diag.set("mxGraphModel", gm);
+      diagrams.set(did, diag);
+    }
+    diagramOrder.insert(0, ["d1", "d2"]);
+    return { doc, mxfile, diagrams, diagramOrder };
+  }
+
+  it("健康 doc 返回 0", () => {
+    const { doc } = makeDocWithDiagrams();
+    expect(validateDocIntegrity(doc)).toBe(0);
+  });
+
+  it("diagramOrder 重复时去重", () => {
+    const { diagramOrder, doc } = makeDocWithDiagrams();
+    diagramOrder.push(["d1"]);
+    expect(diagramOrder.toArray()).toEqual(["d1", "d2", "d1"]);
+    expect(validateDocIntegrity(doc)).toBeGreaterThan(0);
+    expect(diagramOrder.toArray().filter((id) => id === "d1").length).toBe(1);
+  });
+
+  it("diagramOrder 有 map 不存在的 id 时移除", () => {
+    const { diagramOrder, doc } = makeDocWithDiagrams();
+    diagramOrder.push(["ghost"]);
+    expect(validateDocIntegrity(doc)).toBeGreaterThan(0);
+    expect(diagramOrder.toArray()).not.toContain("ghost");
+  });
+
+  it("map 有但 order 没有的 diagram 时补充", () => {
+    const { diagrams, diagramOrder, doc } = makeDocWithDiagrams();
+    const extraDiag = new Y.Map<unknown>();
+    extraDiag.set("name", "Extra");
+    const gm = new Y.Map<unknown>();
+    const cellsMap = new Y.Map<Y.XmlElement>();
+    const cellsOrder = new Y.Array<string>();
+    const c0 = new Y.XmlElement("mxCell"); c0.setAttribute("id", "0");
+    const c1 = new Y.XmlElement("mxCell"); c1.setAttribute("id", "1"); c1.setAttribute("parent", "0");
+    cellsMap.set("0", c0); cellsMap.set("1", c1);
+    cellsOrder.insert(0, ["0", "1"]);
+    gm.set("mxCell", cellsMap); gm.set("mxCellOrder", cellsOrder);
+    extraDiag.set("mxGraphModel", gm);
+    diagrams.set("d3", extraDiag);
+    expect(diagramOrder.toArray()).not.toContain("d3");
+    expect(validateDocIntegrity(doc)).toBeGreaterThan(0);
+    expect(diagramOrder.toArray()).toContain("d3");
+  });
+
+  it("diagram 缺 mxGraphModel 时补建", () => {
+    const { diagrams, doc } = makeDocWithDiagrams();
+    const brokenDiag = new Y.Map<unknown>();
+    brokenDiag.set("name", "Broken");
+    // 不设置 mxGraphModel
+    diagrams.set("broken", brokenDiag);
+    expect(validateDocIntegrity(doc)).toBeGreaterThan(0);
+    expect(brokenDiag.get("mxGraphModel")).toBeDefined();
+  });
+});

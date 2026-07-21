@@ -87,9 +87,77 @@ export function validateDocIntegrity(doc: Y.Doc): number {
   // 所有自愈操作包在 INTEGRITY_ORIGIN 事务中，不进 undo 栈
   doc.transact(() => {
     const mxfile = doc.getMap("mxfile");
-    const diagrams = mxfile?.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
-    if (!diagrams) return;
+    if (!mxfile) return;
 
+    // === diagram 级别检查 ===
+    const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+    const diagramOrder = mxfile.get("diagramOrder") as Y.Array<string> | undefined;
+
+    if (diagrams && diagramOrder) {
+      // 1. diagramOrder 去重
+      const orderArr = diagramOrder.toArray();
+      const seen = new Set<string>();
+      const duplicates: string[] = [];
+      for (const id of orderArr) {
+        if (seen.has(id)) duplicates.push(id);
+        else seen.add(id);
+      }
+      if (duplicates.length > 0) {
+        console.warn(`[y-mxgraph][integrity][heal] mxfile: diagramOrder 有重复 id [${[...new Set(duplicates)].join(",")}]，执行去重`);
+        const deduped: string[] = [];
+        for (const id of orderArr) {
+          if (!deduped.includes(id)) deduped.push(id);
+        }
+        diagramOrder.delete(0, diagramOrder.length);
+        if (deduped.length > 0) diagramOrder.insert(0, deduped);
+        issues++;
+      }
+
+      // 2. diagramOrder 和 diagram map 一致
+      const currentOrder = diagramOrder.toArray();
+      const mapIds = new Set(diagrams.keys());
+      const inOrderNotMap = currentOrder.filter((id) => !mapIds.has(id));
+      const inMapNotOrder = [...mapIds].filter((id) => !currentOrder.includes(id));
+
+      if (inOrderNotMap.length > 0) {
+        console.warn(`[y-mxgraph][integrity][heal] mxfile: diagramOrder 中有 map 不存在的 id [${inOrderNotMap.join(",")}]，从 order 移除`);
+        for (const id of inOrderNotMap) {
+          const idx = diagramOrder.toArray().indexOf(id);
+          if (idx !== -1) diagramOrder.delete(idx, 1);
+        }
+        issues++;
+      }
+      if (inMapNotOrder.length > 0) {
+        console.warn(`[y-mxgraph][integrity][heal] mxfile: map 中有 order 缺失的 id [${inMapNotOrder.join(",")}]，补充到 order 末尾`);
+        diagramOrder.push(inMapNotOrder);
+        issues++;
+      }
+
+      // 3. 每个 diagram 必须有 mxGraphModel
+      for (const [did, diagram] of diagrams.entries()) {
+        if (!diagram.get("mxGraphModel")) {
+          console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: 缺少 mxGraphModel，补建空结构`);
+          const gm = new Y.Map<unknown>();
+          const cellsMap = new Y.Map<Y.XmlElement>();
+          const cellsOrder = new Y.Array<string>();
+          const c0 = new Y.XmlElement("mxCell");
+          c0.setAttribute("id", "0");
+          cellsMap.set("0", c0);
+          const c1 = new Y.XmlElement("mxCell");
+          c1.setAttribute("id", "1");
+          c1.setAttribute("parent", "0");
+          cellsMap.set("1", c1);
+          cellsOrder.insert(0, ["0", "1"]);
+          gm.set("mxCell", cellsMap);
+          gm.set("mxCellOrder", cellsOrder);
+          diagram.set("mxGraphModel", gm);
+          issues++;
+        }
+      }
+    }
+
+    // === cell 级别检查 ===
+    if (!diagrams) return;
     for (const [did, diagram] of diagrams.entries()) {
       const gm = diagram.get("mxGraphModel") as Y.Map<unknown> | undefined;
       if (!gm) continue;
@@ -97,13 +165,13 @@ export function validateDocIntegrity(doc: Y.Doc): number {
       const cellsOrder = gm.get("mxCellOrder") as Y.Array<string> | undefined;
       if (!cellsMap || !cellsOrder) continue;
 
-      // 1. cell 0/1 存在（ensureBasicCell 已修复，这里做二次确认）
+      // cell 0/1 存在（ensureBasicCell 已修复，这里做二次确认）
       if (!cellsMap.has("0") || !cellsMap.has("1")) {
         ensureBasicCell(doc);
         issues++;
       }
 
-      // 2. cellsOrder 去重
+      // cellsOrder 去重
       const orderArr = cellsOrder.toArray();
       const seen = new Set<string>();
       const duplicates: string[] = [];
@@ -122,7 +190,7 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         issues++;
       }
 
-      // 3. cellsOrder 和 cellsMap 一致
+      // cellsOrder 和 cellsMap 一致
       const currentOrder = cellsOrder.toArray();
       const mapIds = new Set(cellsMap.keys());
       const inOrderNotMap = currentOrder.filter((id) => !mapIds.has(id));
@@ -142,7 +210,7 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         issues++;
       }
 
-      // 4. parent 链完整（parent 不存在时降级为 0）
+      // parent 链完整（parent 不存在时降级为 0）
       const finalOrder = cellsOrder.toArray();
       for (const id of finalOrder) {
         if (id === "0") continue;

@@ -625,4 +625,70 @@ btnValidateIntegrity.addEventListener("click", () => {
   alert(issues === 0 ? "✓ 文档完整，未发现问题" : `已修复 ${issues} 个问题，页面已同步`);
 });
 
+// === diagram 级别损坏模拟 ===
+
+// diagram 重复
+const btnCorruptDiagramDup = document.getElementById(
+  "btn-corrupt-diagram-dup",
+) as HTMLButtonElement;
+
+btnCorruptDiagramDup.addEventListener("click", () => {
+  const doc = getCurrentDoc();
+  if (!doc) { alert("Y.Doc 尚未初始化"); return; }
+  const mxfile = doc.getMap("mxfile");
+  const diagramOrder = mxfile.get("diagramOrder") as Y.Array<string> | undefined;
+  const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+  if (!diagramOrder || !diagrams) { alert("diagramOrder 或 diagram 不存在"); return; }
+  const order = diagramOrder.toArray();
+  const target = order[0] || "diagram-0";
+  diagramOrder.push([target]);
+  console.warn(`[debug] mxfile: 已在 diagramOrder 末尾重复插入 "${target}"，当前 order:`, diagramOrder.toArray());
+  alert(`已重复插入 diagram id "${target}"\n\n当前 order: [${diagramOrder.toArray().join(", ")}]`);
+});
+
+// diagram 幽灵
+const btnCorruptDiagramGhost = document.getElementById(
+  "btn-corrupt-diagram-ghost",
+) as HTMLButtonElement;
+
+btnCorruptDiagramGhost.addEventListener("click", () => {
+  const doc = getCurrentDoc();
+  if (!doc) { alert("Y.Doc 尚未初始化"); return; }
+  const mxfile = doc.getMap("mxfile");
+  const diagramOrder = mxfile.get("diagramOrder") as Y.Array<string> | undefined;
+  if (!diagramOrder) { alert("diagramOrder 不存在"); return; }
+  const ghostId = `ghost-diagram-${Date.now()}`;
+  diagramOrder.push([ghostId]);
+  console.warn(`[debug] mxfile: 已在 diagramOrder 插入幽灵 id "${ghostId}"，当前 order:`, diagramOrder.toArray());
+  alert(`已插入幽灵 diagram id "${ghostId}"\n\n当前 order: [${diagramOrder.toArray().join(", ")}]`);
+});
+
+// diagram 孤儿
+const btnCorruptDiagramOrphan = document.getElementById(
+  "btn-corrupt-diagram-orphan",
+) as HTMLButtonElement;
+
+btnCorruptDiagramOrphan.addEventListener("click", () => {
+  const doc = getCurrentDoc();
+  if (!doc) { alert("Y.Doc 尚未初始化"); return; }
+  const mxfile = doc.getMap("mxfile");
+  const diagrams = mxfile.get("diagram") as Y.Map<Y.Map<unknown>> | undefined;
+  if (!diagrams) { alert("diagram 不存在"); return; }
+  const orphanId = `orphan-diagram-${Date.now()}`;
+  const orphanDiag = new Y.Map<unknown>();
+  orphanDiag.set("name", "Orphan Diagram");
+  const gm = new Y.Map<unknown>();
+  const cellsMap = new Y.Map<Y.XmlElement>();
+  const cellsOrder = new Y.Array<string>();
+  const c0 = new Y.XmlElement("mxCell"); c0.setAttribute("id", "0");
+  const c1 = new Y.XmlElement("mxCell"); c1.setAttribute("id", "1"); c1.setAttribute("parent", "0");
+  cellsMap.set("0", c0); cellsMap.set("1", c1);
+  cellsOrder.insert(0, ["0", "1"]);
+  gm.set("mxCell", cellsMap); gm.set("mxCellOrder", cellsOrder);
+  orphanDiag.set("mxGraphModel", gm);
+  diagrams.set(orphanId, orphanDiag);
+  console.warn(`[debug] mxfile: 已在 diagram map 中添加孤儿 diagram "${orphanId}"（不在 order 中）`);
+  alert(`已添加孤儿 diagram "${orphanId}"\n\n此 diagram 在 map 中但不在 order 中`);
+});
+
 window.addEventListener("DOMContentLoaded", init);
