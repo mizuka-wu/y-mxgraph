@@ -237,20 +237,20 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         const cell = cellsMap.get(id);
         if (!cell || typeof cell.getAttribute !== "function") continue;
         const isEdge = cell.getAttribute("edge");
-        if (isEdge !== "1") continue;
+        if (isEdge != "1") continue;
 
         const source = cell.getAttribute("source");
         const target = cell.getAttribute("target");
         const hasSource = source != null && source !== "";
         const hasTarget = target != null && target !== "";
 
-        if (source === "" || (hasSource && !cellsMap.has(source!))) {
+        if (source === "" || (hasSource && !cellsMap.has(String(source)))) {
           console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 source="${source}" 无效，移除 source 属性`);
           cell.removeAttribute("source");
           issues++;
         }
 
-        if (target === "" || (hasTarget && !cellsMap.has(target!))) {
+        if (target === "" || (hasTarget && !cellsMap.has(String(target)))) {
           console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 target="${target}" 无效，移除 target 属性`);
           cell.removeAttribute("target");
           issues++;

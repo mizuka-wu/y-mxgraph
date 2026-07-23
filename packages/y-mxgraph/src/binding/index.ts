@@ -217,11 +217,28 @@ function reconcileInitialContent(
   // merge 策略需要进一步判断是否存在真实 diagram 内容
   const fileHasDiagrams = fileHasAnyData && file.data.includes("<diagram");
 
+  // 保存当前视图状态，避免 replaceFileData 时丢失
+  const graph = file.ui?.editor?.graph;
+  const savedTranslate = graph?.view?.translate ? { ...graph.view.translate } : null;
+  const savedScale = graph?.view?.scale;
+
+  const applyAndRestoreView = (f: DrawioFile, xml: string) => {
+    applyFileData(f, xml);
+    // 恢复视图状态
+    if (savedTranslate && graph?.view?.translate) {
+      graph.view.translate.x = savedTranslate.x;
+      graph.view.translate.y = savedTranslate.y;
+    }
+    if (savedScale != null && graph?.view) {
+      graph.view.scale = savedScale;
+    }
+  };
+
   if (strategy === "replace") {
     if (docHasData) {
       const xml = ydoc2xml(doc);
       if (xml && xml.includes("<diagram")) {
-        applyFileData(file, xml);
+        applyAndRestoreView(file, xml);
       } else if (!fileHasAnyData) {
         applyFileData(file, Binding.generateFileTemplate("diagram-0"));
       }
@@ -458,12 +475,23 @@ export class Binding {
       if (xml && xml.includes("<diagram")) {
         const graph = this.ui?.editor?.graph;
         const currentPageId = this.ui?.currentPage?.getId?.();
-        const viewState = graph?.getViewState?.();
         const selection = graph?.getSelectionCells?.();
+        const beforeTranslate = graph?.view?.translate ? { ...graph.view.translate } : null;
+        const beforeScale = graph?.view?.scale;
 
         this.suppressLocalApply = true;
         try {
           applyFileData(file, xml);
+
+          // 直接恢复 translate 和 scale，不依赖 restoreViewState
+          if (beforeTranslate && graph?.view?.translate) {
+            graph.view.translate.x = beforeTranslate.x;
+            graph.view.translate.y = beforeTranslate.y;
+          }
+          if (beforeScale != null && graph?.view) {
+            graph.view.scale = beforeScale;
+          }
+
           file.setShadowPages(file.ui.clonePages(file.ui.pages));
           initDocSnapshot(doc, false);
           this.docInitialized = true;
@@ -476,9 +504,6 @@ export class Binding {
             if (page) {
               if (this.ui.currentPage?.getId?.() !== currentPageId) {
                 this.ui.selectPage(page, true);
-              }
-              if (viewState) {
-                this.ui.restoreViewState?.(page, viewState, selection);
               }
             }
           }
@@ -551,6 +576,7 @@ export class Binding {
     if (direction === "ydoc-to-file") {
       const xml = ydoc2xml(this.doc);
       if (!xml || !xml.includes("<diagram")) return;
+
       this.suppressLocalApply = true;
       try {
         this.applyFileData(this.file, xml);
