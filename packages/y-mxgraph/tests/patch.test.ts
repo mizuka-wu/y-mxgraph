@@ -492,7 +492,7 @@ describe("validateDocIntegrity — edge source/target", () => {
     const issues = validateDocIntegrity(doc);
     expect(issues).toBeGreaterThan(0);
     expect(cellsMap.has("e1")).toBe(true);
-    expect(edge.getAttribute("source")).toBe("");
+    expect(edge.getAttribute("source")).toBeUndefined();
     expect(edge.getAttribute("target")).toBe("v2");
   });
 
@@ -511,7 +511,7 @@ describe("validateDocIntegrity — edge source/target", () => {
     expect(issues).toBeGreaterThan(0);
     expect(cellsMap.has("e1")).toBe(true);
     expect(edge.getAttribute("source")).toBe("v1");
-    expect(edge.getAttribute("target")).toBe("");
+    expect(edge.getAttribute("target")).toBeUndefined();
   });
 
   it("edge 的 source 和 target 都指向不存在的 cell 时都移除", () => {
@@ -528,11 +528,11 @@ describe("validateDocIntegrity — edge source/target", () => {
     const issues = validateDocIntegrity(doc);
     expect(issues).toBeGreaterThanOrEqual(2);
     expect(cellsMap.has("e1")).toBe(true);
-    expect(edge.getAttribute("source")).toBe("");
-    expect(edge.getAttribute("target")).toBe("");
+    expect(edge.getAttribute("source")).toBeUndefined();
+    expect(edge.getAttribute("target")).toBeUndefined();
   });
 
-  it("edge 的 source/target 为空字符串时不触发修复", () => {
+  it("edge 的 source/target 为空字符串时触发修复并移除属性", () => {
     const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
     const edge = new Y.XmlElement("mxCell");
     edge.setAttribute("id", "e1");
@@ -543,8 +543,10 @@ describe("validateDocIntegrity — edge source/target", () => {
     cellsMap.set("e1", edge);
     cellsOrder.push(["e1"]);
 
-    expect(validateDocIntegrity(doc)).toBe(0);
+    expect(validateDocIntegrity(doc)).toBeGreaterThanOrEqual(2);
     expect(cellsMap.has("e1")).toBe(true);
+    expect(edge.getAttribute("source")).toBeUndefined();
+    expect(edge.getAttribute("target")).toBeUndefined();
   });
 
   it("edge 的 source/target 不存在时不触发修复", () => {
@@ -585,8 +587,8 @@ describe("validateDocIntegrity — edge source/target", () => {
     expect(issues).toBeGreaterThanOrEqual(2);
     expect(cellsMap.has("e1")).toBe(true);
     expect(cellsMap.has("e2")).toBe(true);
-    expect(edge1.getAttribute("target")).toBe("");
-    expect(edge2.getAttribute("source")).toBe("");
+    expect(edge1.getAttribute("target")).toBeUndefined();
+    expect(edge2.getAttribute("source")).toBeUndefined();
   });
 });
 

@@ -244,15 +244,15 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         const hasSource = source != null && source !== "";
         const hasTarget = target != null && target !== "";
 
-        if (hasSource && !cellsMap.has(source!)) {
-          console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 source="${source}" 不存在，移除 source 属性`);
-          cell.setAttribute("source", "");
+        if (source === "" || (hasSource && !cellsMap.has(source!))) {
+          console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 source="${source}" 无效，移除 source 属性`);
+          cell.removeAttribute("source");
           issues++;
         }
 
-        if (hasTarget && !cellsMap.has(target!)) {
-          console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 target="${target}" 不存在，移除 target 属性`);
-          cell.setAttribute("target", "");
+        if (target === "" || (hasTarget && !cellsMap.has(target!))) {
+          console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 target="${target}" 无效，移除 target 属性`);
+          cell.removeAttribute("target");
           issues++;
         }
       }
