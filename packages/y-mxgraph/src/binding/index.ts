@@ -450,8 +450,9 @@ export class Binding {
         return;
       }
 
-      // 远端/undo-redo 变更后，确保 cell 0/1 存在
+      // 远端/undo-redo 变更后，校验数据完整性并自愈
       ensureBasicCell(doc);
+      validateDocIntegrity(doc);
 
       const xml = ydoc2xml(doc);
       if (xml && xml.includes("<diagram")) {
