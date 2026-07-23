@@ -599,6 +599,49 @@ btnCorruptParentBreak.addEventListener("click", () => {
   });
 });
 
+// edge target 断裂
+const btnCorruptEdgeTarget = document.getElementById(
+  "btn-corrupt-edge-target",
+) as HTMLButtonElement;
+
+btnCorruptEdgeTarget.addEventListener("click", () => {
+  withDiagram((cellsMap, cellsOrder, did) => {
+    // 先找一个现有的 edge cell
+    let edgeId: string | null = null;
+    for (const [id, cell] of cellsMap.entries()) {
+      if (id === "0" || id === "1") continue;
+      if (typeof cell.getAttribute === "function" && cell.getAttribute("edge") === "1") {
+        edgeId = id;
+        break;
+      }
+    }
+
+    // 如果没有 edge，创建一个模拟的 edge cell
+    if (!edgeId) {
+      edgeId = `edge-${Date.now()}`;
+      const edgeCell = new Y.XmlElement("mxCell");
+      edgeCell.setAttribute("id", edgeId);
+      edgeCell.setAttribute("edge", "1");
+      edgeCell.setAttribute("parent", "1");
+      edgeCell.setAttribute("source", "1");
+      edgeCell.setAttribute("target", "1");
+      edgeCell.setAttribute("value", "Test Edge");
+      cellsMap.set(edgeId, edgeCell);
+      cellsOrder.push([edgeId]);
+      console.warn(`[debug] diagram ${did}: 没有找到现有 edge，已创建模拟 edge "${edgeId}"`);
+    }
+
+    // 将 edge 的 target 改为不存在的 id
+    const cell = cellsMap.get(edgeId!);
+    if (cell && typeof cell.setAttribute === "function") {
+      const nonexistentTarget = `nonexistent-${Date.now()}`;
+      cell.setAttribute("target", nonexistentTarget);
+      console.warn(`[debug] diagram ${did}: edge "${edgeId}" 的 target 已改为 "${nonexistentTarget}"`);
+      alert(`已将 diagram ${did} 的 edge "${edgeId}" 的 target 改为 "${nonexistentTarget}"\n\n此 target 指向不存在的 cell`);
+    }
+  });
+});
+
 // 验证完整性
 const btnValidateIntegrity = document.getElementById(
   "btn-validate-integrity",
