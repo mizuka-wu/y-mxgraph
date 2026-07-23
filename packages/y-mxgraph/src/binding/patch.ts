@@ -229,6 +229,33 @@ export function validateDocIntegrity(doc: Y.Doc): number {
           issues++;
         }
       }
+
+      // edge 的 source/target 引用校验（引用不存在的 cell 时移除对应属性）
+      const finalOrderForEdge = cellsOrder.toArray();
+      for (const id of finalOrderForEdge) {
+        if (id === "0" || id === "1") continue;
+        const cell = cellsMap.get(id);
+        if (!cell || typeof cell.getAttribute !== "function") continue;
+        const isEdge = cell.getAttribute("edge");
+        if (isEdge !== "1") continue;
+
+        const source = cell.getAttribute("source");
+        const target = cell.getAttribute("target");
+        const hasSource = source != null && source !== "";
+        const hasTarget = target != null && target !== "";
+
+        if (hasSource && !cellsMap.has(source!)) {
+          console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 source="${source}" 不存在，移除 source 属性`);
+          cell.setAttribute("source", "");
+          issues++;
+        }
+
+        if (hasTarget && !cellsMap.has(target!)) {
+          console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: edge "${id}" 的 target="${target}" 不存在，移除 target 属性`);
+          cell.setAttribute("target", "");
+          issues++;
+        }
+      }
     }
   }, INTEGRITY_ORIGIN);
 

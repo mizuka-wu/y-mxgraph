@@ -431,6 +431,165 @@ describe("validateDocIntegrity — diagram 级别", () => {
   });
 });
 
+describe("validateDocIntegrity — edge source/target", () => {
+  function makeDocWithEdge() {
+    const doc = new Y.Doc();
+    const mxfile = doc.getMap("mxfile");
+    const diagrams = new Y.Map<Y.Map<unknown>>();
+    const diagramOrder = new Y.Array<string>();
+    mxfile.set("diagram", diagrams);
+    mxfile.set("diagramOrder", diagramOrder);
+
+    const diag = new Y.Map<unknown>();
+    diag.set("name", "Page 1");
+    diag.set("id", "d1");
+    const gm = new Y.Map<unknown>();
+    const cellsMap = new Y.Map<Y.XmlElement>();
+    const cellsOrder = new Y.Array<string>();
+
+    const c0 = new Y.XmlElement("mxCell"); c0.setAttribute("id", "0");
+    const c1 = new Y.XmlElement("mxCell"); c1.setAttribute("id", "1"); c1.setAttribute("parent", "0");
+    const v1 = new Y.XmlElement("mxCell"); v1.setAttribute("id", "v1"); v1.setAttribute("parent", "1"); v1.setAttribute("vertex", "1");
+    const v2 = new Y.XmlElement("mxCell"); v2.setAttribute("id", "v2"); v2.setAttribute("parent", "1"); v2.setAttribute("vertex", "1");
+
+    cellsMap.set("0", c0); cellsMap.set("1", c1); cellsMap.set("v1", v1); cellsMap.set("v2", v2);
+    cellsOrder.insert(0, ["0", "1", "v1", "v2"]);
+
+    gm.set("mxCell", cellsMap); gm.set("mxCellOrder", cellsOrder);
+    diag.set("mxGraphModel", gm);
+    diagrams.set("d1", diag);
+    diagramOrder.insert(0, ["d1"]);
+
+    return { doc, cellsMap, cellsOrder };
+  }
+
+  it("健康的 edge 不触发修复", () => {
+    const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
+    const edge = new Y.XmlElement("mxCell");
+    edge.setAttribute("id", "e1");
+    edge.setAttribute("edge", "1");
+    edge.setAttribute("parent", "1");
+    edge.setAttribute("source", "v1");
+    edge.setAttribute("target", "v2");
+    cellsMap.set("e1", edge);
+    cellsOrder.push(["e1"]);
+
+    expect(validateDocIntegrity(doc)).toBe(0);
+    expect(cellsMap.has("e1")).toBe(true);
+  });
+
+  it("edge 的 source 指向不存在的 cell 时移除 source 属性", () => {
+    const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
+    const edge = new Y.XmlElement("mxCell");
+    edge.setAttribute("id", "e1");
+    edge.setAttribute("edge", "1");
+    edge.setAttribute("parent", "1");
+    edge.setAttribute("source", "nonexistent");
+    edge.setAttribute("target", "v2");
+    cellsMap.set("e1", edge);
+    cellsOrder.push(["e1"]);
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThan(0);
+    expect(cellsMap.has("e1")).toBe(true);
+    expect(edge.getAttribute("source")).toBe("");
+    expect(edge.getAttribute("target")).toBe("v2");
+  });
+
+  it("edge 的 target 指向不存在的 cell 时移除 target 属性", () => {
+    const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
+    const edge = new Y.XmlElement("mxCell");
+    edge.setAttribute("id", "e1");
+    edge.setAttribute("edge", "1");
+    edge.setAttribute("parent", "1");
+    edge.setAttribute("source", "v1");
+    edge.setAttribute("target", "nonexistent");
+    cellsMap.set("e1", edge);
+    cellsOrder.push(["e1"]);
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThan(0);
+    expect(cellsMap.has("e1")).toBe(true);
+    expect(edge.getAttribute("source")).toBe("v1");
+    expect(edge.getAttribute("target")).toBe("");
+  });
+
+  it("edge 的 source 和 target 都指向不存在的 cell 时都移除", () => {
+    const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
+    const edge = new Y.XmlElement("mxCell");
+    edge.setAttribute("id", "e1");
+    edge.setAttribute("edge", "1");
+    edge.setAttribute("parent", "1");
+    edge.setAttribute("source", "bad1");
+    edge.setAttribute("target", "bad2");
+    cellsMap.set("e1", edge);
+    cellsOrder.push(["e1"]);
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThanOrEqual(2);
+    expect(cellsMap.has("e1")).toBe(true);
+    expect(edge.getAttribute("source")).toBe("");
+    expect(edge.getAttribute("target")).toBe("");
+  });
+
+  it("edge 的 source/target 为空字符串时不触发修复", () => {
+    const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
+    const edge = new Y.XmlElement("mxCell");
+    edge.setAttribute("id", "e1");
+    edge.setAttribute("edge", "1");
+    edge.setAttribute("parent", "1");
+    edge.setAttribute("source", "");
+    edge.setAttribute("target", "");
+    cellsMap.set("e1", edge);
+    cellsOrder.push(["e1"]);
+
+    expect(validateDocIntegrity(doc)).toBe(0);
+    expect(cellsMap.has("e1")).toBe(true);
+  });
+
+  it("edge 的 source/target 不存在时不触发修复", () => {
+    const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
+    const edge = new Y.XmlElement("mxCell");
+    edge.setAttribute("id", "e1");
+    edge.setAttribute("edge", "1");
+    edge.setAttribute("parent", "1");
+    cellsMap.set("e1", edge);
+    cellsOrder.push(["e1"]);
+
+    expect(validateDocIntegrity(doc)).toBe(0);
+    expect(cellsMap.has("e1")).toBe(true);
+  });
+
+  it("多个无效 edge 时全部修复", () => {
+    const { cellsMap, cellsOrder, doc } = makeDocWithEdge();
+
+    const edge1 = new Y.XmlElement("mxCell");
+    edge1.setAttribute("id", "e1");
+    edge1.setAttribute("edge", "1");
+    edge1.setAttribute("parent", "1");
+    edge1.setAttribute("source", "v1");
+    edge1.setAttribute("target", "nonexistent1");
+    cellsMap.set("e1", edge1);
+    cellsOrder.push(["e1"]);
+
+    const edge2 = new Y.XmlElement("mxCell");
+    edge2.setAttribute("id", "e2");
+    edge2.setAttribute("edge", "1");
+    edge2.setAttribute("parent", "1");
+    edge2.setAttribute("source", "nonexistent2");
+    edge2.setAttribute("target", "v2");
+    cellsMap.set("e2", edge2);
+    cellsOrder.push(["e2"]);
+
+    const issues = validateDocIntegrity(doc);
+    expect(issues).toBeGreaterThanOrEqual(2);
+    expect(cellsMap.has("e1")).toBe(true);
+    expect(cellsMap.has("e2")).toBe(true);
+    expect(edge1.getAttribute("target")).toBe("");
+    expect(edge2.getAttribute("source")).toBe("");
+  });
+});
+
 // ============================================================
 // order/map 不匹配的根因复现测试
 // ============================================================
