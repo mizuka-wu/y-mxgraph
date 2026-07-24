@@ -177,6 +177,30 @@ export function validateDocIntegrity(doc: Y.Doc): number {
         ensureBasicCell(doc);
         issues++;
       }
+      
+      // 修复缺 id / parent 属性的 cell
+      // cellsMap 的 key 即为正确 id；缺 parent 的非根 cell 挂到默认图层 "1"
+      // （draw.io mxCodec.decodeCell 遇到缺 id 或 parent 的 cell 会抛错并中断整个解析，导致页面空白）
+      const fixedCells: string[] = [];
+      for (const [key, cell] of cellsMap.entries()) {
+        if (PROTECTED_CELLS.has(key)) continue;
+        if (!cell || typeof cell.getAttribute !== "function") continue;
+        let fixed = false;
+        if (!cell.getAttribute("id")) {
+          cell.setAttribute("id", key);
+          fixed = true;
+        }
+        if (!cell.getAttribute("parent")) {
+          cell.setAttribute("parent", "1");
+          fixed = true;
+        }
+        if (fixed) fixedCells.push(key);
+      }
+      if (fixedCells.length > 0) {
+        console.warn(`[y-mxgraph][integrity][heal] diagram ${did}: 修复缺 id/parent 的 cell [${fixedCells.join(",")}]`);
+        issues++;
+      }
+          
 
       // cellsOrder 去重
       const orderArr = cellsOrder.toArray();
