@@ -117,6 +117,14 @@ export function serialize(map: YMxGraphModel) {
 
     const cell = cells.get(id);
     if (cell && typeof cell.getAttributes === "function") {
+      if (!cell.getAttribute("id")) {
+        cell.setAttribute("id", id);
+      }
+      
+      if (!cell.getAttribute("parent") && id !== "0" && id !=="1") {
+        cell.setAttribute("parent", "1");
+      }
+      
       ordered.push(cell);
 
       // 递归处理子单元格
