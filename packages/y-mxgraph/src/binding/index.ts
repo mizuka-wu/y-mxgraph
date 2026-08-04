@@ -138,6 +138,65 @@ const defaultApplyFileData = (file: DrawioFile, xml: string) => {
   }
 };
 
+// ─── 视图状态保持 ───────────────────────────────────────────────
+// draw.io 的 replaceFileData / setFileData 会完全重建 view，
+// 内部的 SelectPage → setViewState / fitInitialView / resetScrollbars
+// 会把 translate / scale / scroll 重置为 XML 中存储的值或 fit 结果。
+// 以下工具在 apply 前捕获完整视图状态（含 scroll），apply 后同步恢复，
+// 并用 setTimeout(0) 兜底以防异步 layout / ResizeObserver 覆盖。
+
+interface ViewSnapshot {
+  pageId: string | null;
+  viewState: Record<string, unknown> | null;
+  selection: unknown[];
+}
+
+/** 捕获当前完整视图状态（scale + translate + scroll + selection） */
+function captureView(ui: DrawioUi | null): ViewSnapshot {
+  const graph = ui?.editor?.graph;
+  return {
+    pageId: ui?.currentPage?.getId?.() ?? null,
+    viewState: typeof graph?.getViewState === "function"
+      ? graph.getViewState()
+      : null,
+    selection: typeof graph?.getSelectionCells === "function"
+      ? graph.getSelectionCells()
+      : [],
+  };
+}
+
+/** 用快照恢复视图状态（按 pageId 找到新 page 引用后调用 restoreViewState） */
+function restoreView(ui: DrawioUi | null, snapshot: ViewSnapshot): void {
+  if (!ui || !snapshot.viewState) return;
+  // 旧 page 引用可能已失效，按 id 重新查找
+  const page = snapshot.pageId
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ui.pages?.find((p: any) => p.getId?.() === snapshot.pageId)
+    : ui.currentPage;
+  if (!page) return;
+  if (typeof ui.restoreViewState === "function") {
+    ui.restoreViewState(page, snapshot.viewState, snapshot.selection);
+  }
+}
+
+/**
+ * 在 apply 回调前后保持视图状态。
+ * 同步恢复为主，setTimeout(0) 兜底挡异步覆盖。
+ */
+function withPreservedView(
+  ui: DrawioUi | null,
+  apply: () => void,
+  scheduleDeferred: (fn: () => void) => void,
+): void {
+  const captured = captureView(ui);
+  apply();
+  restoreView(ui, captured);
+  // 异步兜底：挡 ResizeObserver / 后续 layout 等异步覆盖
+  scheduleDeferred(() => {
+    restoreView(ui, captured);
+  });
+}
+
 /**
  * 把 file XML 中的 diagram 合并进 Y.Doc。仅在 merge 策略 + doc 已有数据时调用。
  * @returns 是否成功合并；解析失败时返回 false 由调用方回退到 replace。
@@ -217,21 +276,8 @@ function reconcileInitialContent(
   // merge 策略需要进一步判断是否存在真实 diagram 内容
   const fileHasDiagrams = fileHasAnyData && file.data.includes("<diagram");
 
-  // 保存当前视图状态，避免 replaceFileData 时丢失
-  const graph = file.ui?.editor?.graph;
-  const savedTranslate = graph?.view?.translate ? { ...graph.view.translate } : null;
-  const savedScale = graph?.view?.scale;
-
   const applyAndRestoreView = (f: DrawioFile, xml: string) => {
-    applyFileData(f, xml);
-    // 恢复视图状态
-    if (savedTranslate && graph?.view?.translate) {
-      graph.view.translate.x = savedTranslate.x;
-      graph.view.translate.y = savedTranslate.y;
-    }
-    if (savedScale != null && graph?.view) {
-      graph.view.scale = savedScale;
-    }
+    withPreservedView(file.ui, () => applyFileData(f, xml), (fn) => setTimeout(fn, 0));
   };
 
   if (strategy === "replace") {
@@ -346,6 +392,25 @@ export class Binding {
   private debouncedForceSync: ReturnType<typeof setTimeout> | null = null;
 
   private syncOnOrderMismatch: boolean;
+  /** 视图恢复的异步兜底 timer */
+  private restoreViewTimer?: ReturnType<typeof setTimeout>;
+
+  /** 取消待执行的异步视图恢复 */
+  private cancelRestoreView(): void {
+    if (this.restoreViewTimer != null) {
+      clearTimeout(this.restoreViewTimer);
+      this.restoreViewTimer = undefined;
+    }
+  }
+
+  /** 调度异步视图恢复（取消前一个，保留最后一次快照） */
+  private scheduleRestoreView(fn: () => void): void {
+    this.cancelRestoreView();
+    this.restoreViewTimer = setTimeout(() => {
+      this.restoreViewTimer = undefined;
+      fn();
+    }, 0);
+  }
 
   /** replace 策略下，构造时 doc 为空，现在 doc 有数据时需要强制替换 */
   private get shouldReplaceWhenDocHasData(): boolean {
@@ -462,40 +527,30 @@ export class Binding {
         typeof transaction.origin === "object" &&
         "undo" in transaction.origin &&
         "redo" in transaction.origin;
-
       if (transaction.local && !isUndoRedo) {
         return;
       }
-
       // 远端/undo-redo 变更后，校验数据完整性并自愈
       ensureBasicCell(doc);
       validateDocIntegrity(doc);
 
       const xml = ydoc2xml(doc);
       if (xml && xml.includes("<diagram")) {
-        const graph = this.ui?.editor?.graph;
         const currentPageId = this.ui?.currentPage?.getId?.();
-        const selection = graph?.getSelectionCells?.();
-        const beforeTranslate = graph?.view?.translate ? { ...graph.view.translate } : null;
-        const beforeScale = graph?.view?.scale;
+
+        // ① 捕获完整视图状态（scale + translate + scroll + selection）
+        const viewSnapshot = captureView(this.ui);
 
         this.suppressLocalApply = true;
         try {
+          // ② 全量重建 view（replaceFileData 内部会重置 translate/scale/scroll）
           applyFileData(file, xml);
-
-          // 直接恢复 translate 和 scale，不依赖 restoreViewState
-          if (beforeTranslate && graph?.view?.translate) {
-            graph.view.translate.x = beforeTranslate.x;
-            graph.view.translate.y = beforeTranslate.y;
-          }
-          if (beforeScale != null && graph?.view) {
-            graph.view.scale = beforeScale;
-          }
 
           file.setShadowPages(file.ui.clonePages(file.ui.pages));
           initDocSnapshot(doc, false);
           this.docInitialized = true;
 
+          // 切页（如有需要），在 restoreViewState 之前完成
           if (currentPageId && this.ui?.pages) {
             const page = this.ui.pages.find(
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -508,10 +563,18 @@ export class Binding {
             }
           }
 
+          // ③ 同步恢复视图状态（按 pageId 找到新 page 引用后调用 restoreViewState）
+          restoreView(this.ui, viewSnapshot);
+
           this.resetEditorStatus();
         } finally {
           this.suppressLocalApply = false;
         }
+
+        // ④ 异步兜底：挡 ResizeObserver / 后续 layout 等异步覆盖
+        this.scheduleRestoreView(() => {
+          restoreView(this.ui, viewSnapshot);
+        });
       }
     };
     doc.getMap(mxfileKey).observeDeep(this.docObserver);
@@ -577,15 +640,21 @@ export class Binding {
       const xml = ydoc2xml(this.doc);
       if (!xml || !xml.includes("<diagram")) return;
 
+      // 捕获视图状态，apply 后同步恢复 + 异步兜底
+      const viewSnapshot = captureView(this.ui);
       this.suppressLocalApply = true;
       try {
         this.applyFileData(this.file, xml);
         this.file.setShadowPages(this.file.ui.clonePages(this.file.ui.pages));
         initDocSnapshot(this.doc, false);
+        restoreView(this.ui, viewSnapshot);
         this.resetEditorStatus();
       } finally {
         this.suppressLocalApply = false;
       }
+      this.scheduleRestoreView(() => {
+        restoreView(this.ui, viewSnapshot);
+      });
     } else {
       const fileXml = this.file.ui.getFileData();
       this.doc.transact(() => {
@@ -736,6 +805,7 @@ export class Binding {
    * @param deep - 是否深度清理（包括 awareness/undoManager），默认 false
    */
   destroy(deep = false): void {
+    this.cancelRestoreView();
     this.mxGraphModel.removeListener("change", this.mxListener);
     this.doc.getMap(mxfileKey).unobserveDeep(this.docObserver);
     this.consistencyChecker?.destroy();
