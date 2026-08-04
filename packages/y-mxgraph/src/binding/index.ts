@@ -167,16 +167,27 @@ function captureView(ui: DrawioUi | null): ViewSnapshot {
 
 /** 用快照恢复视图状态（按 pageId 找到新 page 引用后调用 restoreViewState） */
 function restoreView(ui: DrawioUi | null, snapshot: ViewSnapshot): void {
-  if (!ui || !snapshot.viewState) return;
+  if (!ui) return;
+  if (!snapshot.viewState) {
+    console.warn("[y-mxgraph] restoreView: viewState 为空，跳过恢复");
+    return;
+  }
   // 旧 page 引用可能已失效，按 id 重新查找
   const page = snapshot.pageId
     ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ui.pages?.find((p: any) => p.getId?.() === snapshot.pageId)
     : ui.currentPage;
-  if (!page) return;
-  if (typeof ui.restoreViewState === "function") {
-    ui.restoreViewState(page, snapshot.viewState, snapshot.selection);
+  if (!page) {
+    console.warn(
+      `[y-mxgraph] restoreView: 找不到 page (id=${snapshot.pageId})，跳过恢复`,
+    );
+    return;
   }
+  if (typeof ui.restoreViewState !== "function") {
+    console.warn("[y-mxgraph] restoreView: ui.restoreViewState 不存在，跳过恢复");
+    return;
+  }
+  ui.restoreViewState(page, snapshot.viewState, snapshot.selection);
 }
 
 /**
