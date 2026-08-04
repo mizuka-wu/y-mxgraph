@@ -178,9 +178,12 @@ function restoreView(ui: DrawioUi | null, snapshot: ViewSnapshot): void {
       ui.pages?.find((p: any) => p.getId?.() === snapshot.pageId)
     : ui.currentPage;
   if (!page) {
-    console.warn(
-      `[y-mxgraph] restoreView: 找不到 page (id=${snapshot.pageId})，跳过恢复`,
-    );
+    // 初始化阶段 currentPage 可能尚未设置，属于正常情况
+    if (snapshot.pageId != null) {
+      console.warn(
+        `[y-mxgraph] restoreView: 找不到 page (id=${snapshot.pageId})，跳过恢复`,
+      );
+    }
     return;
   }
   if (typeof ui.restoreViewState !== "function") {
