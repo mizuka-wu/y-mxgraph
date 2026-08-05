@@ -22,7 +22,12 @@ function getAwarenessStateFieldChanges(
   for (const key of keys) {
     const prevValue = prev?.[key];
     const nextValue = next?.[key];
-    if (JSON.stringify(prevValue) !== JSON.stringify(nextValue)) {
+    try {
+      if (JSON.stringify(prevValue) !== JSON.stringify(nextValue)) {
+        changes.push({ key, value: nextValue });
+      }
+    } catch {
+      // 循环引用等异常情况，视为有变化
       changes.push({ key, value: nextValue });
     }
   }
@@ -218,6 +223,7 @@ export function createIframeBridgeProvider(
   let connected = false;
   let forceFullSync = false;
   const MAX_QUEUE_SIZE = 1000;
+  const MAX_UNACKED_SIZE = 500;
   const pendingYdocUpdates: Array<{update: Uint8Array, isBaseline: boolean}> = [];
   let seq = 0;
   const unackedYdocUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean; sentAt: number }>();
@@ -292,6 +298,12 @@ export function createIframeBridgeProvider(
           localStates.set(id, state);
           const update = { added: !existed ? [id] : [], updated: [id], removed: [] };
           updateHandlers.forEach(handler => handler(update));
+        }
+        // 同步整个状态到父页面
+        if (connected && !applyingParentUpdate) {
+          const message = { type: "set-local-state", state };
+          logMessage("send", "set-local-state", message);
+          window.parent.postMessage(message, "*");
         }
       },
       setLocalStateField(field: string, value: unknown) {
@@ -372,6 +384,7 @@ export function createIframeBridgeProvider(
           unackedYdocUpdates.set(seqNum, { update, isBaseline, sentAt: Date.now() });
         }
       }
+      // 重发未确认的更新（带seq）
       if (!legacyMode) {
         for (const [savedSeq, { update, isBaseline }] of unackedYdocUpdates) {
           const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: savedSeq };
@@ -447,6 +460,12 @@ export function createIframeBridgeProvider(
       logMessage("send", "ydoc-update", message);
       window.parent.postMessage(message, "*");
     } else {
+      // 检查unackedUpdates上限，超出时触发强制同步
+      if (unackedYdocUpdates.size >= MAX_UNACKED_SIZE) {
+        forceFullSync = true;
+        unackedYdocUpdates.clear();
+        console.warn("[iframe-bridge] unacked updates limit reached, forcing full sync");
+      }
       const seqNum = ++seq;
       const message = { type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum };
       logMessage("send", "ydoc-update", message);
@@ -552,12 +571,15 @@ export function createIframeBridgeProvider(
     }
 
     if (type === "ydoc-sync" || type === "ydoc-update") {
-      applyingParentUpdate = true;
       // 使用 origin 区分 baseline vs 编辑数据，server 端 UndoManager 可据此追踪
       const isBaseline = (event.data && typeof event.data === "object" && event.data.isBaseline) ? true : false;
       const applyOrigin = isBaseline ? BASELINE_ORIGIN : IFRAME_ORIGIN;
-      Y.applyUpdate(ydoc, new Uint8Array(payload), applyOrigin);
-      applyingParentUpdate = false;
+      applyingParentUpdate = true;
+      try {
+        Y.applyUpdate(ydoc, new Uint8Array(payload), applyOrigin);
+      } finally {
+        applyingParentUpdate = false;
+      }
       // 对 server 发来的 ydoc-update 发送 ack，清理 server 的 unackedServerUpdates
       if (type === "ydoc-update") {
         const inSeq = event.data.seq;
@@ -603,7 +625,6 @@ export function createIframeBridgeProvider(
         const serverId = receivedServerId ?? serverClientId;
         const localId = awareness.clientID;
         
-        applyingParentUpdate = true;
         if (serverId != null && serverId !== localId) {
           const remapped = remapClientIdInUpdate(
             new Uint8Array(payload),
@@ -616,35 +637,47 @@ export function createIframeBridgeProvider(
             awareness.setLocalState(null);
           }
           
-          applyAwarenessUpdate(awareness as Awareness, remapped, null);
+          applyingParentUpdate = true;
+          try {
+            applyAwarenessUpdate(awareness as Awareness, remapped, null);
+          } finally {
+            applyingParentUpdate = false;
+          }
         } else {
-          applyAwarenessUpdate(awareness as Awareness, new Uint8Array(payload), null);
+          applyingParentUpdate = true;
+          try {
+            applyAwarenessUpdate(awareness as Awareness, new Uint8Array(payload), null);
+          } finally {
+            applyingParentUpdate = false;
+          }
         }
-        applyingParentUpdate = false;
       } else {
         const parsedStates = parseAwarenessPayload(new Uint8Array(payload));
-        applyingParentUpdate = true;
         const changedClientIds: number[] = [];
         const removedClientIds: number[] = [];
-        for (const [id, state] of parsedStates) {
-          const existed = localStates.has(id);
-          const changed = !existed || JSON.stringify(localStates.get(id)) !== JSON.stringify(state);
-          localStates.set(id, state);
-          if (changed) {
-            changedClientIds.push(id);
+        applyingParentUpdate = true;
+        try {
+          for (const [id, state] of parsedStates) {
+            const existed = localStates.has(id);
+            const changed = !existed || JSON.stringify(localStates.get(id)) !== JSON.stringify(state);
+            localStates.set(id, state);
+            if (changed) {
+              changedClientIds.push(id);
+            }
           }
-        }
-        for (const [id] of localStates) {
-          if (!parsedStates.has(id)) {
-            localStates.delete(id);
-            removedClientIds.push(id);
+          for (const [id] of localStates) {
+            if (!parsedStates.has(id)) {
+              localStates.delete(id);
+              removedClientIds.push(id);
+            }
           }
+          if (changedClientIds.length > 0 || removedClientIds.length > 0) {
+            const update = { added: [], updated: changedClientIds, removed: removedClientIds };
+            updateHandlers.forEach(handler => handler(update));
+          }
+        } finally {
+          applyingParentUpdate = false;
         }
-        if (changedClientIds.length > 0 || removedClientIds.length > 0) {
-          const update = { added: [], updated: changedClientIds, removed: removedClientIds };
-          updateHandlers.forEach(handler => handler(update));
-        }
-        applyingParentUpdate = false;
       }
     } else if (type === "undo-state") {
       if (!currentMxLike) {
@@ -878,9 +911,16 @@ export function createIframeBridgeProvider(
         clearTimeout(pendingCheckTimer);
         pendingCheckTimer = null;
       }
+      // 发送剩余的pending updates（带seq以便追踪）
       while (pendingYdocUpdates.length > 0) {
         const { update, isBaseline } = pendingYdocUpdates.shift()!;
-        window.parent.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline }, "*");
+        if (legacyMode) {
+          window.parent.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline }, "*");
+        } else {
+          const seqNum = ++seq;
+          window.parent.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline, seq: seqNum }, "*");
+          unackedYdocUpdates.set(seqNum, { update, isBaseline, sentAt: Date.now() });
+        }
       }
       unackedYdocUpdates.clear();
       ydoc.off("update", onYdocUpdate);
@@ -898,6 +938,8 @@ export function createIframeBridgeProvider(
       }
       connectListeners.clear();
       disconnectListeners.clear();
+      updateHandlers.clear();
+      localStates.clear();
       if (currentCleanup) {
         currentCleanup();
       }

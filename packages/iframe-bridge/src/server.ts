@@ -61,6 +61,7 @@ export function createIframeBridgeServer(
   const disconnectListeners = new Set<() => void>();
   let iframeOriginTracked = false;
   const MAX_QUEUE_SIZE = 1000;
+  const MAX_UNACKED_SIZE = 500;
   const pendingUpdatesToIframe: Array<{ update: Uint8Array; isBaseline: boolean }> = [];
   let serverSeq = 0;
   const unackedServerUpdates = new Map<number, { update: Uint8Array; isBaseline: boolean; sentAt: number }>();
@@ -187,6 +188,12 @@ export function createIframeBridgeServer(
       pendingUpdatesToIframe.push({ update, isBaseline });
       schedulePendingCheck();
       return;
+    }
+    // 检查unackedUpdates上限，超出时触发强制同步
+    if (unackedServerUpdates.size >= MAX_UNACKED_SIZE) {
+      forceFullSync = true;
+      unackedServerUpdates.clear();
+      console.warn("[iframe-bridge server] unacked updates limit reached, forcing full sync");
     }
     const seqNum = ++serverSeq;
     const cw = iframe.contentWindow;
@@ -336,28 +343,37 @@ export function createIframeBridgeServer(
       logMessage("recv", "set-local-state", { key, value });
       if (typeof key === "string") {
         applyingIframeUpdate = true;
-        awareness.setLocalStateField(key, value);
-        applyingIframeUpdate = false;
+        try {
+          awareness.setLocalStateField(key, value);
+        } finally {
+          applyingIframeUpdate = false;
+        }
       }
     } else if (msgType === "awareness-update") {
       logMessage("recv", "awareness-update", payload);
       // 应用 iframe 的 awareness 更新时设置标志，防止触发 onAwarenessUpdate 回传
       applyingIframeUpdate = true;
-      applyAwarenessUpdate(awareness, new Uint8Array(payload), IFRAME_ORIGIN);
-      applyingIframeUpdate = false;
+      try {
+        applyAwarenessUpdate(awareness, new Uint8Array(payload), IFRAME_ORIGIN);
+      } finally {
+        applyingIframeUpdate = false;
+      }
     } else if (msgType === "set-local-fields") {
       logMessage("recv", "set-local-fields", payload);
       const { fields } = event.data;
       if (fields && typeof fields === "object") {
         applyingIframeUpdate = true;
-        const currentLocal = awareness.getLocalState() || {};
-        const currentUser = (currentLocal as { user?: Record<string, unknown> }).user || {};
-        const newUser = { ...currentUser, ...fields };
-        awareness.setLocalState({
-          ...currentLocal,
-          user: newUser,
-        });
-        applyingIframeUpdate = false;
+        try {
+          const currentLocal = awareness.getLocalState() || {};
+          const currentUser = (currentLocal as { user?: Record<string, unknown> }).user || {};
+          const newUser = { ...currentUser, ...fields };
+          awareness.setLocalState({
+            ...currentLocal,
+            user: newUser,
+          });
+        } finally {
+          applyingIframeUpdate = false;
+        }
       }
     } else if (msgType === "request-undo-state") {
       postUndoStateToIframe();
@@ -470,11 +486,14 @@ export function createIframeBridgeServer(
         clearTimeout(pendingCheckTimer);
         pendingCheckTimer = null;
       }
+      // 发送剩余的pending updates
       while (pendingUpdatesToIframe.length > 0) {
         const { update, isBaseline } = pendingUpdatesToIframe.shift()!;
         const cw = iframe.contentWindow;
         if (cw) {
           cw.postMessage({ type: "ydoc-update", payload: Array.from(update), isBaseline }, "*");
+        } else {
+          log("iframe.contentWindow is null, dropping pending update");
         }
       }
       setConnected(false);
