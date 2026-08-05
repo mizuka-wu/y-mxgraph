@@ -78,18 +78,6 @@ describe("iframe-bridge desync detection", () => {
     provider.destroy();
   });
 
-  it("consistencyCheckInterval is configured correctly", async () => {
-    const provider = createIframeBridgeProvider(providerYdoc, {
-      consistencyCheckInterval: 100,
-    });
-
-    // Verify consistencyCheckInterval is configured
-    // Actual testing requires full iframe integration
-    expect(provider).toBeDefined();
-
-    provider.destroy();
-  });
-
   it("provider can request full sync when desync detected", async () => {
     const provider = createIframeBridgeProvider(providerYdoc);
     const server = createIframeBridgeServer(iframe, serverYdoc, serverAwareness);
